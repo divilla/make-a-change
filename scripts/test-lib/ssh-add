@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Test-only stand-in; never accesses the caller's real SSH agent or keys.
+[[ $# -eq 2 && $1 == -T && $2 == "$MCH_GIT_SSH_KEY.pub" ]] || exit 99
+if [[ -n ${MCH_TEST_AUTH_CALLS:-} ]]; then
+    printf '%s\n' "$*" >>"$MCH_TEST_AUTH_CALLS"
+fi
+exit "${MCH_TEST_AUTH_STATUS:-0}"

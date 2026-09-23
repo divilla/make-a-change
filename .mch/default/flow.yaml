@@ -1,0 +1,80 @@
+version: 1
+slug: default
+name: Default Change Automation
+description: Default repository Flow for moving a Change from definition capture through master promotion.
+
+help: help.yaml
+makefile: Makefile
+
+paths:
+  def: agent/defs/$slug.md
+  spec: specs/$slug.md
+  pr: agent/prs/$slug.md
+
+steps:
+  - slug: def-create
+    help: Create the initial Change definition.
+    stage: artifact
+    type: editor
+    input: def
+    output: def
+    next-step: def-edit
+
+  - slug: def-edit
+    help: Edit the Change definition.
+    stage: artifact
+    type: editor
+    input: def
+    output: def
+    next-step: def-rewrite
+
+  - slug: spec-edit
+    help: Edit the Change specification.
+    stage: artifact
+    type: editor
+    input: spec
+    output: spec
+    commit: Spec for $slug by user
+    next-step: spec-write
+
+  - slug: pr-edit
+    help: Edit the pull request description.
+    stage: artifact
+    type: editor
+    input: pr
+    output: pr
+    commit: PR for $slug by user
+    next-step: pr-write
+
+  - slug: def-rewrite
+    help: Draft or revise the Change definition.
+    stage: artifact
+    type: exec
+    session: restore
+    input: def
+    output: def
+    prompt: prompts/def-rewrite.md
+    next-step: def-review
+
+  - slug: def-review
+    help: Review the Change definition for clarity, completeness, and scope.
+    stage: artifact
+    type: exec
+    session: restore
+    input: def
+    output: def
+    prompt: prompts/def-review.md
+
+  - slug: def-review-chat
+    help: Discuss and refine the current Change artifact.
+    stage: artifact
+    type: chat
+    commit: Update for $slug by user
+
+  - slug: branch-init
+    help: Initialize and check out the Change branch.
+    stage: artifact
+    type: script
+    script: scripts/init-branch.sh
+    commit: Init for $slug by user
+    next-step: def-review-chat

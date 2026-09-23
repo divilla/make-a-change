@@ -1,0 +1,39 @@
+version: 1
+
+stage_modes:
+  - slug: skip
+    help: stage will not execute
+  - slug: prompt
+    help: stage will run an interactive session
+  - slug: exec
+    help: stage will run an automated agent
+
+task_statuses:
+  - slug: queued
+    help: task is waiting to start
+  - slug: running
+    help: task is actively executing
+  - slug: paused
+    help: task is temporarily paused
+  - slug: stopped
+    help: task was manually stopped
+  - slug: waiting
+    help: task is waiting for input
+  - slug: completed
+    help: task finished successfully
+  - slug: failed
+    help: task finished with an error
+
+task_steps:
+  - slug: none
+    help: task has not started yet
+  - slug: entry
+    help: entry script is executing
+  - slug: prompt
+    help: prompt is being prepared or shown
+  - slug: agent
+    help: automated agent is executing
+  - slug: exit
+    help: exit script is executing
+  - slug: done
+    help: task has finished

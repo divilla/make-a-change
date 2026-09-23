@@ -1,0 +1,203 @@
+version: 1
+slug: default
+name: Default Change Automation
+description: Default repository Flow for moving a Change from definition capture through master promotion.
+
+help: help.yaml
+makefile: Makefile
+
+paths:
+  def: agent/defs/$slug.md
+  spec: specs/$slug.md
+  pr: agent/prs/$slug.md
+
+steps:
+  - slug: def-create
+    help: Create the initial Change definition.
+    stage: artifact
+    type: editor
+    input: def
+    output: def
+    next-step: def-edit
+
+  - slug: def-edit
+    help: Edit the Change definition.
+    stage: artifact
+    type: editor
+    input: def
+    output: def
+    next-step: def-rewrite
+
+  - slug: spec-edit
+    help: Edit the Change specification.
+    stage: artifact
+    type: editor
+    input: spec
+    output: spec
+    commit: Spec for $slug by user
+    next-step: spec-write
+
+  - slug: pr-edit
+    help: Edit the pull request description.
+    stage: artifact
+    type: editor
+    input: pr
+    output: pr
+    commit: PR for $slug by user
+    next-step: pr-write
+
+  - slug: def-rewrite
+    help: Draft or revise the Change definition.
+    stage: artifact
+    type: exec
+    session: restore
+    input: def
+    output: def
+    prompt: prompts/def-rewrite.md
+    next-step: def-review
+
+  - slug: def-review
+    help: Review the Change definition for clarity, completeness, and scope.
+    stage: artifact
+    type: exec
+    session: restore
+    input: def
+    output: def
+    prompt: prompts/def-review.md
+
+  - slug: branch-init
+    help: Initialize and check out the Change branch.
+    stage: artifact
+    type: script
+    script: scripts/init-branch.sh
+    commit: Init for $slug by user
+    next-step: init-code-chat
+
+  - slug: init-code-chat
+    help: Discuss the initial implementation context before specification work.
+    stage: artifact
+    type: chat
+    session: resume
+    input: def
+    output: def
+    commit: Initial Code for $slug by user
+    next-step: spec-write
+
+  - slug: spec-write
+    help: Draft or revise the Change specification.
+    stage: artifact
+    type: exec
+    session: restore
+    commit: Spec for $slug by agent
+    prompt: prompts/spec-write.md
+    input: def
+    output: spec
+    pre: scripts/spec-publish.sh
+    post: scripts/spec-save.sh
+    next-step: spec-write-chat
+    switch-output:
+      - case: Done.
+        goto: spec-review
+
+  - slug: spec-write-chat
+    stage: artifact
+    type: chat
+    help: Discuss and refine the current Change artifact.
+    commit: Update for $slug by user
+    next-step: spec-review
+
+  - slug: spec-review
+    help: Review the Change specification for implementation readiness.
+    stage: spec-review
+    type: exec
+    session: restore
+    input: spec
+    output: spec
+    prompt: prompts/spec-review.md
+    next-step: spec-review-chat
+    commit: Spec for $slug by agent
+    switch-output:
+      - case: No blocking issues found.
+        goto: code-implement
+
+  - slug: spec-review-chat
+    help: Resolve specification review findings.
+    stage: spec-review
+    type: chat
+    session: resume
+    input: spec
+    output: spec
+    commit: Spec for $slug by agent
+    next-step: spec-review
+
+  - slug: code-implement
+    help: Implement the approved Change specification.
+    stage: code
+    type: exec
+    session: new
+    prompt: prompts/code-implement.md
+    commit: Code for $slug by agent
+    next-step: code-chat
+
+  - slug: code-chat
+    help: Discuss implementation progress, decisions, and blockers.
+    stage: code
+    type: chat
+    session: resume
+    commit: Code for $slug by user
+    next-step: pr-write
+
+  - slug: pr-write
+    help: Draft the pull request description from the specification and branch diff.
+    stage: artifact
+    type: exec
+    session: new
+    prompt: prompts/pr-write.md
+    commit: PR for $slug by agent
+    next-step: code-chat
+    switch-output:
+      - case: Done.
+        goto: pr-publish
+
+  - slug: pr-publish
+    help: Publish the pull request.
+    stage: artifact
+    type: script
+    script: scripts/pr-publish.sh
+    next-step: code-review
+
+  - slug: code-review
+    help: Review the implementation against the Change specification.
+    stage: code-review
+    type: exec
+    session: new
+    prompt: prompts/code-review.md
+    switch-output:
+      - case: No blocking issues found.
+        goto: pr-update
+      - case: '*'
+        goto: code-review-publish
+
+  - slug: code-review-publish
+    stage: code-review
+    help: Publish the implementation review findings.
+    type: script
+    script: scripts/change-comment.pl
+    next-step: code-review-chat
+
+  - slug: code-review-chat
+    stage: code-review
+    help: Resolve implementation review findings.
+    type: chat
+    commit: Code fix for $slug by agent
+    next-step: code-review
+
+  - slug: pr-update
+    stage: artifact
+    help: Update the pull request description to reflect the final implementation.
+    type: exec
+    prompt: prompts/pr-update.md
+    commit: PR update for $slug by agent
+    switch-output:
+      - case: '*'
+        goto: chat

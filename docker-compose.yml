@@ -1,0 +1,59 @@
+services:
+
+  db:
+    build: ./docker/postgres/
+    container_name: mch-postgres
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ekupi_scrape
+#    command: "postgres -c 'bytea_output=escape'"
+    volumes:
+      - mch-postgres-data:/var/lib/postgresql
+      - ./docker/postgres/backups:/var/backups:z
+      - ./docker/postgres/entrypoint:/docker-entrypoint-initdb.d:z
+    networks:
+      - local
+    restart: always
+
+#  redis:
+#    container_name: redis-golastore
+#    image: redis:7.2.1-bookworm
+#    ports:
+#      - 6397:6397
+#    volumes:
+#      - redis-data:/data
+##      - ./postgres-scripts:/docker-entrypoint-initdb.d
+##      - '/usr/bin/echo "vm.overcommit_memory=1" | /usr/bin/tee -a /etc/sysctl.conf'
+##      - '/usr/bin/sysctl -p'
+#    command: ["redis-server", "--save 60 1", "--loglevel warning"]
+
+#  dragonfly:
+#    image: 'docker.dragonflydb.io/dragonflydb/dragonfly'
+#    container_name: dragonfly-golastore
+#    ulimits:
+#      memlock: -1
+#    ports:
+#      - "6379:6379"
+#    # For better performance, consider `host` mode instead `port` to avoid docker NAT.
+#    # `host` mode is NOT currently supported in Swarm Mode.
+#    # https://docs.docker.com/compose/compose-file/compose-file-v3/#network_mode
+#    # network_mode: "host"
+#    volumes:
+#      - dragonfly-data:/data
+#    networks:
+#      - golastore
+
+volumes:
+  mch-postgres-data:
+    name: 'mch-postgres-data'
+  mch-redis-data:
+    name: 'mch-redis-data'
+  mch-dragonfly-data:
+    name: 'mch-dragonfly-data'
+
+networks:
+  local:
+    name: local-network
+    driver: bridge
