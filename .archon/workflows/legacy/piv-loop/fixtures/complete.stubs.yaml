@@ -1,0 +1,13 @@
+fixture:
+  expect: completed
+explore-work: Reviewable work prepared.
+create-plan: Completed fixture step.
+refine-plan-work: Reviewable work prepared.
+implement-setup: Completed fixture step.
+implement:
+  done: true
+  summary: All work and required validation complete.
+code-review: Completed fixture step.
+fix-feedback-work: Reviewable work prepared.
+finalize: Completed fixture step.
+verify-pr-base: Completed fixture step.

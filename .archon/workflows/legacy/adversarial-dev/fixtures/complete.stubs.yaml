@@ -1,0 +1,6 @@
+fixture:
+  expect: completed
+plan: Completed fixture step.
+init-workspace: Completed fixture step.
+adversarial-sprint: Completed fixture step.
+report: Completed fixture step.

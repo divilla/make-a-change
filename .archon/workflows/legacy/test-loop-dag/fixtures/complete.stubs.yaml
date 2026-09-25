@@ -1,0 +1,5 @@
+fixture:
+  expect: completed
+setup: Completed fixture step.
+loop-counter: Completed fixture step.
+report: Completed fixture step.

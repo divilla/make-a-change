@@ -1,0 +1,6 @@
+fixture:
+  expect: failed
+  fail-node: prepare-target
+  inputs:
+    spec_path: /dev/null/spec.md
+exec-code: true

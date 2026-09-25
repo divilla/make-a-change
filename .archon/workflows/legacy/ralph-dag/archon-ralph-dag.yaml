@@ -1,0 +1,162 @@
+name: archon-ralph-dag
+description: |
+  Use when: User wants to run a Ralph implementation loop.
+  Triggers: "ralph", "run ralph", "ralph dag", "run ralph dag".
+
+  DAG workflow that:
+  1. Detects input: existing prd.json, existing prd.md (needs stories), or raw idea
+  2. Generates prd.md + prd.json if needed (explores codebase, breaks into stories)
+  3. Validates PRD files, reads project context, installs dependencies
+  4. Runs Ralph loop (fresh context per iteration) implementing one story per iteration
+  5. Creates PR and reports completion
+
+  Accepts: An idea description, a path to an existing prd.md, or a directory with prd.md + prd.json
+provider: claude
+nodes:
+- id: detect-input
+  model: small
+  output_format:
+    type: object
+    properties:
+      input_type:
+        type: string
+        enum:
+        - ready
+        - external_prd
+        - needs_generation
+      prd_dir:
+        type: string
+    required:
+    - input_type
+    - prd_dir
+  command: detect-input
+- id: generate-prd
+  depends_on:
+  - detect-input
+  when: $detect-input.output.input_type != 'ready'
+  command: archon-ralph-generate
+  context: fresh
+- id: validate-prd
+  depends_on:
+  - detect-input
+  - generate-prd
+  trigger_rule: one_success
+  bash: |
+    set -e
+
+    # ── 1. Find PRD directory (passed from detect-input) ──────
+    PRD_DIR=$detect-input.output.prd_dir
+
+    # If detect-input didn't know the PRD dir (generated from scratch), discover it
+    if [ -z "$PRD_DIR" ] || [ ! -f "$PRD_DIR/prd.json" ]; then
+      FOUND=$(find .archon/ralph -name "prd.json" -type f 2>/dev/null | head -1)
+      if [ -n "$FOUND" ]; then
+        PRD_DIR=$(dirname "$FOUND")
+      fi
+    fi
+
+    if [ -z "$PRD_DIR" ] || [ ! -f "$PRD_DIR/prd.json" ]; then
+      echo "ERROR: No prd.json found after generation step."
+      echo "Check the generate-prd node output for errors."
+      exit 1
+    fi
+
+    if [ ! -f "$PRD_DIR/prd.md" ]; then
+      echo "ERROR: prd.md not found in $PRD_DIR"
+      exit 1
+    fi
+
+    # ── 2. Install dependencies (worktrees lack node_modules) ──
+    if [ -f "bun.lock" ] || [ -f "bun.lockb" ]; then
+      echo "Installing dependencies (bun)..."
+      bun install --frozen-lockfile 2>&1 | tail -3
+    elif [ -f "package-lock.json" ]; then
+      echo "Installing dependencies (npm)..."
+      npm ci 2>&1 | tail -3
+    elif [ -f "yarn.lock" ]; then
+      echo "Installing dependencies (yarn)..."
+      yarn install --frozen-lockfile 2>&1 | tail -3
+    elif [ -f "pnpm-lock.yaml" ]; then
+      echo "Installing dependencies (pnpm)..."
+      pnpm install --frozen-lockfile 2>&1 | tail -3
+    fi
+
+    # ── 3. Git state ──────────────────────────────────────────
+    echo "BRANCH=$(git branch --show-current)"
+    echo "GIT_ROOT=$(git rev-parse --show-toplevel)"
+
+    # ── 4. Output PRD context ─────────────────────────────────
+    echo "PRD_DIR=$PRD_DIR"
+    echo "=== PRD_JSON_START ==="
+    cat "$PRD_DIR/prd.json"
+    echo ""
+    echo "=== PRD_JSON_END ==="
+    echo "=== PRD_MD_START ==="
+    cat "$PRD_DIR/prd.md"
+    echo ""
+    echo "=== PRD_MD_END ==="
+    echo "=== PROGRESS_START ==="
+    if [ -f "$PRD_DIR/progress.txt" ]; then
+      cat "$PRD_DIR/progress.txt"
+    else
+      echo "(no progress yet)"
+    fi
+    echo ""
+    echo "=== PROGRESS_END ==="
+
+    # ── 5. Summary ────────────────────────────────────────────
+    TOTAL=$(grep -c '"passes"' "$PRD_DIR/prd.json" || true)
+    DONE=$(grep -c '"passes": true' "$PRD_DIR/prd.json" || true)
+    TOTAL=${TOTAL:-0}
+    DONE=${DONE:-0}
+    echo "STORIES_TOTAL=$TOTAL"
+    echo "STORIES_DONE=$DONE"
+    echo "STORIES_REMAINING=$(( TOTAL - DONE ))"
+- id: implement
+  depends_on:
+  - validate-prd
+  idle_timeout: 600000
+  model: large
+  loop:
+    max_iterations: 15
+    fresh_context: true
+    until_field: done
+    command: implement
+  output_format:
+    type: object
+    properties:
+      done:
+        type: boolean
+      summary:
+        type: string
+    required:
+    - done
+    - summary
+    additionalProperties: false
+- id: verify-pr-base
+  bash: |
+    set -euo pipefail
+    # Pin to the origin remote — in a fork clone, gh otherwise queries the upstream parent
+    ORIGIN_REPO=$(git remote get-url origin | sed -E 's#^.*[:/]([^/]+/[^/]+)$#\1#; s#\.git$##')
+    HEAD_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    PR_NUMBER=$(gh pr list --repo "$ORIGIN_REPO" --head "$HEAD_BRANCH" --state open --json number -q '.[0].number')
+    if [ -z "$PR_NUMBER" ]; then
+      echo "No open PR found for branch $HEAD_BRANCH" >&2
+      exit 1
+    fi
+    EXPECTED="$BASE_BRANCH"
+    ACTUAL=$(gh pr view "$PR_NUMBER" --repo "$ORIGIN_REPO" --json baseRefName -q '.baseRefName')
+    if [ "$ACTUAL" != "$EXPECTED" ]; then
+      echo "Base mismatch on PR #$PR_NUMBER: expected=$EXPECTED actual=$ACTUAL — re-targeting" >&2
+      gh pr edit "$PR_NUMBER" --repo "$ORIGIN_REPO" --base "$EXPECTED"
+    else
+      echo "PR base verified: $EXPECTED"
+    fi
+  depends_on:
+  - implement
+- id: report
+  depends_on:
+  - verify-pr-base
+  command: report
+deprecated:
+  message: Switch to the sdlc pack instead.

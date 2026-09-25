@@ -1,0 +1,97 @@
+name: archon-adversarial-dev
+description: |
+  Use when: User wants to build a complete application from scratch using adversarial development.
+  Triggers: "adversarial dev", "adversarial development", "build with adversarial", "gan dev",
+            "adversarial build", "build app adversarially", "adversarial coding".
+  Does: Three-role GAN-inspired development — Planner creates spec with sprints, then a state-machine
+        loop alternates between Generator (builds code) and Evaluator (attacks it) with hard pass/fail
+        thresholds. The evaluator's job is to BREAK what the generator builds. If any criterion scores
+        below 7/10, the sprint goes back to the generator with adversarial feedback. Stops on sprint
+        failure after max retries.
+  NOT for: Bug fixes, PR reviews, refactoring existing code, simple one-off tasks.
+
+  Based on Anthropic's harness design article for long-running application development.
+  Separates planning, building, and evaluation into distinct roles with adversarial tension.
+provider: claude
+model: medium
+nodes:
+- id: plan
+  allowed_tools:
+  - Read
+  - Write
+  - Glob
+  - Grep
+  command: plan
+- id: init-workspace
+  depends_on:
+  - plan
+  bash: |
+    ARTIFACTS="$ARTIFACTS_DIR"
+
+    # Create directory structure for harness communication
+    mkdir -p "$ARTIFACTS/contracts"
+    mkdir -p "$ARTIFACTS/feedback"
+    mkdir -p "$ARTIFACTS/app"
+
+    # Initialize isolated git repo in app directory
+    cd "$ARTIFACTS/app"
+    git init -q
+    git commit --allow-empty -m "Initial commit: adversarial-dev workspace" -q
+
+    # Extract sprint count from spec (find highest "Sprint N" reference)
+    SPEC="$ARTIFACTS/spec.md"
+    SPRINT_COUNT=3
+    if [ -f "$SPEC" ]; then
+      FOUND=$(grep -ioE 'sprint\s+[0-9]+' "$SPEC" | grep -oE '[0-9]+' | sort -n | tail -1)
+      if [ -n "$FOUND" ] && [ "$FOUND" -ge 1 ] 2>/dev/null; then
+        SPRINT_COUNT=$FOUND
+      fi
+      if [ "$SPRINT_COUNT" -gt 10 ]; then
+        SPRINT_COUNT=10
+      fi
+    fi
+
+    # Write initial state machine file
+    cat > "$ARTIFACTS/state.json" << 'STATEEOF'
+    {
+      "phase": "negotiating",
+      "sprint": 1,
+      "totalSprints": SPRINT_COUNT_PLACEHOLDER,
+      "retry": 0,
+      "maxRetries": 3,
+      "passThreshold": 7,
+      "completedSprints": [],
+      "status": "running"
+    }
+    STATEEOF
+    STATE_TMP="$ARTIFACTS/state.json.tmp"
+    sed "s/SPRINT_COUNT_PLACEHOLDER/$SPRINT_COUNT/" "$ARTIFACTS/state.json" > "$STATE_TMP"
+    mv "$STATE_TMP" "$ARTIFACTS/state.json"
+
+    echo "{\"totalSprints\": $SPRINT_COUNT, \"appDir\": \"$ARTIFACTS/app\", \"artifactsDir\": \"$ARTIFACTS\"}"
+  timeout: 30000
+- id: adversarial-sprint
+  depends_on:
+  - init-workspace
+  idle_timeout: 600000
+  model: large
+  loop:
+    max_iterations: 60
+    fresh_context: true
+    until_bash: 'bun -e ''const s = await Bun.file(process.env.ARTIFACTS_DIR + "/state.json").json();
+      process.exit(["complete", "failed"].includes(s.status) ? 0 : 1)'''
+    command: adversarial-sprint
+- id: report
+  depends_on:
+  - adversarial-sprint
+  trigger_rule: all_done
+  context: fresh
+  model: small
+  allowed_tools:
+  - Read
+  - Write
+  - Glob
+  - Grep
+  command: report
+deprecated:
+  message: Switch to the sdlc pack instead.

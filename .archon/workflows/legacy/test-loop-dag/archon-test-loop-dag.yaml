@@ -1,0 +1,25 @@
+name: archon-test-loop-dag
+description: |
+  Use when: User explicitly says "test-loop-dag" or "run test-loop-dag".
+  IMPORTANT: This is a DAG workflow with a loop node that iterates until completion.
+  NOT for: General testing questions or debugging.
+  Does: Initializes a counter, iterates until it reaches 3, then reports completion.
+nodes:
+- id: setup
+  bash: |
+    echo "0" > .archon/test-loop-dag-counter.txt
+    echo "Counter initialized to 0"
+- id: loop-counter
+  depends_on:
+  - setup
+  loop:
+    max_iterations: 5
+    fresh_context: false
+    until_bash: test "$(cat .archon/test-loop-dag-counter.txt)" -ge 3
+    command: loop-counter
+- id: report
+  depends_on:
+  - loop-counter
+  command: report
+deprecated:
+  message: Switch to the sdlc pack instead.

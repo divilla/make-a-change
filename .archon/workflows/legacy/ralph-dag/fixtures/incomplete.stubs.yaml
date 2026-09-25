@@ -1,0 +1,10 @@
+fixture:
+  expect: failed
+  fail-node: implement
+detect-input:
+  input_type: ready
+  prd_dir: .archon/ralph/example
+validate-prd: Completed fixture step.
+implement:
+  done: false
+  summary: Required validation still fails.

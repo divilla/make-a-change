@@ -1,0 +1,189 @@
+name: archon-piv-loop
+description: |
+  Use when: User wants guided Plan-Implement-Validate development with human-in-the-loop.
+  Triggers: "piv", "piv loop", "plan implement validate", "guided development",
+            "structured development", "build a feature", "develop with review".
+  NOT for: Autonomous implementation without planning (use archon-feature-development).
+  NOT for: PRD creation (use archon-interactive-prd).
+  NOT for: Ralph story-based implementation (use archon-ralph-dag).
+
+  Interactive PIV loop workflow — the foundational AI coding methodology:
+  1. EXPLORE: Iterative conversation with human to understand the problem (arbitrary rounds)
+  2. PLAN: Create structured plan -> iterative review & revision (arbitrary rounds)
+  3. IMPLEMENT: Autonomous task-by-task implementation from plan (Ralph loop)
+  4. VALIDATE: Automated code review -> iterative human feedback & fixes (arbitrary rounds)
+
+  The PIV loop comes AFTER a PRD exists. Each PIV loop focuses on ONE granular feature or bug fix.
+  Input: A description of what to build, a path to an existing plan, or a GitHub issue number.
+provider: claude
+interactive: true
+nodes:
+- id: explore
+  loop_group:
+    nodes:
+    - id: explore-work
+      command: explore-work
+    - id: explore-review
+      depends_on:
+      - explore-work
+      approval:
+        message: |-
+          Choose Create plan to proceed, or Continue exploring with your answers,
+          questions, or requested changes.
+
+          $explore-work.output
+        decisions:
+        - id: approve
+          label: Create plan
+        - id: revise
+          label: Continue exploring
+    until_bash: test "$explore-review.output.decision" = "approve"
+    max_iterations: 15
+- id: create-plan
+  model: medium
+  depends_on:
+  - explore
+  context: fresh
+  command: create-plan
+- id: refine-plan
+  depends_on:
+  - create-plan
+  loop_group:
+    nodes:
+    - id: refine-plan-work
+      command: refine-plan-work
+    - id: refine-plan-review
+      depends_on:
+      - refine-plan-work
+      approval:
+        message: |-
+          Review the plan document. Choose Begin implementation to approve it,
+          or Revise plan with specific feedback.
+
+          $refine-plan-work.output
+        decisions:
+        - id: approve
+          label: Begin implementation
+        - id: revise
+          label: Revise plan
+    until_bash: test "$refine-plan-review.output.decision" = "approve"
+    max_iterations: 10
+- id: implement-setup
+  depends_on:
+  - refine-plan
+  bash: |
+    set -e
+
+    PLAN_FILE="$ARTIFACTS_DIR/plan.md"
+
+    if [ ! -f "$PLAN_FILE" ]; then
+      echo "ERROR: No plan file found at $ARTIFACTS_DIR/plan.md"
+      exit 1
+    fi
+
+    # Install dependencies if needed
+    if [ -f "bun.lock" ] || [ -f "bun.lockb" ]; then
+      echo "Installing dependencies..."
+      bun install --frozen-lockfile 2>&1 | tail -3
+    elif [ -f "package-lock.json" ]; then
+      npm ci 2>&1 | tail -3
+    elif [ -f "yarn.lock" ]; then
+      yarn install --frozen-lockfile 2>&1 | tail -3
+    elif [ -f "pnpm-lock.yaml" ]; then
+      pnpm install --frozen-lockfile 2>&1 | tail -3
+    fi
+
+    echo "BRANCH=$(git branch --show-current)"
+    echo "GIT_ROOT=$(git rev-parse --show-toplevel)"
+    echo "PLAN_FILE=$PLAN_FILE"
+
+    echo "=== PLAN_START ==="
+    cat "$PLAN_FILE"
+    echo ""
+    echo "=== PLAN_END ==="
+
+    TASK_COUNT=$(grep -c "^### Task [0-9]" "$PLAN_FILE" 2>/dev/null || echo "0")
+    if [ "$TASK_COUNT" -eq 0 ]; then
+      echo "ERROR: No '### Task N:' sections found in $PLAN_FILE. Plan may be malformed."
+      exit 1
+    fi
+    echo "TASK_COUNT=${TASK_COUNT}"
+- id: implement
+  depends_on:
+  - implement-setup
+  idle_timeout: 600000
+  model: large
+  loop:
+    max_iterations: 15
+    fresh_context: true
+    until_field: done
+    command: implement
+  output_format:
+    type: object
+    properties:
+      done:
+        type: boolean
+      summary:
+        type: string
+    required:
+    - done
+    - summary
+    additionalProperties: false
+- id: code-review
+  model: medium
+  depends_on:
+  - implement
+  context: fresh
+  command: code-review
+- id: fix-feedback
+  depends_on:
+  - code-review
+  loop_group:
+    nodes:
+    - id: fix-feedback-work
+      command: fix-feedback-work
+    - id: fix-feedback-review
+      depends_on:
+      - fix-feedback-work
+      approval:
+        message: |-
+          Test the implementation and review the code changes. Choose Finalize
+          to approve, or Request fixes with specific feedback.
+
+          $fix-feedback-work.output
+        decisions:
+        - id: approve
+          label: Finalize
+        - id: revise
+          label: Request fixes
+    until_bash: test "$fix-feedback-review.output.decision" = "approve"
+    max_iterations: 10
+- id: finalize
+  model: medium
+  depends_on:
+  - fix-feedback
+  context: fresh
+  command: finalize
+- id: verify-pr-base
+  bash: |
+    set -euo pipefail
+    # Pin to the origin remote — in a fork clone, gh otherwise queries the upstream parent
+    ORIGIN_REPO=$(git remote get-url origin | sed -E 's#^.*[:/]([^/]+/[^/]+)$#\1#; s#\.git$##')
+    HEAD_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    PR_NUMBER=$(gh pr list --repo "$ORIGIN_REPO" --head "$HEAD_BRANCH" --state open --json number -q '.[0].number')
+    if [ -z "$PR_NUMBER" ]; then
+      echo "No open PR found for branch $HEAD_BRANCH" >&2
+      exit 1
+    fi
+    EXPECTED="$BASE_BRANCH"
+    ACTUAL=$(gh pr view "$PR_NUMBER" --repo "$ORIGIN_REPO" --json baseRefName -q '.baseRefName')
+    if [ "$ACTUAL" != "$EXPECTED" ]; then
+      echo "Base mismatch on PR #$PR_NUMBER: expected=$EXPECTED actual=$ACTUAL — re-targeting" >&2
+      gh pr edit "$PR_NUMBER" --repo "$ORIGIN_REPO" --base "$EXPECTED"
+    else
+      echo "PR base verified: $EXPECTED"
+    fi
+  depends_on:
+  - finalize
+deprecated:
+  message: Switch to the sdlc pack instead.

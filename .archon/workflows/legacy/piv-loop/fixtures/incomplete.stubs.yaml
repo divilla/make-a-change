@@ -1,0 +1,10 @@
+fixture:
+  expect: failed
+  fail-node: implement
+explore-work: Reviewable work prepared.
+create-plan: Completed fixture step.
+refine-plan-work: Reviewable work prepared.
+implement-setup: Completed fixture step.
+implement:
+  done: false
+  summary: Required validation still fails.

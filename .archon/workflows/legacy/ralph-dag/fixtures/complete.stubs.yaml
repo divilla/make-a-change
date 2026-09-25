@@ -1,0 +1,11 @@
+fixture:
+  expect: completed
+detect-input:
+  input_type: ready
+  prd_dir: .archon/ralph/example
+validate-prd: Completed fixture step.
+implement:
+  done: true
+  summary: All work and required validation complete.
+verify-pr-base: Completed fixture step.
+report: Completed fixture step.
