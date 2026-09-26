@@ -110,23 +110,14 @@ func TestTestCaseCRUDRecalculatesChangeAndEpicCompleteness(t *testing.T) {
 	assert.Equal(t, int16(50), updated.Change.Completed)
 	assert.Equal(t, second.Version, updated.TestCase.Version)
 
-	newChangeID := createChange(t, client, projectID, &epicID)
-	previousVersion := updated.TestCase.Version
-	status = client.Post(t, "/api/v1/test-case/update-change", map[string]any{
-		"id": second.ID, "change_id": newChangeID,
-	}, &updated)
-	require.Equal(t, http.StatusOK, status)
-	require.NotNil(t, updated.TestCase)
-	assert.Equal(t, newChangeID, updated.TestCase.ChangeID)
-	assert.Equal(t, previousVersion, updated.TestCase.Version)
-	assert.Equal(t, newChangeID, updated.Change.ID)
-
 	var deleted mutation
 	status = client.Post(t, "/api/v1/test-case/delete", map[string]any{"id": first.ID}, &deleted)
 	require.Equal(t, http.StatusOK, status)
 	assert.Nil(t, deleted.TestCase)
 	assert.Equal(t, int16(0), deleted.Change.Completed)
-	assert.Empty(t, deleted.TestCases)
+	require.Len(t, deleted.TestCases, 1)
+	assert.Equal(t, second.ID, deleted.TestCases[0].ID)
+	assertEpicCompleteness(t, client, epicID, 0, 1, 0)
 
 	status = client.Post(t, "/api/v1/test-case/delete", map[string]any{"id": first.ID}, nil)
 	assert.Equal(t, http.StatusNotFound, status)
@@ -175,14 +166,6 @@ func TestTestCaseRejectsInvalidInputAndMissingRows(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, status)
 
 	status = client.Post(t, "/api/v1/test-case/update-done", map[string]any{"id": 999999999, "done": true}, nil)
-	assert.Equal(t, http.StatusNotFound, status)
-
-	status = client.Post(t, "/api/v1/test-case/update-change", map[string]any{"id": 999999999}, nil)
-	assert.Equal(t, http.StatusBadRequest, status)
-
-	status = client.Post(t, "/api/v1/test-case/update-change", map[string]any{
-		"id": 999999999, "change_id": 999999999,
-	}, nil)
 	assert.Equal(t, http.StatusNotFound, status)
 
 	status = client.Post(t, "/api/v1/test-case/delete", map[string]any{}, nil)
@@ -252,7 +235,7 @@ func createChange(t *testing.T, client *shared.Client, projectID int, epicID *in
 	status := client.Post(t, "/api/v1/change/create", map[string]any{
 		"project_id": projectID,
 		"title":      fmt.Sprintf("api-test-test-case-change-%d", time.Now().UnixNano()),
-		"def":        "Test case def",
+		"brief":      "Test case brief",
 	}, &created)
 	require.Equal(t, http.StatusCreated, status)
 	require.NotEmpty(t, created.ID)

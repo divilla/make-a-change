@@ -1,11 +1,9 @@
 package change
 
 import (
+	"aipm/internal/dto"
 	"context"
 	"errors"
-	"slices"
-
-	"aipm/internal/dto"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -21,23 +19,19 @@ type (
 	// Repository defines Repository values.
 	Repository interface {
 		List(ctx context.Context, projectID int) ([]dto.ChangeListItem, error)
-		Get(ctx context.Context, id int) (dto.ChangeDetail, error)
+		Details(ctx context.Context, id int) (dto.ChangeDetails, error)
 		Artifacts(ctx context.Context, ids []int) ([]dto.Change, error)
 		AvailableChangeTypes(ctx context.Context) ([]string, error)
 		Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Change, error)
 		UpdateChangeTypes(ctx context.Context, req dto.ChangeUpdateChangeTypesRequest) (dto.Change, error)
 		UpdateTitle(ctx context.Context, req dto.ChangeUpdateTitleRequest) (dto.Change, error)
-		UpdateDef(ctx context.Context, req dto.ChangeUpdateDefRequest) (dto.Change, error)
+		UpdateBrief(ctx context.Context, req dto.ChangeUpdateBriefRequest) (dto.Change, error)
 		UpdateSpec(ctx context.Context, req dto.ChangeUpdateSpecRequest) (dto.Change, error)
 		UpdatePR(ctx context.Context, req dto.ChangeUpdatePRRequest) (dto.Change, error)
 		UpdatePRUrl(ctx context.Context, req dto.ChangeUpdatePRUrlRequest) (dto.Change, error)
 		UpdateEpic(ctx context.Context, req dto.ChangeUpdateEpicRequest) (dto.Change, error)
 		UpdatePhase(ctx context.Context, req dto.ChangeUpdatePhaseRequest) (dto.Change, error)
 		UpdateOpen(ctx context.Context, req dto.ChangeUpdateOpenRequest) (dto.Change, error)
-		AssignFlow(ctx context.Context, req dto.ChangeIDRequest) (dto.Change, error)
-		StartRun(ctx context.Context, req dto.ChangeIDRequest) (dto.ChangeRunClaimResponse, error)
-		UpdateRun(ctx context.Context, req dto.ChangeUpdateRunRequest) (dto.ChangeRunUpdateResponse, error)
-		ResetClaim(ctx context.Context, req dto.ChangeIDRequest) (dto.ChangeRunClaimResponse, error)
 		Delete(ctx context.Context, req dto.ChangeIDRequest) error
 	}
 )
@@ -54,21 +48,10 @@ const changeDetailColumns = `
 	epic_id,
 	epic_name,
 	title,
-	def,
+	brief,
 	spec,
 	pr,
 	pr_url,
-	agent_edit,
-	flow_stages,
-	flow_stage_modes,
-	run_claim_id,
-	run_flow_stage,
-	run_task_step,
-	run_task_status,
-	run_error,
-	run_is_completed,
-	run_started_at,
-	run_updated_at,
 	open,
 	done_tc,
 	total_tc,
@@ -87,7 +70,6 @@ const changeListColumns = `
 	epic_id,
 	epic_name,
 	title,
-	agent_edit,
 	open,
 	done_tc,
 	total_tc,
@@ -114,32 +96,85 @@ func (r *Repo) List(ctx context.Context, projectID int) ([]dto.ChangeListItem, e
 
 	changes := make([]dto.ChangeListItem, 0)
 	for rows.Next() {
-		change, err := scanChangeList(rows)
+		var change dto.ChangeListItem
+		err = rows.Scan(
+			&change.ID,
+			&change.RefUUID,
+			&change.Ref,
+			&change.Slug,
+			&change.ProjectID,
+			&change.ChangePhase,
+			&change.ChangeTypes,
+			&change.EpicID,
+			&change.EpicName,
+			&change.Title,
+			&change.Open,
+			&change.DoneTC,
+			change.TotalTC,
+			&change.Completed,
+			&change.Modified,
+		)
 		if err != nil {
 			return nil, err
 		}
 		changes = append(changes, change)
 	}
+
 	return changes, rows.Err()
 }
 
-// Get executes Get behavior.
-func (r *Repo) Get(ctx context.Context, id int) (dto.ChangeDetail, error) {
-	change, err := getChange(ctx, r.pool, id)
+// Details executes Get behavior.
+func (r *Repo) Details(ctx context.Context, id int) ([]dto.Change, error) {
+	rows, err := r.pool.Query(ctx, `
+		select `+changeListColumns+`
+		from public.vw_change_list
+		where id = $1
+		order by modified desc, id
+	`, id)
 	if err != nil {
-		return dto.ChangeDetail{}, err
+		return nil, err
 	}
-	testCases, err := listTestCases(ctx, r.pool, id)
-	if err != nil {
-		return dto.ChangeDetail{}, err
+	defer rows.Close()
+
+	var changes []dto.Change
+	for rows.Next() {
+		var change dto.Change
+		err = rows.Scan(
+			&change.ID,
+			&change.RefUUID,
+			&change.Ref,
+			&change.Version,
+			&change.Slug,
+			&change.ProjectID,
+			&change.ChangePhase,
+			&change.ChangeTypes,
+			&change.EpicID,
+			&change.EpicName,
+			&change.Title,
+			&change.Brief,
+			&change.Spec,
+			&change.PR,
+			&change.PRUrl,
+			&change.Open,
+			&change.DoneTC,
+			&change.TotalTC,
+			&change.Completed,
+			&change.Created,
+			&change.Modified,
+		)
+		if err != nil {
+			return nil, err
+		}
+		changes = append(changes, change)
 	}
-	return dto.ChangeDetail{Change: change, TestCases: testCases}, nil
+
+	return changes, rows.Err()
 }
 
 // Artifacts executes Artifacts behavior.
 func (r *Repo) Artifacts(ctx context.Context, ids []int) ([]dto.Change, error) {
 	rows, err := r.pool.Query(ctx, `
-		select requested.id::integer, c.spec, c.pr
+		select requested.id::integer, c.brief, c.spec, c.pr
 		from unnest($1::bigint[]) with ordinality as requested(id, ord)
 		join public.change c on c.id = requested.id
 		order by requested.ord
@@ -152,7 +187,7 @@ func (r *Repo) Artifacts(ctx context.Context, ids []int) ([]dto.Change, error) {
 	changes := make([]dto.Change, 0, len(ids))
 	for rows.Next() {
 		var change dto.Change
-		if err := rows.Scan(&change.ID, &change.Spec, &change.PR); err != nil {
+		if err := rows.Scan(&change.ID, &change.Brief, &change.Spec, &change.PR); err != nil {
 			return nil, err
 		}
 		changes = append(changes, change)
@@ -162,29 +197,41 @@ func (r *Repo) Artifacts(ctx context.Context, ids []int) ([]dto.Change, error) {
 
 // Create executes Create behavior.
 func (r *Repo) Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Change, error) {
-	if err := r.ensureProject(ctx, req.ProjectID); err != nil {
-		return dto.Change{}, err
-	}
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return dto.Change{}, err
-	}
-	defer tx.Rollback(ctx)
+	var change dto.Change
+	err := r.pool.QueryRow(ctx,
+		`select * from public.vw_change_details where id=public.fn_change_insert($1, $2, $3, $4)`,
+		req.ProjectID, *req.RefUUID, req.Title, req.Brief).
+		Scan(
+			&change.ID,
+			&change.RefUUID,
+			&change.Ref,
+			&change.Version,
+			&change.Slug,
+			&change.ProjectID,
+			&change.ChangePhase,
+			&change.ChangeTypes,
+			&change.EpicID,
+			&change.EpicName,
+			&change.Title,
+			&change.Brief,
+			&change.Spec,
+			&change.PR,
+			&change.PRUrl,
+			&change.Open,
+			&change.DoneTC,
+			&change.TotalTC,
+			&change.Completed,
+			&change.Created,
+			&change.Modified,
+		)
 
-	var id int
-	err = tx.QueryRow(ctx, `
-		select public.fn_change_insert($1, $2, $3, $4)
-	`, req.ProjectID, *req.RefUUID, req.Title, req.Def).Scan(&id)
-	if err != nil {
-		return dto.Change{}, err
-	}
-
-	return finishMutation(ctx, tx, id)
+	return change, err
 }
 
 // AvailableChangeTypes returns the type slugs currently accepted by the backend.
 func (r *Repo) AvailableChangeTypes(ctx context.Context) ([]string, error) {
-	rows, err := r.pool.Query(ctx, "select slug from public.change_type order by priority, slug")
+	rows, err := r.pool.Query(ctx,
+		"select slug from public.change_type order by priority, slug")
 	if err != nil {
 		return nil, err
 	}
@@ -203,14 +250,7 @@ func (r *Repo) AvailableChangeTypes(ctx context.Context) ([]string, error) {
 
 // UpdateChangeTypes executes UpdateChangeTypes behavior.
 func (r *Repo) UpdateChangeTypes(ctx context.Context, req dto.ChangeUpdateChangeTypesRequest) (dto.Change, error) {
-	return r.updateField(ctx, req.ID, func(current state) bool {
-		return slices.Equal(current.ChangeTypes, req.ChangeTypes)
-	}, `
-		update public.change
-		set change_types = $2,
-			modified = now()
-		where id = $1
-	`, req.ChangeTypes)
+	r.pool.Exec(ctx, `update public.change set change_types = $1, modified = now() where id = $2`, req.ChangeTypes, req.ID)
 }
 
 // UpdateTitle executes UpdateTitle behavior.
@@ -245,9 +285,9 @@ func (r *Repo) UpdateTitle(ctx context.Context, req dto.ChangeUpdateTitleRequest
 	return finishMutation(ctx, tx, req.ID)
 }
 
-// UpdateDef executes UpdateDef behavior.
-func (r *Repo) UpdateDef(ctx context.Context, req dto.ChangeUpdateDefRequest) (dto.Change, error) {
-	return r.updateArtifact(ctx, req.ID, "call public.sp_change_def_update($1, $2, $3)", req.Def, *req.AgentEdit)
+// UpdateBrief executes UpdateBrief behavior.
+func (r *Repo) UpdateBrief(ctx context.Context, req dto.ChangeUpdateBriefRequest) (dto.Change, error) {
+	return r.updateArtifact(ctx, req.ID, "call public.sp_change_brief_update($1, $2, $3)", req.Brief, *req.AgentEdit)
 }
 
 // UpdateSpec executes UpdateSpec behavior.
@@ -312,7 +352,7 @@ func (r *Repo) UpdateEpic(ctx context.Context, req dto.ChangeUpdateEpicRequest) 
 
 // UpdatePhase executes UpdatePhase behavior.
 func (r *Repo) UpdatePhase(ctx context.Context, req dto.ChangeUpdatePhaseRequest) (dto.Change, error) {
-	if err := r.ensureReference(ctx, "change_phase", req.ChangePhase); err != nil {
+	if err := r.ensureReference(ctx, req.ChangePhase); err != nil {
 		return dto.Change{}, err
 	}
 	tx, err := r.pool.Begin(ctx)
@@ -374,91 +414,6 @@ func (r *Repo) UpdateOpen(ctx context.Context, req dto.ChangeUpdateOpenRequest) 
 	return finishMutation(ctx, tx, req.ID)
 }
 
-// AssignFlow executes AssignFlow behavior.
-func (r *Repo) AssignFlow(ctx context.Context, req dto.ChangeIDRequest) (dto.Change, error) {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return dto.Change{}, err
-	}
-	defer tx.Rollback(ctx)
-
-	if _, err := tx.Exec(ctx, "call public.sp_change_assign_flow($1)", req.ID); err != nil {
-		return dto.Change{}, err
-	}
-	return finishMutation(ctx, tx, req.ID)
-}
-
-// StartRun executes StartRun behavior.
-func (r *Repo) StartRun(ctx context.Context, req dto.ChangeIDRequest) (dto.ChangeRunClaimResponse, error) {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return dto.ChangeRunClaimResponse{}, err
-	}
-	defer tx.Rollback(ctx)
-
-	if _, err := getState(ctx, tx, req.ID); err != nil {
-		return dto.ChangeRunClaimResponse{}, err
-	}
-	var claimID pgtype.UUID
-	if err := tx.QueryRow(ctx, "select public.fn_change_start_run($1)", req.ID).Scan(&claimID); err != nil {
-		return dto.ChangeRunClaimResponse{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return dto.ChangeRunClaimResponse{}, err
-	}
-	return claimResponse(claimID), nil
-}
-
-// UpdateRun executes UpdateRun behavior.
-func (r *Repo) UpdateRun(ctx context.Context, req dto.ChangeUpdateRunRequest) (dto.ChangeRunUpdateResponse, error) {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return dto.ChangeRunUpdateResponse{}, err
-	}
-	defer tx.Rollback(ctx)
-
-	var claimID pgtype.UUID
-	if err := claimID.Scan(req.RunClaimID); err != nil {
-		return dto.ChangeRunUpdateResponse{}, ErrInvalidInput
-	}
-	var changeID pgtype.Int8
-	err = tx.QueryRow(ctx, `
-		select public.fn_change_update_run($1, $2, $3, $4, $5, $6, $7)
-	`, req.ID, claimID, req.RunFlowStage, req.RunTaskStep, req.RunTaskStatus, req.RunError, req.RunIsCompleted).Scan(&changeID)
-	if err != nil {
-		return dto.ChangeRunUpdateResponse{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return dto.ChangeRunUpdateResponse{}, err
-	}
-	if !changeID.Valid {
-		return dto.ChangeRunUpdateResponse{}, nil
-	}
-	value := int(changeID.Int64)
-	return dto.ChangeRunUpdateResponse{ChangeID: &value}, nil
-}
-
-// ResetClaim executes ResetClaim behavior.
-func (r *Repo) ResetClaim(ctx context.Context, req dto.ChangeIDRequest) (dto.ChangeRunClaimResponse, error) {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return dto.ChangeRunClaimResponse{}, err
-	}
-	defer tx.Rollback(ctx)
-
-	if _, err := getState(ctx, tx, req.ID); err != nil {
-		return dto.ChangeRunClaimResponse{}, err
-	}
-	var claimID pgtype.UUID
-	if err := tx.QueryRow(ctx, "select public.fn_change_reset_claim($1)", req.ID).Scan(&claimID); err != nil {
-		return dto.ChangeRunClaimResponse{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return dto.ChangeRunClaimResponse{}, err
-	}
-	return claimResponse(claimID), nil
-}
-
 // Delete executes Delete behavior.
 func (r *Repo) Delete(ctx context.Context, req dto.ChangeIDRequest) error {
 	tx, err := r.pool.Begin(ctx)
@@ -471,16 +426,7 @@ func (r *Repo) Delete(ctx context.Context, req dto.ChangeIDRequest) error {
 	if err != nil {
 		return err
 	}
-	testCases, err := testCasesForChange(ctx, tx, req.ID)
-	if err != nil {
-		return err
-	}
-	for _, testCase := range testCases {
-		if _, err := tx.Exec(ctx, "call public.sp_test_case_to_history($1, true)", testCase.ID); err != nil {
-			return err
-		}
-	}
-	if _, err := tx.Exec(ctx, "delete from public.test_case where change_id = $1", req.ID); err != nil {
+	if err := deleteTestCasesForChange(ctx, tx, req.ID); err != nil {
 		return err
 	}
 	tag, err := tx.Exec(ctx, "delete from public.change where id = $1", req.ID)
@@ -496,9 +442,9 @@ func (r *Repo) Delete(ctx context.Context, req dto.ChangeIDRequest) error {
 	return tx.Commit(ctx)
 }
 
-func (r *Repo) ensureReference(ctx context.Context, table, slug string) error {
+func (r *Repo) ensureReference(ctx context.Context, slug string) error {
 	var exists bool
-	if err := r.pool.QueryRow(ctx, "select exists(select 1 from public."+table+" where slug = $1)", slug).Scan(&exists); err != nil {
+	if err := r.pool.QueryRow(ctx, "select exists(select 1 from public.change_phase where slug = $1)", slug).Scan(&exists); err != nil {
 		return err
 	}
 	if !exists {
@@ -568,18 +514,28 @@ func scanChange(row pgx.Row) (dto.Change, error) {
 	var slug pgtype.Text
 	var epicID pgtype.Int8
 	var epicName pgtype.Text
-	var runClaimID pgtype.UUID
-	var runStartedAt pgtype.Timestamptz
-	var runUpdatedAt pgtype.Timestamptz
 	err := row.Scan(
-		&change.ID, &refUUID, &ref, &change.Version, &slug, &change.ProjectID,
-		&change.ChangePhase, &change.ChangeTypes, &epicID, &epicName, &change.Title,
-		&change.Def, &change.Spec, &change.PR, &change.PRUrl, &change.AgentEdit,
-		&change.FlowStages, &change.FlowStageModes, &runClaimID, &change.RunFlowStage,
-		&change.RunTaskStep, &change.RunTaskStatus, &change.RunError, &change.RunIsCompleted,
-		&runStartedAt, &runUpdatedAt,
-		&change.Open, &change.DoneTC,
-		&change.TotalTC, &change.Completed, &change.Created, &change.Modified,
+		&change.ID,
+		&refUUID,
+		&ref,
+		&change.Version,
+		&slug,
+		&change.ProjectID,
+		&change.ChangePhase,
+		&change.ChangeTypes,
+		&epicID,
+		&epicName,
+		&change.Title,
+		&change.Brief,
+		&change.Spec,
+		&change.PR,
+		&change.PRUrl,
+		&change.Open,
+		&change.DoneTC,
+		&change.TotalTC,
+		&change.Completed,
+		&change.Created,
+		&change.Modified,
 	)
 	if err != nil {
 		return dto.Change{}, err
@@ -603,18 +559,6 @@ func scanChange(row pgx.Row) (dto.Change, error) {
 		value := epicName.String
 		change.EpicName = &value
 	}
-	if runClaimID.Valid {
-		value := runClaimID.String()
-		change.RunClaimID = &value
-	}
-	if runStartedAt.Valid {
-		value := runStartedAt.Time
-		change.RunStartedAt = &value
-	}
-	if runUpdatedAt.Valid {
-		value := runUpdatedAt.Time
-		change.RunUpdatedAt = &value
-	}
 	return change, nil
 }
 
@@ -626,9 +570,21 @@ func scanChangeList(row pgx.Row) (dto.ChangeListItem, error) {
 	var epicID pgtype.Int8
 	var epicName pgtype.Text
 	err := row.Scan(
-		&change.ID, &refUUID, &ref, &slug, &change.ProjectID, &change.ChangePhase,
-		&change.ChangeTypes, &epicID, &epicName, &change.Title, &change.AgentEdit,
-		&change.Open, &change.DoneTC, &change.TotalTC, &change.Completed, &change.Modified,
+		&change.ID,
+		&refUUID,
+		&ref,
+		&slug,
+		&change.ProjectID,
+		&change.ChangePhase,
+		&change.ChangeTypes,
+		&epicID,
+		&epicName,
+		&change.Title,
+		&change.Open,
+		&change.DoneTC,
+		&change.TotalTC,
+		&change.Completed,
+		&change.Modified,
 	)
 	if err != nil {
 		return dto.ChangeListItem{}, err
@@ -661,11 +617,10 @@ type state struct {
 	ChangePhase string
 	ChangeTypes []string
 	Title       string
-	Def         string
+	Brief       string
 	Spec        string
 	PR          string
 	PRUrl       string
-	AgentEdit   bool
 	Open        bool
 }
 
@@ -673,10 +628,10 @@ func getState(ctx context.Context, tx pgx.Tx, id int) (state, error) {
 	var item state
 	var epicID pgtype.Int8
 	err := tx.QueryRow(ctx, `
-		select project_id, epic_id, change_phase, change_types, title, def, spec, pr, pr_url, agent_edit, open
+		select project_id, epic_id, change_phase, change_types, title, brief, spec, pr, pr_url, open
 		from public.change
 		where id = $1
-	`, id).Scan(&item.ProjectID, &epicID, &item.ChangePhase, &item.ChangeTypes, &item.Title, &item.Def, &item.Spec, &item.PR, &item.PRUrl, &item.AgentEdit, &item.Open)
+	`, id).Scan(&item.ProjectID, &epicID, &item.ChangePhase, &item.ChangeTypes, &item.Title, &item.Brief, &item.Spec, &item.PR, &item.PRUrl, &item.Open)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return state{}, ErrNotFound
 	}
@@ -746,6 +701,19 @@ type testCaseRef struct {
 	ID int
 }
 
+func deleteTestCasesForChange(ctx context.Context, tx pgx.Tx, changeID int) error {
+	testCases, err := testCasesForChange(ctx, tx, changeID)
+	if err != nil {
+		return err
+	}
+	for _, testCase := range testCases {
+		if _, err := tx.Exec(ctx, "call public.sp_test_case_delete($1)", testCase.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func testCasesForChange(ctx context.Context, tx pgx.Tx, changeID int) ([]testCaseRef, error) {
 	rows, err := tx.Query(ctx, "select id from public.test_case where change_id = $1", changeID)
 	if err != nil {
@@ -778,14 +746,6 @@ func recalculateEpics(ctx context.Context, tx pgx.Tx, values ...*int) error {
 		}
 	}
 	return nil
-}
-
-func claimResponse(claimID pgtype.UUID) dto.ChangeRunClaimResponse {
-	if !claimID.Valid {
-		return dto.ChangeRunClaimResponse{}
-	}
-	value := claimID.String()
-	return dto.ChangeRunClaimResponse{ClaimID: &value}
 }
 
 func equalIntPointers(left, right *int) bool {

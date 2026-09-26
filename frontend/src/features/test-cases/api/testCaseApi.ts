@@ -24,10 +24,6 @@ export function updateTestCaseDone(id: number, done: boolean): Promise<TestCaseM
   return post<TestCaseMutation>('/api/v1/test-case/update-done', { id, done });
 }
 
-export function updateTestCaseChange(id: number, changeId: number): Promise<TestCaseMutation> {
-  return post<TestCaseMutation>('/api/v1/test-case/update-change', { id, change_id: changeId });
-}
-
 export function deleteTestCase(id: number): Promise<TestCaseMutation> {
   return post<TestCaseMutation>('/api/v1/test-case/delete', { id });
 }

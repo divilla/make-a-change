@@ -38,15 +38,27 @@ as
 $$
 declare
     _id bigint;
-    _def text;
+    _brief text;
+    _ref integer;
+    _slug text;
 begin
-    _def := coalesce(nullif(trim(_spec), ''), format('# %s', trim(_title)));
+    _brief := coalesce(nullif(trim(_spec), ''), format('# %s', trim(_title)));
 
-    select public.fn_change_insert(_project_id, gen_random_uuid(), _title, _def) into _id;
-    call public.sp_change_assign_flow(_id);
+    select public.fn_change_insert(_project_id, gen_random_uuid(), _title, _brief) into _id;
+
+    -- Assign fixture identifiers explicitly; the schema has no flow-assignment procedure.
+    update public.project
+    set last_ref = last_ref + 1
+    where id = _project_id
+    returning last_ref into _ref;
+
+    _slug := trim(both '-' from regexp_replace(lower(trim(_title)), '[^a-z0-9]+', '-', 'g'));
+    _slug := concat(lpad(_ref::text, 3, '0'), '-', coalesce(nullif(_slug, ''), 'change'));
 
     update public.change
     set
+        ref = _ref,
+        slug = _slug,
         change_types = coalesce(_change_types, array[]::text[]),
         epic_id = _epic_id
     where id = _id;
@@ -4411,27 +4423,37 @@ do
 $$
 declare
     _change record;
-    _epic record;
+    _test_case record;
+    _test_case_id bigint;
+    _active_phases text[];
 begin
+    select array_agg(slug order by priority, slug)
+    into _active_phases
+    from public.change_phase
+    where slug <> 'backlog';
+
     -- Demo board distribution: 40% backlog, the remaining 60% spread across active phases.
-    with ranked as (
-        select
-            c.id,
-            row_number() over (order by c.ref) as rn,
-            count(*) over () as total_count
-        from public.change c
-        join public.project p on p.id = c.project_id
-        where p.name = 'demo1'
-    )
-    update public.change c
-    set change_phase = case
-        when ranked.rn <= floor(ranked.total_count * 0.40)::int then 'backlog'
-        else (array['progress', 'review', 'staging', 'production', 'rejected'])[
-            ((ranked.rn - floor(ranked.total_count * 0.40)::int - 1) % 5) + 1
-        ]
-    end
-    from ranked
-    where c.id = ranked.id;
+    for _change in
+        with ranked as (
+            select
+                c.id,
+                row_number() over (order by c.ref) as rn,
+                count(*) over () as total_count
+            from public.change c
+            join public.project p on p.id = c.project_id
+            where p.name = 'demo1'
+        )
+        select id, case
+            when rn <= floor(total_count * 0.40)::int then 'backlog'
+            else _active_phases[
+                ((rn - floor(total_count * 0.40)::int - 1) % cardinality(_active_phases)) + 1
+            ]
+        end as phase
+        from ranked
+        order by rn
+    loop
+        call public.sp_change_phase_update(_change.id, _change.phase);
+    end loop;
 
     -- Keep 30% of demo Changes standalone; distribute the rest across Echo epics.
     with ranked as (
@@ -4469,41 +4491,23 @@ begin
       and p.name = 'demo1'
       and c.ref % 10 = 0;
 
-    -- Existing demo Changes predate the scraped PR timestamp batch, so keep them recent and varied.
-    update public.change c
-    set modified = now() - (random() * interval '10 days')
-    from public.project p
-    where p.id = c.project_id
-      and p.name = 'demo1'
-      and c.ref <= 300;
-
-    insert into public.test_case (change_id, scenario, done)
-    select c.id, seed.scenario, seed.done
-    from public.change c
-    join public.project p on p.id = c.project_id
-    cross join lateral (values
-        ('Review the Change spec and confirm it states the user-visible behavior.', true),
-        ('Exercise the primary success path for this Change.', (c.ref % 3) <> 0),
-        ('Verify the documented failure or boundary path for this Change.', (c.ref % 4) = 0)
-    ) as seed(scenario, done)
-    where p.name = 'demo1';
-
-    for _change in
-        select c.id
+    for _test_case in
+        select c.id as change_id, seed.scenario, seed.done
         from public.change c
         join public.project p on p.id = c.project_id
+        cross join lateral (values
+            (1, 'Review the Change spec and confirm it states the user-visible behavior.', true),
+            (2, 'Exercise the primary success path for this Change.', (c.ref % 3) <> 0),
+            (3, 'Verify the documented failure or boundary path for this Change.', (c.ref % 4) = 0)
+        ) as seed(ordinal, scenario, done)
         where p.name = 'demo1'
+        order by c.ref, seed.ordinal
     loop
-        call public.sp_change_test_case_recalculate(_change.id);
-    end loop;
-
-    for _epic in
-        select e.id
-        from public.epic e
-        join public.project p on p.id = e.project_id
-        where p.name = 'demo1'
-    loop
-        call public.sp_epic_test_case_recalculate(_epic.id);
+        select public.fn_test_case_insert(_test_case.change_id, _test_case.scenario)
+        into _test_case_id;
+        if _test_case.done then
+            call public.sp_test_case_update_done(_test_case_id, true);
+        end if;
     end loop;
 end;
 $$;

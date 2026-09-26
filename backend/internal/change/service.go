@@ -40,13 +40,13 @@ func (s *Service) ListChanges(ctx context.Context, req dto.ChangeListRequest) ([
 }
 
 // GetChange executes GetChange behavior.
-func (s *Service) GetChange(ctx context.Context, req dto.ChangeIDRequest) (dto.ChangeDetail, error) {
+func (s *Service) GetChange(ctx context.Context, req dto.ChangeIDRequest) (dto.ChangeDetails, error) {
 	if req.ID <= 0 {
-		return dto.ChangeDetail{}, ErrInvalidInput
+		return dto.ChangeDetails{}, ErrInvalidInput
 	}
-	detail, err := s.repo.Get(ctx, req.ID)
+	detail, err := s.repo.Details(ctx, req.ID)
 	if err != nil {
-		return dto.ChangeDetail{}, err
+		return dto.ChangeDetails{}, err
 	}
 	detail.Change = s.renderer.RenderChange(detail.Change)
 	return detail, nil
@@ -80,8 +80,8 @@ func (s *Service) RenderedArtifacts(ctx context.Context, req dto.ChangeRenderedA
 // CreateChange executes CreateChange behavior.
 func (s *Service) CreateChange(ctx context.Context, req dto.ChangeCreateRequest) (dto.Change, error) {
 	req.Title = strings.TrimSpace(req.Title)
-	req.Def = strings.TrimSpace(req.Def)
-	if req.ProjectID <= 0 || req.Title == "" || req.Def == "" {
+	req.Brief = strings.TrimSpace(req.Brief)
+	if req.ProjectID <= 0 || req.Title == "" || req.Brief == "" {
 		return dto.Change{}, ErrInvalidInput
 	}
 	if req.RefUUID == nil {
@@ -129,13 +129,13 @@ func (s *Service) UpdateTitle(ctx context.Context, req dto.ChangeUpdateTitleRequ
 	return s.renderer.RenderChange(change), nil
 }
 
-// UpdateDef executes UpdateDef behavior.
-func (s *Service) UpdateDef(ctx context.Context, req dto.ChangeUpdateDefRequest) (dto.Change, error) {
-	req.Def = strings.TrimSpace(req.Def)
-	if req.ID <= 0 || req.Def == "" || req.AgentEdit == nil {
+// UpdateBrief executes UpdateBrief behavior.
+func (s *Service) UpdateBrief(ctx context.Context, req dto.ChangeUpdateBriefRequest) (dto.Change, error) {
+	req.Brief = strings.TrimSpace(req.Brief)
+	if req.ID <= 0 || req.Brief == "" || req.AgentEdit == nil {
 		return dto.Change{}, ErrInvalidInput
 	}
-	change, err := s.repo.UpdateDef(ctx, req)
+	change, err := s.repo.UpdateBrief(ctx, req)
 	if err != nil {
 		return dto.Change{}, err
 	}
@@ -216,47 +216,6 @@ func (s *Service) UpdateOpen(ctx context.Context, req dto.ChangeUpdateOpenReques
 		return dto.Change{}, err
 	}
 	return s.renderer.RenderChange(change), nil
-}
-
-// AssignFlow executes AssignFlow behavior.
-func (s *Service) AssignFlow(ctx context.Context, req dto.ChangeIDRequest) (dto.Change, error) {
-	if req.ID <= 0 {
-		return dto.Change{}, ErrInvalidInput
-	}
-	change, err := s.repo.AssignFlow(ctx, req)
-	if err != nil {
-		return dto.Change{}, err
-	}
-	return s.renderer.RenderChange(change), nil
-}
-
-// StartRun executes StartRun behavior.
-func (s *Service) StartRun(ctx context.Context, req dto.ChangeIDRequest) (dto.ChangeRunClaimResponse, error) {
-	if req.ID <= 0 {
-		return dto.ChangeRunClaimResponse{}, ErrInvalidInput
-	}
-	return s.repo.StartRun(ctx, req)
-}
-
-// UpdateRun executes UpdateRun behavior.
-func (s *Service) UpdateRun(ctx context.Context, req dto.ChangeUpdateRunRequest) (dto.ChangeRunUpdateResponse, error) {
-	req.RunClaimID = strings.TrimSpace(req.RunClaimID)
-	req.RunFlowStage = strings.TrimSpace(req.RunFlowStage)
-	req.RunTaskStep = strings.TrimSpace(req.RunTaskStep)
-	req.RunTaskStatus = strings.TrimSpace(req.RunTaskStatus)
-	req.RunError = strings.TrimSpace(req.RunError)
-	if req.ID <= 0 || req.RunClaimID == "" {
-		return dto.ChangeRunUpdateResponse{}, ErrInvalidInput
-	}
-	return s.repo.UpdateRun(ctx, req)
-}
-
-// ResetClaim executes ResetClaim behavior.
-func (s *Service) ResetClaim(ctx context.Context, req dto.ChangeIDRequest) (dto.ChangeRunClaimResponse, error) {
-	if req.ID <= 0 {
-		return dto.ChangeRunClaimResponse{}, ErrInvalidInput
-	}
-	return s.repo.ResetClaim(ctx, req)
 }
 
 // DeleteChange executes DeleteChange behavior.

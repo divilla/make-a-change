@@ -214,14 +214,6 @@
               input-style="min-height: 72px"
               label="Test Case"
             />
-            <q-select
-              v-model="editingTestCaseChangeId"
-              filled
-              emit-value
-              map-options
-              label="Change"
-              :options="changeOptions"
-            />
           </q-card-section>
 
           <q-card-actions align="right">
@@ -319,7 +311,6 @@ import {
   createTestCase,
   deleteTestCase,
   updateTestCase,
-  updateTestCaseChange,
   updateTestCaseDone,
 } from '@/features/test-cases/api/testCaseApi';
 import type { TestCase } from '@/features/test-cases/model/testCase.types';
@@ -349,7 +340,6 @@ const creatingTestCase = ref(false);
 const testCaseEditOpen = ref(false);
 const editingTestCase = ref<TestCase | null>(null);
 const editingTestCaseScenario = ref('');
-const editingTestCaseChangeId = ref<number | null>(null);
 const savingTestCase = ref(false);
 const deleteConfirmationOpen = ref(false);
 const pendingDeleteAction = ref<(() => Promise<void>) | null>(null);
@@ -363,9 +353,6 @@ const currentChange = computed(() =>
   detailChange.value?.id === changeId.value ? detailChange.value : null,
 );
 const safePRUrl = computed(() => normalizeHTTPURL(currentChange.value?.pr_url || ''));
-const changeOptions = computed(() =>
-  changes.value.map((change) => ({ label: `#${change.id} ${change.title}`, value: change.id })),
-);
 
 function normalizeHTTPURL(value: string) {
   try {
@@ -552,7 +539,6 @@ async function toggleTestCase(testCase: TestCase, done: boolean) {
 function openTestCaseEdit(testCase: TestCase) {
   editingTestCase.value = testCase;
   editingTestCaseScenario.value = testCase.scenario;
-  editingTestCaseChangeId.value = testCase.change_id;
   testCaseEditOpen.value = true;
 }
 
@@ -562,7 +548,6 @@ function closeTestCaseEdit() {
   testCaseEditOpen.value = false;
   editingTestCase.value = null;
   editingTestCaseScenario.value = '';
-  editingTestCaseChangeId.value = null;
 }
 
 function openTestCaseCreate() {
@@ -609,26 +594,15 @@ async function saveTestCaseEdit() {
   testCaseError.value = '';
 
   try {
-    let mutation = await updateTestCase({
+    const mutation = await updateTestCase({
       id: editingTestCase.value.id,
       scenario,
     });
-    if (
-      editingTestCaseChangeId.value &&
-      editingTestCaseChangeId.value !== editingTestCase.value.change_id
-    ) {
-      mutation = await updateTestCaseChange(
-        editingTestCase.value.id,
-        editingTestCaseChangeId.value,
-      );
-    }
     applyTestCaseMutation(mutation.test_cases, mutation.change);
     testCaseEditOpen.value = false;
     editingTestCase.value = null;
     editingTestCaseScenario.value = '';
-    editingTestCaseChangeId.value = null;
     await changeCache.loadProjectChanges(mutation.change.project_id);
-    if (mutation.change.id !== changeId.value) await loadChangeDetail();
   } catch (err) {
     testCaseError.value = err instanceof Error ? err.message : 'Unable to update test case.';
   } finally {

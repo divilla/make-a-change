@@ -28,16 +28,12 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 	a.g.POST("/get", a.getChange)
 	a.g.POST("/rendered-artifacts", a.renderedArtifacts)
 	a.g.POST("/create", a.createChange)
-	a.g.POST("/assign-flow", a.assignFlow)
-	a.g.POST("/start-run", a.startRun)
-	a.g.POST("/update-run", a.updateRun)
-	a.g.POST("/reset-claim", a.resetClaim)
 	a.g.POST("/update-epic", a.updateEpic)
 	a.g.POST("/update-phase", a.updatePhase)
 	a.g.POST("/update-open", a.updateOpen)
 	a.g.POST("/update-change-types", a.updateChangeTypes)
 	a.g.POST("/update-title", a.updateTitle)
-	a.g.POST("/update-def", a.updateDef)
+	a.g.POST("/update-brief", a.updateBrief)
 	a.g.POST("/update-spec", a.updateSpec)
 	a.g.POST("/update-pr", a.updatePR)
 	a.g.POST("/update-pr-url", a.updatePRUrl)
@@ -130,60 +126,12 @@ func (a *API) updateTitle(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *API) assignFlow(c *echo.Context) error {
-	var req dto.ChangeIDRequest
+func (a *API) updateBrief(c *echo.Context) error {
+	var req dto.ChangeUpdateBriefRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid change flow assignment payload")
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid change brief payload")
 	}
-	res, err := a.s.AssignFlow(c.Request().Context(), req)
-	if err != nil {
-		return changeError(err)
-	}
-	return c.JSON(http.StatusOK, &res)
-}
-
-func (a *API) startRun(c *echo.Context) error {
-	var req dto.ChangeIDRequest
-	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid change start run payload")
-	}
-	res, err := a.s.StartRun(c.Request().Context(), req)
-	if err != nil {
-		return changeError(err)
-	}
-	return c.JSON(http.StatusOK, &res)
-}
-
-func (a *API) updateRun(c *echo.Context) error {
-	var req dto.ChangeUpdateRunRequest
-	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid change update run payload")
-	}
-	res, err := a.s.UpdateRun(c.Request().Context(), req)
-	if err != nil {
-		return changeError(err)
-	}
-	return c.JSON(http.StatusOK, &res)
-}
-
-func (a *API) resetClaim(c *echo.Context) error {
-	var req dto.ChangeIDRequest
-	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid change reset claim payload")
-	}
-	res, err := a.s.ResetClaim(c.Request().Context(), req)
-	if err != nil {
-		return changeError(err)
-	}
-	return c.JSON(http.StatusOK, &res)
-}
-
-func (a *API) updateDef(c *echo.Context) error {
-	var req dto.ChangeUpdateDefRequest
-	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid change definition payload")
-	}
-	res, err := a.s.UpdateDef(c.Request().Context(), req)
+	res, err := a.s.UpdateBrief(c.Request().Context(), req)
 	if err != nil {
 		return changeError(err)
 	}

@@ -29,7 +29,6 @@ type (
 		Create(ctx context.Context, req dto.TestCaseCreateRequest) (dto.TestCaseMutationResponse, error)
 		Update(ctx context.Context, req dto.TestCaseUpdateRequest) (dto.TestCaseMutationResponse, error)
 		UpdateDone(ctx context.Context, req dto.TestCaseUpdateDoneRequest) (dto.TestCaseMutationResponse, error)
-		UpdateChange(ctx context.Context, req dto.TestCaseUpdateChangeRequest) (dto.TestCaseMutationResponse, error)
 		Delete(ctx context.Context, req dto.TestCaseIDRequest) (dto.TestCaseMutationResponse, error)
 	}
 )
@@ -79,18 +78,6 @@ func (s *Service) UpdateTestCaseDone(ctx context.Context, req dto.TestCaseUpdate
 		return dto.TestCaseMutationResponse{}, ErrInvalidInput
 	}
 	mutation, err := s.repo.UpdateDone(ctx, req)
-	if err != nil {
-		return dto.TestCaseMutationResponse{}, err
-	}
-	return s.renderMutation(mutation), nil
-}
-
-// UpdateTestCaseChange executes UpdateTestCaseChange behavior.
-func (s *Service) UpdateTestCaseChange(ctx context.Context, req dto.TestCaseUpdateChangeRequest) (dto.TestCaseMutationResponse, error) {
-	if req.ID <= 0 || req.ChangeID <= 0 {
-		return dto.TestCaseMutationResponse{}, ErrInvalidInput
-	}
-	mutation, err := s.repo.UpdateChange(ctx, req)
 	if err != nil {
 		return dto.TestCaseMutationResponse{}, err
 	}

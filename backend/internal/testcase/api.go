@@ -28,7 +28,6 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 	a.g.POST("/create", a.createTestCase)
 	a.g.POST("/update", a.updateTestCase)
 	a.g.POST("/update-done", a.updateTestCaseDone)
-	a.g.POST("/update-change", a.updateTestCaseChange)
 	a.g.POST("/delete", a.deleteTestCase)
 
 	return a
@@ -76,18 +75,6 @@ func (a *API) updateTestCaseDone(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid test case done payload")
 	}
 	res, err := a.s.UpdateTestCaseDone(c.Request().Context(), req)
-	if err != nil {
-		return testCaseError(err)
-	}
-	return c.JSON(http.StatusOK, &res)
-}
-
-func (a *API) updateTestCaseChange(c *echo.Context) error {
-	var req dto.TestCaseUpdateChangeRequest
-	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid test case change payload")
-	}
-	res, err := a.s.UpdateTestCaseChange(c.Request().Context(), req)
 	if err != nil {
 		return testCaseError(err)
 	}

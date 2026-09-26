@@ -9,40 +9,30 @@ import (
 type (
 	// Change defines Change values.
 	Change struct {
-		ID             int        `json:"id"`
-		Version        int16      `json:"version"`
-		RefUUID        string     `json:"ref_uuid"`
-		Ref            *int32     `json:"ref"`
-		Slug           *string    `json:"slug"`
-		ProjectID      int        `json:"project_id"`
-		EpicID         *int       `json:"epic_id"`
-		EpicName       *string    `json:"epic_name"`
-		ChangePhase    string     `json:"change_phase"`
-		ChangeTypes    []string   `json:"change_types"`
-		Title          string     `json:"title"`
-		Def            string     `json:"def"`
-		Spec           string     `json:"spec"`
-		SpecHTML       string     `json:"spec_html"`
-		PR             string     `json:"pr"`
-		PRHtml         string     `json:"pr_html"`
-		PRUrl          string     `json:"pr_url"`
-		AgentEdit      bool       `json:"agent_edit"`
-		FlowStages     []string   `json:"flow_stages"`
-		FlowStageModes []string   `json:"flow_stage_modes"`
-		RunClaimID     *string    `json:"run_claim_id"`
-		RunFlowStage   string     `json:"run_flow_stage"`
-		RunTaskStep    string     `json:"run_task_step"`
-		RunTaskStatus  string     `json:"run_task_status"`
-		RunError       string     `json:"run_error"`
-		RunIsCompleted bool       `json:"run_is_completed"`
-		RunStartedAt   *time.Time `json:"run_started_at"`
-		RunUpdatedAt   *time.Time `json:"run_updated_at"`
-		Open           bool       `json:"open"`
-		DoneTC         int16      `json:"done_tc"`
-		TotalTC        int16      `json:"total_tc"`
-		Completed      int16      `json:"completed"`
-		Created        time.Time  `json:"created"`
-		Modified       time.Time  `json:"modified"`
+		ID          int       `json:"id"`
+		Version     int16     `json:"version"`
+		RefUUID     string    `json:"ref_uuid"`
+		Ref         *int32    `json:"ref"`
+		Slug        *string   `json:"slug"`
+		ProjectID   int       `json:"project_id"`
+		EpicID      *int      `json:"epic_id"`
+		EpicName    *string   `json:"epic_name"`
+		ChangePhase string    `json:"change_phase"`
+		ChangeTypes []string  `json:"change_types"`
+		Title       string    `json:"title"`
+		Brief       string    `json:"brief"`
+		BriefHTML   string    `json:"brief_html"`
+		Spec        string    `json:"spec"`
+		SpecHTML    string    `json:"spec_html"`
+		PR          string    `json:"pr"`
+		PRHtml      string    `json:"pr_html"`
+		PRUrl       string    `json:"pr_url"`
+		Open        bool      `json:"open"`
+		DoneTC      int16     `json:"done_tc"`
+		TotalTC     int16     `json:"total_tc"`
+		Completed   int16     `json:"completed"`
+		Created     time.Time `json:"created"`
+		Modified    time.Time `json:"modified"`
 	}
 
 	// ChangeListItem defines ChangeListItem values.
@@ -57,7 +47,6 @@ type (
 		EpicID      *int      `json:"epic_id"`
 		EpicName    *string   `json:"epic_name"`
 		Title       string    `json:"title"`
-		AgentEdit   bool      `json:"agent_edit"`
 		Open        bool      `json:"open"`
 		DoneTC      int16     `json:"done_tc"`
 		TotalTC     int16     `json:"total_tc"`
@@ -65,8 +54,7 @@ type (
 		Modified    time.Time `json:"modified"`
 	}
 
-	// ChangeDetail defines ChangeDetail values.
-	ChangeDetail struct {
+	ChangeDetails struct {
 		Change    Change     `json:"change"`
 		TestCases []TestCase `json:"test_cases"`
 	}
@@ -103,7 +91,7 @@ type (
 		ProjectID int        `json:"project_id"`
 		RefUUID   *uuid.UUID `json:"ref_uuid"`
 		Title     string     `json:"title"`
-		Def       string     `json:"def"`
+		Brief     string     `json:"brief"`
 	}
 
 	// ChangeUpdatePhaseRequest defines ChangeUpdatePhaseRequest values.
@@ -130,10 +118,10 @@ type (
 		Title string `json:"title"`
 	}
 
-	// ChangeUpdateDefRequest defines ChangeUpdateDefRequest values.
-	ChangeUpdateDefRequest struct {
+	// ChangeUpdateBriefRequest defines ChangeUpdateBriefRequest values.
+	ChangeUpdateBriefRequest struct {
 		ID        int    `json:"id"`
-		Def       string `json:"def"`
+		Brief     string `json:"brief"`
 		AgentEdit *bool  `json:"agent_edit"`
 	}
 
@@ -156,28 +144,6 @@ type (
 		ID    int    `json:"id"`
 		PRUrl string `json:"pr_url"`
 	}
-
-	// ChangeUpdateRunRequest defines ChangeUpdateRunRequest values.
-	ChangeUpdateRunRequest struct {
-		ID             int    `json:"id"`
-		RunClaimID     string `json:"run_claim_id"`
-		RunFlowStage   string `json:"run_flow_stage"`
-		RunTaskStep    string `json:"run_task_step"`
-		RunTaskStatus  string `json:"run_task_status"`
-		RunError       string `json:"run_error"`
-		RunIsCompleted bool   `json:"run_is_completed"`
-	}
-
-	// ChangeRunClaimResponse defines ChangeRunClaimResponse values.
-	ChangeRunClaimResponse struct {
-		ClaimID *string `json:"claim_id"`
-	}
-
-	// ChangeRunUpdateResponse defines ChangeRunUpdateResponse values.
-	ChangeRunUpdateResponse struct {
-		ChangeID *int `json:"change_id"`
-	}
-
 	// ChangeUpdateOpenRequest defines ChangeUpdateOpenRequest values.
 	ChangeUpdateOpenRequest struct {
 		ID   int   `json:"id"`

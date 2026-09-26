@@ -42,12 +42,6 @@ type (
 		Done bool `json:"done"`
 	}
 
-	// TestCaseUpdateChangeRequest defines TestCaseUpdateChangeRequest values.
-	TestCaseUpdateChangeRequest struct {
-		ID       int `json:"id"`
-		ChangeID int `json:"change_id"`
-	}
-
 	// TestCaseMutationResponse defines TestCaseMutationResponse values.
 	TestCaseMutationResponse struct {
 		TestCase  *TestCase  `json:"test_case,omitempty"`

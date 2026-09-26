@@ -3,10 +3,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { listProjects } from '@/features/projects/api/projectApi';
 import type { Project } from '@/features/projects/model/project.types';
 import { useProjectSelectionStore } from '@/features/projects/model/projectSelection.store';
-import {
-  deleteTestCase,
-  updateTestCaseChange,
-} from '@/features/test-cases/api/testCaseApi';
+import { deleteTestCase } from '@/features/test-cases/api/testCaseApi';
 import {
   testCaseFixture,
   testCaseMutationFixture,
@@ -59,7 +56,6 @@ vi.mock('@/features/test-cases/api/testCaseApi', () => ({
   createTestCase: vi.fn(),
   deleteTestCase: vi.fn(),
   updateTestCase: vi.fn(),
-  updateTestCaseChange: vi.fn(),
   updateTestCaseDone: vi.fn(),
 }));
 
@@ -172,7 +168,6 @@ describe('ChangeDetailPage', () => {
     vi.mocked(listEpics).mockResolvedValue([epicFixture({ id: 1, name: 'Project Epic' })]);
     vi.mocked(deleteChange).mockResolvedValue(undefined);
     vi.mocked(deleteTestCase).mockResolvedValue(testCaseMutationFixture());
-    vi.mocked(updateTestCaseChange).mockResolvedValue(testCaseMutationFixture());
   });
 
   afterEach(() => {
@@ -302,6 +297,7 @@ describe('ChangeDetailPage', () => {
     await wrapper.find('[data-action="edit-test-case"]').trigger('click');
 
     expect(wrapper.text()).toContain('Edit Test Case');
+    expect(wrapper.find('select').exists()).toBe(false);
   });
 
   it('confirms test case deletion with the shared delete dialog', async () => {

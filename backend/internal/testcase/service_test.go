@@ -19,8 +19,6 @@ func TestServiceRejectsInvalidTestCaseInput(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvalidInput)
 	_, err = service.UpdateTestCase(context.Background(), dto.TestCaseUpdateRequest{ID: 3, Scenario: "   "})
 	require.ErrorIs(t, err, ErrInvalidInput)
-	_, err = service.UpdateTestCaseChange(context.Background(), dto.TestCaseUpdateChangeRequest{ID: 3})
-	require.ErrorIs(t, err, ErrInvalidInput)
 	_, err = service.DeleteTestCase(context.Background(), dto.TestCaseIDRequest{})
 	require.ErrorIs(t, err, ErrInvalidInput)
 }
@@ -40,9 +38,6 @@ func TestServiceNormalizesTestCaseRequests(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "Mark test green", repo.updateReq.Scenario)
-	_, err = service.UpdateTestCaseChange(context.Background(), dto.TestCaseUpdateChangeRequest{ID: 3, ChangeID: 4})
-	require.NoError(t, err)
-	assert.Equal(t, 4, repo.changeID)
 	_, err = service.DeleteTestCase(context.Background(), dto.TestCaseIDRequest{ID: 3})
 	require.NoError(t, err)
 	assert.Equal(t, 3, repo.id)
@@ -100,11 +95,6 @@ func (r *fakeTestCaseRepository) Update(_ context.Context, req dto.TestCaseUpdat
 
 func (r *fakeTestCaseRepository) UpdateDone(_ context.Context, req dto.TestCaseUpdateDoneRequest) (dto.TestCaseMutationResponse, error) {
 	r.id = req.ID
-	return dto.TestCaseMutationResponse{}, nil
-}
-
-func (r *fakeTestCaseRepository) UpdateChange(_ context.Context, req dto.TestCaseUpdateChangeRequest) (dto.TestCaseMutationResponse, error) {
-	r.id, r.changeID = req.ID, req.ChangeID
 	return dto.TestCaseMutationResponse{}, nil
 }
 
