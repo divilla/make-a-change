@@ -1,93 +1,79 @@
 -- Run after init.sql, seed.sql, and seed-demo.sql.
 begin;
 
-do
-$$
+do $$
 begin
     assert (select count(*) = 1 from public.config), 'one default config';
-    assert (
-        select change_phases = array(select slug from public.change_phase order by priority, slug)
-            and change_types = array(select slug from public.change_type order by priority, slug)
-            and change_docs = array['brief', 'spec', 'pr']
-        from public.config where slug = 'default'
-    ), 'config matches lookup tables and supported documents';
-
+    assert (select project_docs = array['brief', 'prd'] and epic_docs = array['brief', 'prd']
+        and change_docs = array['brief', 'spec', 'pr', 'plan', 'review', 'comment']
+        and change_phases = array['backlog', 'todo', 'in-progress', 'in-review', 'in-test', 'in-prod']
+        and change_colors = array['15', '14', '10', '11', '12', '13']
+        and change_types = array['feature', 'fix', 'refactor', 'upgrade', 'chore', 'docs', 'test', 'ci',
+                                 'security', 'migration', 'revert', 'spike']
+        from public.config where slug = 'default'), 'default configuration values';
     assert (select array_agg(name order by name) = array['demo1', 'demo2', 'demo3'] from public.project),
         'demo projects preserved';
+    assert not exists (
+        select from public.project p left join public.config c on c.slug = p.config
+        where p.config <> 'default' or c.slug is null
+    ), 'demo projects use the default configuration';
     assert (select count(*) = 5 from public.epic), 'five demo epics';
     assert (select count(*) = 200 from public.change), '200 demo changes';
-    assert (select count(*) = 600 from public.test_case), 'three test cases per demo change';
+    assert (select count(*) = 600 from public.testcase), 'three test cases per demo change';
     assert not exists (
-        select c.id from public.change c
-        left join public.test_case tc on tc.change_id = c.id
+        select c.id from public.change c left join public.testcase tc on tc.change_id = c.id
         group by c.id having count(tc.id) <> 3
     ), 'every demo change has three test cases';
-
-    assert (select count(*) = 600 from public.test_case_history), 'one initial history per test case';
+    assert exists (select from public.testcase where done)
+        and exists (select from public.testcase where not done), 'mixed completion states';
     assert not exists (
-        select from public.test_case tc
-        left join public.test_case_history h on h.id = tc.id and h.version = 0
-        where h.id is null or h.deleted or h.scenario <> tc.scenario
-            or h.change_id <> tc.change_id or h.modified <> tc.created or tc.version <> 0
-    ), 'initial test case history matches creation; completion does not increment version';
-    assert exists (select from public.test_case where done)
-        and exists (select from public.test_case where not done), 'mixed completion states preserved';
-
+        select from public.vw_change_list c where c.total_tc <> 3 or c.done_tc < 1
+            or c.done_tc <> (select count(*) from public.testcase t where t.change_id = c.id and t.done)
+    ), 'list counts match actual test cases';
     assert not exists (
-        select c.id from public.change c
-        left join public.test_case tc on tc.change_id = c.id
-        group by c.id
-        having c.total_tc <> count(tc.id)
-            or c.done_tc <> count(tc.id) filter (where tc.done)
-    ), 'change counters match actual test cases';
+        select from public.vw_change_details d join public.vw_change_list c using (id)
+        where d.total_tc <> c.total_tc or d.done_tc <> c.done_tc
+    ), 'detail counts match list counts';
     assert not exists (
-        select e.id from public.epic e
-        left join public.change c on c.epic_id = e.id
-        group by e.id
-        having e.total_tc <> coalesce(sum(c.total_tc), 0)
-            or e.done_tc <> coalesce(sum(c.done_tc), 0)
-    ), 'epic counters match assigned changes';
-
+        select from public.vw_epic e where e.total_tc <> (
+            select count(*) from public.testcase t join public.change c on c.id = t.change_id where c.epic_id = e.id
+        ) or e.done_tc <> (
+            select count(*) from public.testcase t join public.change c on c.id = t.change_id where c.epic_id = e.id and t.done
+        ) or e.change_count <> (select count(*) from public.change c where c.epic_id = e.id)
+    ), 'epic counts match assigned changes';
+    assert (select change_count = 200 from public.vw_project where name = 'demo1'), 'demo1 project counts';
+    assert not exists (select from public.vw_project where name <> 'demo1' and change_count <> 0), 'empty project counts';
     assert not exists (
-        select from public.change c
-        left join public.change_history h on h.id = c.id and h.version = 0
-        where h.id is null or h.doc_type <> 'brief' or h.body <> c.brief or h.deleted
-    ), 'initial change history is preserved';
+        select from public.doc d left join public.change c on d.ref_table = 'change' and d.ref_id = c.id
+        where c.id is null or d.doc_type not in ('brief', 'spec', 'pr') or d.body = '' or d.agent_edit
+    ), 'seeded documents belong to live changes and contain human-authored bodies';
     assert not exists (
-        select c.id from public.change c
-        join public.change_history h on h.id = c.id
-        group by c.id
-        having max(h.version) <> c.version or count(*) <> c.version + 1
-    ), 'document history versions remain contiguous';
+        select from public.change c where
+            (select count(*) from public.doc d where d.ref_table = 'change' and d.ref_id = c.id and d.doc_type = 'brief') <> 1
+            or (select count(*) from public.doc d where d.ref_table = 'change' and d.ref_id = c.id and d.doc_type = 'pr') <> 1
+            or (select count(*) from public.doc d where d.ref_table = 'change' and d.ref_id = c.id and d.doc_type = 'spec')
+                <> case when c.ref % 11 = 0 then 0 else 1 end
+    ), 'each change has its brief, PR, and optional spec documents';
     assert not exists (
-        select from public.change c
-        cross join lateral (values ('spec', c.spec), ('pr', c.pr)) as doc(kind, body)
-        where doc.body <> '' and not exists (
-            select from public.change_history h
-            where h.id = c.id and h.doc_type = doc.kind and h.body = doc.body and not h.deleted
-        )
-    ), 'submitted documents have history';
-
+        select from public.change c where c.ref is null or c.slug is null or c.pr_url = ''
+    ), 'fixture identifiers and PR links are populated';
+    assert (select count(distinct ref) = 200 and min(ref) = 201 and max(ref) = 400 from public.change),
+        'fixture references remain unique and stable';
+    assert (select last_ref = 400 from public.project where name = 'demo1'), 'reference counter tracks fixtures';
     assert not exists (
-        select from public.change c
-        left join public.change_phase phase on phase.slug = c.change_phase
-        where phase.slug is null
-    ), 'all demo phases exist in the lookup table';
+        select from public.change c join public.project p on p.id = c.project_id
+        join public.config cfg on cfg.slug = p.config
+        where not (c.change_phase = any(cfg.change_phases)) or not (c.change_types <@ cfg.change_types)
+    ), 'demo phases and types come from project configuration';
     assert (select count(*) = 80 from public.change where change_phase = 'backlog'), '40 percent backlog';
     assert not exists (
-        select phase.slug from public.change_phase phase
-        left join public.change c on c.change_phase = phase.slug
-        where phase.slug <> 'backlog'
-        group by phase.slug having count(c.id) <> 24
-    ), 'remaining changes spread evenly across seeded phases';
+        select phase from public.project p join public.config cfg on cfg.slug = p.config
+        cross join lateral unnest(cfg.change_phases) as phases(phase)
+        where p.name = 'demo1' and phase <> 'backlog'
+            and (select count(*) from public.change c where c.project_id = p.id and c.change_phase = phase) <> 24
+    ), 'remaining changes spread evenly across configured phases';
     assert (select count(*) = 60 from public.change where epic_id is null), '30 percent standalone changes';
-    assert exists (select from public.change where spec = '')
-        and exists (select from public.change where cardinality(change_types) = 0), 'optional default states preserved';
-    assert not exists (
-        select from public.change c cross join lateral unnest(c.change_types) as chosen(slug)
-        left join public.change_type t on t.slug = chosen.slug where t.slug is null
-    ), 'all demo change types exist in the lookup table';
+    assert exists (select from public.change where cardinality(change_types) = 0), 'optional empty change types';
 end;
 $$;
-
 rollback;

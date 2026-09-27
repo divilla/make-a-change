@@ -1,3 +1,11 @@
 #!/bin/bash
+set -euo pipefail
 
-gunzip < $1 | psql --echo-errors -h localhost -U postgres -X changes_test -F c
+archive=${1:?Usage: restore-test.sh archive.sql.gz}
+restore_sql=$(mktemp "${TMPDIR:-/tmp}/changes-restore.XXXXXX")
+trap 'rm -f -- "$restore_sql"' EXIT
+
+# Finish decompression before sending any SQL to the database.
+gunzip < "$archive" > "$restore_sql"
+psql --echo-errors -h localhost -U postgres -X -d changes_test \
+    --single-transaction -v ON_ERROR_STOP=1 -f "$restore_sql"

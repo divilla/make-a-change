@@ -1,16 +1,18 @@
 begin;
 
+-- Replace demo data and its documents together; preserve identity sequences.
 truncate table
-    public.test_case_history,
-    public.test_case,
-    public.change_history,
+    public.doc,
+    public.testcase,
     public.change,
-    public.epic_history,
     public.epic,
-    public.project
-restart identity;
+    public.project;
 
-insert into public.project (name) values ('demo1'), ('demo2'), ('demo3');
+insert into public.project (name, config)
+select demo.name, c.slug
+from public.config c
+cross join (values ('demo1'), ('demo2'), ('demo3')) as demo(name)
+where c.slug = 'default';
 
 insert into public.epic (project_id, name)
 select p.id, seed.name
@@ -72,7 +74,7 @@ begin
           and p.name = 'demo1'
           and c.ref % 11 = 0
     ) then
-        call public.sp_change_spec_update(_id, _spec, false);
+        call public.sp_change_doc_set(_id, 'spec', _spec, false);
     end if;
 
     return _id;
@@ -88,7 +90,7 @@ create or replace procedure pg_temp.sp_demo_change_pr_update(
 as
 $$
 begin
-    call public.sp_change_pr_update(_id, _pr, false);
+    call public.sp_change_doc_set(_id, 'pr', _pr, false);
 
     update public.change
     set pr_url = _pr_url
@@ -4424,13 +4426,13 @@ $$
 declare
     _change record;
     _test_case record;
-    _test_case_id bigint;
     _active_phases text[];
 begin
-    select array_agg(slug order by priority, slug)
+    select array_remove(c.change_phases, 'backlog')
     into _active_phases
-    from public.change_phase
-    where slug <> 'backlog';
+    from public.project p
+    join public.config c on c.slug = p.config
+    where p.name = 'demo1';
 
     -- Demo board distribution: 40% backlog, the remaining 60% spread across active phases.
     for _change in
@@ -4503,11 +4505,8 @@ begin
         where p.name = 'demo1'
         order by c.ref, seed.ordinal
     loop
-        select public.fn_test_case_insert(_test_case.change_id, _test_case.scenario)
-        into _test_case_id;
-        if _test_case.done then
-            call public.sp_test_case_update_done(_test_case_id, true);
-        end if;
+        insert into public.testcase (change_id, scenario, done)
+        values (_test_case.change_id, _test_case.scenario, _test_case.done);
     end loop;
 end;
 $$;

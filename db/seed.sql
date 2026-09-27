@@ -1,47 +1,21 @@
 begin;
 
-truncate table public.change_phase;
-truncate table public.change_type;
 truncate table public.config;
 
-insert into public.change_phase (slug, priority)
-values
-    ('backlog', 0),
-    ('progress', 1),
-    ('review', 2),
-    ('staging', 3),
-    ('production', 4),
-    ('rejected', 5)
-on conflict (slug) do update
-set priority = excluded.priority;
-
-insert into public.change_type (slug, priority)
-values
-    ('feature', 0),
-    ('fix', 1),
-    ('refactor', 2),
-    ('upgrade', 3),
-    ('chore', 4),
-    ('docs', 5),
-    ('test', 6),
-    ('ci', 7),
-    ('security', 8),
-    ('migration', 9),
-    ('revert', 10),
-    ('spike', 11)
-on conflict (slug) do update
-set priority = excluded.priority;
-
 insert into public.config (
-    slug,
+    project_docs,
+    epic_docs,
+    change_docs,
     change_phases,
-    change_types,
-    change_docs
+    change_colors,
+    change_types
 ) values (
-    'default',
-    array(select slug from public.change_phase order by priority, slug),
-    array(select slug from public.change_type order by priority, slug),
-    array['brief', 'spec', 'pr']
+    array['brief', 'prd'],
+    array['brief', 'prd'],
+    array['brief', 'spec', 'pr', 'plan', 'review', 'comment'],
+    array['backlog', 'todo', 'in-progress', 'in-review', 'in-test', 'in-prod'],
+    array['15', '14', '10', '11', '12', '13'],
+    array['feature', 'fix', 'refactor', 'upgrade', 'chore', 'docs', 'test', 'ci', 'security', 'migration', 'revert', 'spike']
 );
 
 commit;
