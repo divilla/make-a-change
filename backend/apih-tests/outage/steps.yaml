@@ -1,0 +1,205 @@
+app: apihydra
+kind: steps
+metadata:
+  name: outage-contracts
+spec:
+  defaults:
+    retries: -1
+    timeout: 5
+    headers:
+      Content-Type: application/json
+  steps:
+    - request:
+        method: GET
+        path: /api/v1/health
+      response:
+        expected_status: 503
+        expected_body: "{\"status\":\"degraded\",\"api\":\"ok\",\"database\":\"error\",\"error\":\"database unavailable\"}"
+    - request:
+        method: GET
+        path: /api/health
+      response:
+        expected_status: 503
+        expected_body: "{\"status\":\"degraded\",\"api\":\"ok\",\"database\":\"error\",\"error\":\"database unavailable\"}"
+    - request:
+        method: POST
+        path: /api/v1/project/list
+        body: "{}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/project/get
+        body: "{\"id\":3001}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/project/config
+        body: "{\"id\":3001}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/epic/list
+        body: "{\"project_id\":3001}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: "{\"id\":3101}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/change/list
+        body: "{\"project_id\":3001}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: "{\"id\":3201}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/change/documents
+        body: "{\"id\":3201}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/change/rendered-artifacts
+        body: "{\"ids\":[3201]}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/test-case/list
+        body: "{\"change_id\":3201}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/project/create
+        body: "{\"name\":\"Outage forbidden insert\"}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/project/update
+        body: "{\"id\":3001,\"name\":\"Outage forbidden update\"}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/project/delete
+        body: "{\"id\":3002}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/epic/create
+        body: "{\"project_id\":3001,\"name\":\"Outage forbidden insert\"}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/epic/update
+        body: "{\"id\":3101,\"name\":\"Outage forbidden update\"}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/epic/delete
+        body: "{\"id\":3102}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/test-case/create
+        body: "{\"change_id\":3201,\"scenario\":\"Outage forbidden insert\"}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/test-case/update
+        body: "{\"id\":3301,\"scenario\":\"Outage forbidden update\"}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/test-case/update-done
+        body: "{\"id\":3301,\"done\":true}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/test-case/delete
+        body: "{\"id\":3302}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/change/update-open
+        body: "{\"id\":3201,\"open\":false}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr-url
+        body: "{\"id\":3201,\"pr_url\":\"https://example.com/outage\"}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/change/delete
+        body: "{\"id\":3202}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/change/update-title
+        body: "{\"id\":3201,\"title\":\"Outage forbidden update\"}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: "{\"id\":3201,\"doc_type\":\"brief\",\"body\":\"Outage forbidden document\",\"agent_edit\":true}"
+      response:
+        expected_status: 500
+        expected_body: "{\"message\":\"Internal Server Error\"}"
+    - request:
+        method: POST
+        path: /api/v1/project/get
+        body: "{\"id\":0}"
+      response:
+        expected_status: 400
+        expected_body: "{\"message\":\"invalid project payload\"}"

@@ -36,3 +36,13 @@
 2026-28-09 05:07 015-backend-compact-handlers
 +97 -126 code - +55 -3 tests --- spec
 
+2026-28-09 05:28 016-backend-failure-integration
++1167 -361 code - +330 -14 tests --- spec
+
+
+2026-28-09 05:32 016-backend-failure-integration
++68 -3 code - +109 -1 tests --- review fixes 01
+
+
+2026-09-28 016 supervisor: preserve primary command failures through bounded emergency kill/reap errors; meaningful signal/timeout/permission tests; relocated review helper log into backend. All five final-source checks pass; final native review follows.
+Final native review of da7481f against 62d9f4f exited 0 with no findings; independently passed tooling, phased APIHydra 864/925, and legacy. Authorized dev merge follows.

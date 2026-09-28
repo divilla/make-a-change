@@ -1,11 +1,12 @@
 # Backend refactor plan
 
-Status: P0–P4, R1, the separate011 validation-cause repair and R3–R6 are implemented and reviewed; R2 remains no actionable work. R6 preserves408 APIHydra requests/34 operations and full legacy HTTP/SQL parity, with all five validation targets green. Fresh gates pass: unit911/925 (98.4865%), integration837/925 (90.4865%). No retained production behavior was removed; Go counts14 fewer statements for scoped mutation errors. The remaining task is separate016 final failure-integration verification and combined architecture review, after the authorized R6 dev merge. See [the current checkpoint](../backend/agents/backend-refactor-checkpoint.md).
-Inspected on 2026-09-28 at commit `7a89905`, branch `change/004-refactor-backend`.
+Status: P0–P4, R1, separate011 validation-cause repair, R3–R6 and016 implementation/local review are completed. R2 had no actionable duplicate cleanup. Final016 retains all408 normal requests and adds28 outage plus22 recovery requests on one owned server/database lifecycle. All34 operations remain covered. Fresh unit911/925 (98.4865%) and APIHydra864/925 (93.4054%) pass both strict gates. Required checks and the separate legacy campaign are recorded in [the current checkpoint](../backend/agents/backend-refactor-checkpoint.md). Factory native review resolved a cleanup evidence failure; final native review of `da7481f` passed with no findings. Dev merge/hash verification completes the handoff. No future squash hash is asserted. No stage/production promotion.
+
+Historical preparation inspection: 2026-09-28 at `7a89905`, branch `change/004-refactor-backend`. Preparation findings and proposed pass tables below are historical baseline evidence, not current failures or outstanding P0 work.
 
 ## Recommendation and scope
 
-Treat this as two kinds of work: first restore a working backend aligned with the current database and architecture; then conduct six separate behavior-preserving cleanup iterations. The current backend does not compile, and several queries and tests describe the previous database. A single large “refactor” would obscure necessary contract changes and make regressions difficult to identify.
+Treat this as two kinds of work: first restore a working backend aligned with the current database and architecture; then conduct six separate behavior-preserving cleanup iterations. At the initial preparation baseline the backend did not compile, and several queries and tests described the previous database; P0–P4 repaired those contracts. A single large “refactor” would obscure necessary contract changes and make regressions difficult to identify.
 
 Use small, sequential branches with tests delivered alongside each change. Start APIHydra and coverage infrastructure early; do not postpone integration testing until the final branch. Complete one reviewable pass before starting the next. No parallel agent work is needed for the initial shared-contract changes.
 
@@ -16,7 +17,7 @@ Use small, sequential branches with tests delivered alongside each change. Start
 - No framework migration, dependency upgrade, new dependency, speculative API, compatibility placeholder, or new Go-managed transaction is included.
 - Preserve retained behavior. Explicit architecture-required API changes belong in the contract-alignment branches, not hidden inside cleanup commits.
 
-## Preparation on change/004-refactor-backend
+## Historical preparation on change/004-refactor-backend
 
 The user authorized the Makefile modernization before the specification sequence. The supplied `/home/vito/apihydra/Makefile` path was absent; the user confirmed `/home/vito/go/src/apihydra/Makefile` as the reference, with improvements where appropriate.
 
@@ -34,7 +35,7 @@ Verification: 19 tooling regression tests pass; a real golangci-lint formatter s
 
 The user also authorized repository-wide naming cleanup on this preparation branch: the solution is `make-a-change`, the backend executable is `mch-server`, and the CLI is `mch`. Build recipes, frontend branding/storage keys, and tooling tests use these names. The obsolete checked-in executable was removed; generated `backend/mch-server` builds are ignored. Existing browser project selections under the previous storage namespace reset once. Future refactor specifications remain backend-only.
 
-## Initial findings that determine the order
+## Historical initial findings that determined the order
 
 | Evidence | Consequence |
 | --- | --- |
@@ -51,7 +52,7 @@ The user also authorized repository-wide naming cleanup on this preparation bran
 | Existing HTTP tests are Go tests under `api-tests/`; no APIHydra suite was found. The API test target starts an uninstrumented server and kills it during cleanup. | Port retained scenarios to APIHydra and add reliable server coverage collection. Existing Go HTTP test coverage cannot establish the requested APIHydra coverage. |
 | Several “current schema” unit fixtures assert old columns; the repository integration test asserts old testcase history. | Audit tests against the database before treating them as specifications. Replace obsolete assertions with traceable current-contract assertions. |
 
-Paths in this and subsequent tables are relative to `backend/` unless stated otherwise. Size is supporting context, not proof that a file needs splitting: `change/repo.go` currently has 761 lines, much of which may disappear during contract alignment.
+Paths in this and subsequent tables are relative to `backend/` unless stated otherwise. Size is supporting context, not proof that a file needs splitting: `change/repo.go` had 761 lines at baseline, before contract alignment removed obsolete paths.
 
 ### Baseline actually attempted
 
@@ -67,7 +68,7 @@ Result: **failed**, first compiler error `internal/change/repo.go:254:1: missing
 
 ### Official six-step implementation workflow
 
-After the user resumes execution, conduct the entire sequence autonomously using the repository's existing factory scripts. Read `scripts/README.md` before starting and check Git authentication with `bash scripts/git-auth.sh --check`. A successful implementation subprocess does not by itself prove that coverage or acceptance criteria passed.
+The user subsequently authorized and completed execution using this workflow. For any further authorized pass, conduct the entire sequence autonomously using the repository's existing factory scripts. Read `scripts/README.md` before starting and check Git authentication with `bash scripts/git-auth.sh --check`. A successful implementation subprocess does not by itself prove that coverage or acceptance criteria passed.
 
 1. **Author one specification** for the next bounded pass as `agent/specs/NNN-slug.md`. Include scope, acceptance IDs, current/target contracts, concrete tests, coverage requirements, known baseline failures, and explicit backend-only write restrictions. Prepare the text outside the checkout until the matching branch exists. Each specification must reiterate the user's exclusions: ignore frontend, CLI, and PRD; use the current DB and backend architecture. Direct implementation records to `backend/implementation-log.md`, overriding the change-code skill's root-level log default to preserve scope.
 2. **Create `change/NNN-slug` from freshly fetched `origin/dev`**, then add and commit the specification there so implementation starts with a clean tree. Use `scripts/branch-create.sh` when the specification is already committed on `origin/dev`; otherwise create the equivalently named branch directly from `origin/dev` before installing the prepared specification. The helper requires a clean tree and an existing spec, and checking out its `origin/dev` base would lose a spec committed only on another branch. Never hide unrelated work in an automated commit.
@@ -76,9 +77,9 @@ After the user resumes execution, conduct the entire sequence autonomously using
 5. **Run `scripts/merge-to-dev.pl`** after the bounded specification is implemented, reviewed and tested, with actual coverage results and tracked baseline gaps recorded. It requires a clean published change branch containing fetched dev, squashes and pushes to dev, deletes the remote change branch, and leaves dev checked out. If dev advanced, reconcile/rebase and rerun relevant verification before retrying. Do not promote to stage or production as part of this sequence.
 6. **Update the backend checkpoint and continue with the next specification.** Include the checkpoint in the completed branch before its merge, then read it from dev for the next pass. Report completed specifications, coverage and blockers as work proceeds. Continue sequentially despite coverage shortfalls; improve tests throughout and discuss any remaining numerical gap after the full sequence.
 
-The user will integrate the current Makefile/plan branch and return to dev before requesting execution. Confirm that the resulting `origin/dev` contains this preparation before creating the first implementation branch; merely having it on stage is insufficient because the factory branches from dev. Do not begin these runs, commit/push, or promote this preparation on the user's behalf during the current task.
+**Historical preparation-only restriction (superseded by subsequent execution authorization):** The user would integrate the Makefile/plan branch and return to dev before requesting execution. Confirm that the resulting `origin/dev` contains this preparation before creating the first implementation branch; merely having it on stage is insufficient because the factory branches from dev. Do not begin these runs, commit/push, or promote this preparation on the user's behalf during the current task.
 
-The existing pattern is `change/NNN-description`: `001-skills-and-archon`, `002-feature-cutoff-db`, `003-db-redesign`, `004-refactor-backend`. Keep `004` for this plan/current work. The following names are proposed next numbers, not created branches; check for newly reserved numbers before execution.
+**Historical branch proposal:** The existing pattern was `change/NNN-description`: `001-skills-and-archon`, `002-feature-cutoff-db`, `003-db-redesign`, `004-refactor-backend`. The following table preserves the original proposed names; the actual completed branches and commits are listed immediately afterward.
 
 | Order | Proposed branch | Scope and exit evidence |
 | --- | --- | --- |
@@ -94,13 +95,32 @@ The existing pattern is `change/NNN-description`: `001-skills-and-archon`, `002-
 | R5 | `change/014-backend-local-patterns` | Dedicated consistency pass with installed dependencies/toolchain unchanged. |
 | R6 | `change/015-backend-compact-code` | Dedicated readability pass and final combined review. |
 
+### Actual completed sequence
+
+All entries below used `change/` branches and merged into dev. R2 found no actionable duplicates and created no empty branch; 011 was a separate validation-cause repair.
+
+| Pass | Branch suffix | Dev commit |
+| --- | --- | --- |
+| P0 | `005-backend-verification-foundation` | `d3c2235` |
+| P1 | `006-backend-error-contracts` | `131e075` |
+| P2 | `007-backend-project-epic-alignment` | `22624ca` |
+| P3 | `008-backend-change-doc-alignment` | `b626dd5` |
+| P4 | `009-backend-testcase-alignment` | `b9f630f` |
+| R1 | `010-backend-dead-code` | `16bbf0b` |
+| Separate repair | `011-backend-validation-causes` | `4c25d70` |
+| R3 | `012-backend-startup-boundaries` | `b48efed` |
+| R4 | `013-backend-config-isolation` | `d35ea68` |
+| R5 | `014-backend-local-patterns` | `bbde3fe` |
+| R6 | `015-backend-compact-handlers` | `62d9f4f` |
+| Final verification | `016-backend-failure-integration` | Implementation `21f9db5`; final review/merge evidence in [checkpoint](../backend/agents/backend-refactor-checkpoint.md) |
+
 Dependencies are P0 → P1 → P2 → P3 → P4 → R1 → R2 → R3 → R4 → R5 → R6. Complete and merge each specification to dev using the six-step workflow before branching for the next; do not stack unmerged implementation branches. Intermediate dev merges may retain documented baseline/coverage gaps; do not promote to stage or production. Repair introduced failures immediately and remove tracked baseline issues during the planned passes. Do not create empty implementation branches when an iteration has no actionable findings; record that result in the checkpoint and move on (the code-spec helper requires actual implementation changes). Coverage work belongs in every branch, with a final gap review after R6, rather than a separate last-minute test rewrite.
 
 ## Prerequisites and contract-alignment passes
 
-P0 must produce a compact `backend/agents/backend-contracts.md` containing acceptance IDs, route/field-to-database mappings, and old → target behavior. Reuse existing useful tests as fixtures; record any intentionally removed assertion with its database/architecture reason. Maintain `backend/agents/backend-refactor-checkpoint.md` for progress, decisions, test results, and the exact next pass. These are proposed future artifacts, not files created by this planning task.
+P0 must produce a compact `backend/agents/backend-contracts.md` containing acceptance IDs, route/field-to-database mappings, and old → target behavior. Reuse existing useful tests as fixtures; record any intentionally removed assertion with its database/architecture reason. Maintain `backend/agents/backend-refactor-checkpoint.md` for progress, decisions, test results, and the exact next pass. These were proposed artifacts at preparation time; both now exist and record completed work.
 
-Inventory currently finds 33 registered method/path pairs: project 5, epic 5, change 14, testcase 5, options 2, health 2 (including `/api/health`). Recalculate after contract changes. Account explicitly for removed/replaced routes; do not silently drop difficult routes from the inventory.
+The preparation inventory found 33 registered method/path pairs: project 5, epic 5, change 14, testcase 5, options 2, health 2 (including `/api/health`). Recalculate after contract changes. Account explicitly for removed/replaced routes; do not silently drop difficult routes from the inventory.
 
 | Pass, scope, evidence | Behavior to preserve or explicit target | Bounded change | Validation |
 | --- | --- | --- | --- |
@@ -128,7 +148,7 @@ These follow contract alignment because removing old contracts first should subs
 | Iteration and candidate scope/evidence | Behavior to preserve | Structural improvement | Parity validation |
 | --- | --- | --- | --- |
 | R1 dead code: `ExampleErr`/`ExampleError` have no references outside their definitions; `change.API.e` appears assigned but unused; old DTOs/helpers may remain after P2–P4. These are candidates until references, registration, build variants, and consumers are checked. | Registered routes, error identity, constructor effects, supported build paths. | Remove only proven unused declarations, obsolete comments and unreachable branches. Do not classify registered options endpoints as dead code before their explicit P2 removal. | Compile/vet/staticcheck; route registration tests and APIHydra inventory parity; focused tests for affected constructors. No coverage-driven deletion. |
-| R2 duplicates: change/testcase currently duplicate change column scans, listing, mutation completion and rendering; API modules duplicate error classifiers. Much should already disappear during alignment. | Column order/types/null handling, error identity, deterministic result ordering, sanitization, side effects. | Consolidate surviving equivalent paths within their owning layer. Keep distinct business rules and simple repeated SQL where extraction adds indirection. | Null/non-null scans, iterator/scan/query failures, empty arrays, ordering and Markdown fixtures; module APIHydra parity. |
+| R2 duplicates: at baseline change/testcase duplicated change column scans, listing, mutation completion and rendering; API modules duplicate error classifiers. Much should already disappear during alignment. | Column order/types/null handling, error identity, deterministic result ordering, sanitization, side effects. | Consolidate surviving equivalent paths within their owning layer. Keep distinct business rules and simple repeated SQL where extraction adds indirection. | Null/non-null scans, iterator/scan/query failures, empty arrays, ordering and Markdown fixtures; module APIHydra parity. |
 | R3 oversized modules: remeasure `change/repo.go` and `cmd/server/main.go` after removals. Startup mixes flag/config loading, dependency wiring, middleware, serving and error handling. | Routes/middleware order, request context, configuration precedence, shutdown/resource ownership and mutation boundaries. | Separate coherent startup functions; move business mapping out of repositories/API files; split change files only if responsibilities remain distinct. Keep the architecture's layer ownership clear. | Startup/config unit scenarios; cancellation/shutdown/resource-close tests; route/CORS/health APIHydra cases; full module workflow comparisons. |
 | R4 stale abstractions: transaction-oriented `queryer`/`state`/`finishMutation` helpers, global `config.Get`, renderer dependencies crossing business modules. | Required injection seams, external behavior, error causes and ownership. | Remove remaining obsolete wrappers; inject only used collaborators; replace global lookup with explicit values. Keep interfaces justified by tests. | Independent config instances; collaborator failure/cancellation tests; race checks; APIHydra full suite. Do not remove a test seam merely to reduce interface count. |
 | R5 legacy patterns: generic “executes behavior” comments, inconsistent naming/imports, raw error handling, inconsistent pgx iteration; current Makefile drift is handled in P0. | Supported method/route names, response shapes, validation rules, toolchain and dependency versions. | Apply established local conventions and accurate comments. Audit prohibited service imports, error creation outside `internal/error`, and Go transaction use. | Formatting/staticcheck/golint/vet/race; architecture checks plus focused unit/APIHydra cases where control flow changes. No mechanical renaming for symmetry. |
@@ -145,16 +165,12 @@ The user requires 95% unit coverage; repository instructions say **greater than 
 5. Use existing dependencies and small handwritten fakes where necessary. Do not add a mocking library without approval. A fake must assert meaningful interactions/results, not simply reproduce implementation logic to execute lines.
 6. Test config precedence, renderer sanitization, startup/shutdown and resource cleanup through ordinary injectable collaborators. Do not introduce production test-only endpoints, switches, fake errors, or unreachable calls to inflate coverage.
 
-Proposed unit measurement, from `backend/` after P0 makes the target runnable:
+Current unit measurement from the repository root:
 
 ```sh
-mkdir -p .coverage/unit
-go test -short -count=1 -race -covermode=atomic \
-  -coverpkg=./cmd/...,./internal/...,./pkg/... \
-  -coverprofile=.coverage/unit/coverage.out \
-  ./cmd/... ./internal/... ./pkg/...
-go tool cover -func=.coverage/unit/coverage.out
-go tool cover -html=.coverage/unit/coverage.out -o .coverage/unit/coverage.html
+make -C backend coverage
+# Optional HTML investigation (fresh separate unit run):
+make -C backend coverage-html
 ```
 
 The gate must use covered/total statement counts before display rounding, not an arithmetic average of package percentages. Verify that all inventoried production packages are represented. A failed/partial run never passes the gate.
@@ -165,12 +181,14 @@ The gate must use covered/total statement counts before display rounding, not an
 
 Installed binary: `/home/vito/go/bin/apih`, built from APIHydra commit `c3947513e2a4` (`v0.1.1-0.20260907061551-c3947513e2a4`). `apih --help` supports `--parallelism` and directory/steps selections. The installed-version manual was inspected through the local upstream checkout; its current HEAD differs, so use the installed commit's documentation when implementing. `curl`, `jq`, and `git` are available.
 
-Use `backend/apih-tests/root.yaml`, scoped defaults, and steps files organized by health, project/configuration, epic, change/documents, testcase, and negative scenarios. This location intentionally overrides the apih-build skill's root-level default to obey the user's backend-only scope. Add runner scripts under `backend/scripts/` and evidence in `backend/apih-tests/coverage.md`. Ignore generated coverage/binaries locally through `backend/.gitignore` if needed; do not change the root ignore file.
+Use `backend/apih-tests/root.yaml` with executable subtrees `normal/`, `outage/` and `recovery/`. Existing health/module/negative files retain their relative stage/default ancestry under `normal/`. Root fixtures, SQL postconditions and reports are not executable APIHydra documents. This location intentionally overrides the apih-build skill's root-level default to obey the user's backend-only scope. Add runner scripts under `backend/scripts/` and evidence in `backend/apih-tests/coverage.md`. Ignore generated coverage/binaries locally through `backend/.gitignore` if needed; do not change the root ignore file.
 
 ```sh
-# From backend/, after the isolated service is ready:
-apih --parallelism 0 ./apih-tests
+# From the repository root, authoritative complete campaign:
+make -C backend api-test
 ```
+
+Never select the entire suite root: that would execute outage/recovery assertions under the wrong database state. `apih --parallelism 0 backend/apih-tests/normal` against a separately prepared owned healthy service is diagnostic only and cannot establish full-campaign coverage. The Make runner validates every YAML document, selects all three subtrees explicitly and requires every phase and SQL postcondition. Captures reset between selections.
 
 Use `app: apihydra`, `kind: root/defaults/steps`, `spec.steps`, explicit `response.expected_status`, stable JSON assertions, and dynamic type assertions. Capture IDs once and reuse them in request bodies. Captures are run-scoped and write-once; interpolation works in request/expected bodies, not URLs/headers. Keep dependent producers and consumers in one steps file or explicitly ordered stages; serial mode alone is not a substitute for declaring the intended dependency order. Remove all Debug breakpoints before verification.
 
@@ -188,27 +206,9 @@ Create an isolated test database and dedicated port; load the unchanged `../db/i
 
 **Required integration gate: at least 90% of backend production Go statements executed by APIHydra-driven integration runs.** Counting endpoints is a separate diagnostic; it does not satisfy the gate. Aim to exercise every retained operation and report the actual covered/total route count, including blocked routes in the denominator.
 
-Build and run the real backend with Go coverage instrumentation. This is supported by [Go's integration coverage tooling](https://go.dev/doc/build-cover). The proposed commands below describe the build/report portions; the P0 runner must implement isolated DB setup, readiness, failure propagation, graceful stop and process waiting between them.
+The implemented runner builds one real covered server, initializes/seeds one private socket-only PostgreSQL cluster, and runs NORMAL → owned database stop → OUTAGE → same database restart → RECOVERY. Server PID, pool, binary and absolute counters directory remain unchanged. The initial health probes are synchronization and can contribute counters; outage/recovery HTTP behavior assertions all use APIHydra. Independent SQL postconditions receive no Go coverage credit.
 
-```sh
-# From backend/; runner creates a fresh directory for each measured campaign.
-mkdir -p .coverage/integration/raw .coverage/bin
-go build -cover -covermode=atomic \
-  -coverpkg=./cmd/...,./internal/...,./pkg/... \
-  -o .coverage/bin/server ./cmd/server
-
-# Runner launches this binary with an absolute GOCOVERDIR pointing to raw/,
-# waits for readiness, executes apih --parallelism 0 ./apih-tests,
-# then requests graceful shutdown and waits for normal process completion.
-
-go tool covdata textfmt -i=.coverage/integration/raw \
-  -o=.coverage/integration/coverage.out
-go tool cover -func=.coverage/integration/coverage.out
-go tool cover -html=.coverage/integration/coverage.out \
-  -o .coverage/integration/coverage.html
-```
-
-The current server lacks an explicit graceful shutdown lifecycle. P0 must prove that shutdown allows `main` to return and coverage files to flush; simply sending a terminating signal is insufficient. Treat missing metadata/counters, crashed processes, skipped suites, and incomplete runs as failures. Do not add a public coverage/shutdown endpoint.
+Only after successful phases/postconditions, graceful server exit and confirmed resource cleanup does it convert the one counters directory and apply the strict statement gate. Missing counters, crashes, incomplete phases, cleanup failures and invalid provenance remove success artifacts and retain diagnostics. A complete below-threshold profile remains valid evidence with a failing gate. Do not add public test/shutdown routes.
 
 Use fresh profiles for each commit/build. Combining valid APIHydra scenarios from the same measured revision is acceptable, with run provenance. Never merge unit profiles or legacy Go HTTP-test profiles into the APIHydra result. Audit the production package inventory against emitted coverage metadata: `go build` only instruments linked packages, so unlinked production code must be reported, not silently excluded to improve the percentage. No test harness, third-party library, or SQL procedure statement belongs in the Go production denominator; DB correctness needs its own assertions.
 
@@ -221,7 +221,7 @@ Reference: [APIHydra manual at the installed commit](https://github.com/divilla/
 1. Read the latest checkpoint and inspect the working tree. State one bounded purpose, its acceptance IDs, affected modules, and any intentional old → new contract change.
 2. Run the affected baseline checks and record failures. Add meaningful characterization tests for retained behavior before transforming it; use target-contract tests for explicit alignment work.
 3. Make the smallest coherent backend-only change and its tests. Preserve useful assertions; do not fix unrelated formatting or change DB/frontend/CLI files.
-4. Run focused tests, then backend `make check` after its P0 repair, unit coverage, and APIHydra against the instrumented server. Use fresh profiles and inspect uncovered statements. Extend tests only when they add coverage or prove a specific acceptance bullet.
+4. Run focused tests, then `make -C backend check`, unit coverage, and APIHydra against the instrumented server. Use fresh profiles and inspect uncovered statements. Extend tests only when they add coverage or prove a specific acceptance bullet.
 5. Review the diff for layer violations, hidden reads after mutations, raw error definitions, Go-managed transactions, unsupported SQL references, and edits outside the allowed path. Check untracked files too.
 6. Update the backend checkpoint with actual results, deviations, outstanding gaps, and next action. At each of the six cleanup boundaries, condense the checkpoint rather than carrying a long transcript. Reassess remaining candidates before proceeding.
 
@@ -229,7 +229,7 @@ Keep PRs understandable by a reviewer without this conversation: concrete proble
 
 ## Completion and honest shortfall policy
 
-The canonical backend completion commands and their current migration limits are in root `AGENTS.md`, under “Backend Definition of Done”. Keep the future verification-foundation work aligned with that policy; individual specifications must repeat the user clarification that coverage is a final-result goal and does not stop intermediate work.
+The canonical backend completion commands and their current migration limits are in root `AGENTS.md`, under “Backend Definition of Done”. Keep verification tooling aligned with that policy; individual specifications must repeat the user clarification that coverage is a final-result goal and does not stop intermediate work.
 
 The final target is backend checks passing, a unit test for every acceptance bullet, unit statement coverage **>95%**, APIHydra-driven integration statement coverage **≥90%**, verified architecture/database alignment, and no implementation edits outside `backend/`. Report the two percentages independently and provide reproducible backend commands.
 

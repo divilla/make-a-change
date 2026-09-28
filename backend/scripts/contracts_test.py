@@ -20,7 +20,7 @@ class ContractsTest(unittest.TestCase):
         self.assertEqual(routes,documented)
 
     def test_health_suite_has_explicit_contracts_for_both_aliases(self):
-        text=(BACKEND/'apih-tests/health-steps.yaml').read_text()
+        text=(BACKEND/'apih-tests/normal/health-steps.yaml').read_text()
         self.assertEqual(re.findall(r'path: (\S+)',text),['/api/v1/health','/api/health'])
         self.assertEqual(text.count('expected_status: 200'),2)
         self.assertEqual(text.count('expected_body:'),2)

@@ -72,38 +72,38 @@ statement counts, baseline lint debt and the factory/R2 handoff.
 | --- | --- | --- | --- | --- |
 | GET | /api/v1/health | 200 health JSON after pool ping; 503 degraded JSON on ping error | Retain; exact body unit tested | pass |
 | GET | /api/health | Same health alias and database ping | Retain | pass |
-| POST | /api/v1/project/list | 200 array; current view columns; explicit deterministic ordering | P2 aligned | pass (p2-steps.yaml) |
-| POST | /api/v1/project/get | 200 database-backed details | P2 aligned | pass (p2-steps.yaml) |
-| POST | /api/v1/project/config | 200 selected config slug and all six ordered arrays; unavailable join 404 | P2 aligned, no fallback | pass (p2-steps.yaml) |
-| POST | /api/v1/project/create | 201 {id}; one INSERT returning ID | P2 aligned | pass (p2-steps.yaml) |
-| POST | /api/v1/project/update | 204 empty; one name/modified UPDATE, including same name | P2 aligned | pass (p2-steps.yaml) |
-| POST | /api/v1/project/delete | 204 empty; one DELETE, FK conflict 409, missing 404 | P2 aligned | pass (p2-steps.yaml) |
-| POST | /api/v1/epic/list | 200 array; current view columns; explicit deterministic ordering | P2 aligned | pass (p2-steps.yaml) |
-| POST | /api/v1/epic/get | 200 database-backed details | P2 aligned | pass (p2-steps.yaml) |
-| POST | /api/v1/epic/create | 201 {id}; one INSERT returning ID | P2 aligned | pass (p2-steps.yaml) |
-| POST | /api/v1/epic/update | 204 empty; one name/modified UPDATE, including same name | P2 aligned | pass (p2-steps.yaml) |
-| POST | /api/v1/epic/delete | 204 empty; one DELETE, FK conflict 409, missing 404 | P2 aligned | pass (p2-steps.yaml) |
-| POST | /api/v1/change/list | 200 current vw_change_list columns; service int64 completion; modified DESC,id; [] for absent project | P3 aligned | pass (p3/steps.yaml) |
-| POST | /api/v1/change/get | 200 current vw_change_details; flat fields, nullable references, no inline docs/version/testcases; 404 missing | P3 aligned | pass (p3/steps.yaml) |
-| POST | /api/v1/change/rendered-artifacts | 200 artifacts wrapper; ordered deduplicated IDs; live-parent current doc spec/pr, sanitized HTML; absent IDs omitted | P3 aligned | pass (p3/steps.yaml) |
-| POST | /api/v1/change/create | 201 exact {id}; selected config must support backlog/brief; UUIDv7 default or preserved caller UUID; fn_change_insert only | P3 aligned | pass (p3/steps.yaml) |
-| POST | /api/v1/change/update-epic | 204; targeted parent/epic project preflight, sp_change_epic_update; nil detaches; no config | P3 aligned | pass (p3/steps.yaml) |
-| POST | /api/v1/change/update-phase | 204; selected-config phase validation then sp_change_phase_update | P3 aligned | pass (p3/steps.yaml) |
-| POST | /api/v1/change/update-open | 204; explicit bool; direct UPDATE open/modified; affected-row 404 | P3 aligned | pass (p3/steps.yaml) |
-| POST | /api/v1/change/update-change-types | 204; ordered trim/dedup/filter using selected config; direct UPDATE types/modified, including clears | P3 aligned | pass (p3/steps.yaml) |
-| POST | /api/v1/change/update-title | 204; existence preflight then sp_change_title_update; DB whitespace normalization; no config | P3 aligned | pass (p3/steps.yaml) |
-| POST | /api/v1/change/update-brief | 204; service maps brief to ChangeDocumentSetRequest; sp_change_doc_set appends | P3 aligned | pass (p3/steps.yaml) |
-| POST | /api/v1/change/update-spec | 204; service maps spec to ChangeDocumentSetRequest; sp_change_doc_set appends | P3 aligned | pass (p3/steps.yaml) |
-| POST | /api/v1/change/update-pr | 204; service maps pr to ChangeDocumentSetRequest; sp_change_doc_set appends | P3 aligned | pass (p3/steps.yaml) |
-| POST | /api/v1/change/update-pr-url | 204; nonblank http(s) URL; direct UPDATE pr_url/modified; affected-row 404; no config | P3 aligned | pass (p3/steps.yaml) |
-| POST | /api/v1/change/delete | 204; direct DELETE; actual testcase FK 409; missing 404; docs retained; no config | P3 aligned | pass (p3/steps.yaml) |
-| POST | /api/v1/change/documents | 200 current docs ordered doc_type,id with raw body and sanitized html; [] if none; live-parent preflight; no config | P3 aligned | pass (p3/steps.yaml) |
-| POST | /api/v1/change/set-document | 204; explicit agent_edit, nonblank kind/body, selected-config validation; sp_change_doc_set appends even identical body | P3 aligned | pass (p3/steps.yaml) |
-| POST | /api/v1/test-case/list | 200 ordered six-column public.testcase array after live-parent check; [] for no cases; missing parent404 | P4 aligned | pass (p4/steps.yaml) |
-| POST | /api/v1/test-case/create | 201 exact {id}; one INSERT returning ID; default false/timestamps; missing parent FK404 | P4 aligned | pass (p4/steps.yaml) |
-| POST | /api/v1/test-case/update | 204 empty; one scenario/modified UPDATE; affected rows0 means404; same-value writes execute | P4 aligned | pass (p4/steps.yaml) |
-| POST | /api/v1/test-case/update-done | 204 empty; one done/modified UPDATE; omitted/null done=false; affected rows0 means404 | P4 aligned | pass (p4/steps.yaml) |
-| POST | /api/v1/test-case/delete | 204 empty; one testcase DELETE; affected rows0 means404; no cascade or reload | P4 aligned | pass (p4/steps.yaml) |
+| POST | /api/v1/project/list | 200 array; current view columns; explicit deterministic ordering | P2 aligned | pass (normal/p2-steps.yaml) |
+| POST | /api/v1/project/get | 200 database-backed details | P2 aligned | pass (normal/p2-steps.yaml) |
+| POST | /api/v1/project/config | 200 selected config slug and all six ordered arrays; unavailable join 404 | P2 aligned, no fallback | pass (normal/p2-steps.yaml) |
+| POST | /api/v1/project/create | 201 {id}; one INSERT returning ID | P2 aligned | pass (normal/p2-steps.yaml) |
+| POST | /api/v1/project/update | 204 empty; one name/modified UPDATE, including same name | P2 aligned | pass (normal/p2-steps.yaml) |
+| POST | /api/v1/project/delete | 204 empty; one DELETE, FK conflict 409, missing 404 | P2 aligned | pass (normal/p2-steps.yaml) |
+| POST | /api/v1/epic/list | 200 array; current view columns; explicit deterministic ordering | P2 aligned | pass (normal/p2-steps.yaml) |
+| POST | /api/v1/epic/get | 200 database-backed details | P2 aligned | pass (normal/p2-steps.yaml) |
+| POST | /api/v1/epic/create | 201 {id}; one INSERT returning ID | P2 aligned | pass (normal/p2-steps.yaml) |
+| POST | /api/v1/epic/update | 204 empty; one name/modified UPDATE, including same name | P2 aligned | pass (normal/p2-steps.yaml) |
+| POST | /api/v1/epic/delete | 204 empty; one DELETE, FK conflict 409, missing 404 | P2 aligned | pass (normal/p2-steps.yaml) |
+| POST | /api/v1/change/list | 200 current vw_change_list columns; service int64 completion; modified DESC,id; [] for absent project | P3 aligned | pass (normal/p3/steps.yaml) |
+| POST | /api/v1/change/get | 200 current vw_change_details; flat fields, nullable references, no inline docs/version/testcases; 404 missing | P3 aligned | pass (normal/p3/steps.yaml) |
+| POST | /api/v1/change/rendered-artifacts | 200 artifacts wrapper; ordered deduplicated IDs; live-parent current doc spec/pr, sanitized HTML; absent IDs omitted | P3 aligned | pass (normal/p3/steps.yaml) |
+| POST | /api/v1/change/create | 201 exact {id}; selected config must support backlog/brief; UUIDv7 default or preserved caller UUID; fn_change_insert only | P3 aligned | pass (normal/p3/steps.yaml) |
+| POST | /api/v1/change/update-epic | 204; targeted parent/epic project preflight, sp_change_epic_update; nil detaches; no config | P3 aligned | pass (normal/p3/steps.yaml) |
+| POST | /api/v1/change/update-phase | 204; selected-config phase validation then sp_change_phase_update | P3 aligned | pass (normal/p3/steps.yaml) |
+| POST | /api/v1/change/update-open | 204; explicit bool; direct UPDATE open/modified; affected-row 404 | P3 aligned | pass (normal/p3/steps.yaml) |
+| POST | /api/v1/change/update-change-types | 204; ordered trim/dedup/filter using selected config; direct UPDATE types/modified, including clears | P3 aligned | pass (normal/p3/steps.yaml) |
+| POST | /api/v1/change/update-title | 204; existence preflight then sp_change_title_update; DB whitespace normalization; no config | P3 aligned | pass (normal/p3/steps.yaml) |
+| POST | /api/v1/change/update-brief | 204; service maps brief to ChangeDocumentSetRequest; sp_change_doc_set appends | P3 aligned | pass (normal/p3/steps.yaml) |
+| POST | /api/v1/change/update-spec | 204; service maps spec to ChangeDocumentSetRequest; sp_change_doc_set appends | P3 aligned | pass (normal/p3/steps.yaml) |
+| POST | /api/v1/change/update-pr | 204; service maps pr to ChangeDocumentSetRequest; sp_change_doc_set appends | P3 aligned | pass (normal/p3/steps.yaml) |
+| POST | /api/v1/change/update-pr-url | 204; nonblank http(s) URL; direct UPDATE pr_url/modified; affected-row 404; no config | P3 aligned | pass (normal/p3/steps.yaml) |
+| POST | /api/v1/change/delete | 204; direct DELETE; actual testcase FK 409; missing 404; docs retained; no config | P3 aligned | pass (normal/p3/steps.yaml) |
+| POST | /api/v1/change/documents | 200 current docs ordered doc_type,id with raw body and sanitized html; [] if none; live-parent preflight; no config | P3 aligned | pass (normal/p3/steps.yaml) |
+| POST | /api/v1/change/set-document | 204; explicit agent_edit, nonblank kind/body, selected-config validation; sp_change_doc_set appends even identical body | P3 aligned | pass (normal/p3/steps.yaml) |
+| POST | /api/v1/test-case/list | 200 ordered six-column public.testcase array after live-parent check; [] for no cases; missing parent404 | P4 aligned | pass (normal/p4/steps.yaml) |
+| POST | /api/v1/test-case/create | 201 exact {id}; one INSERT returning ID; default false/timestamps; missing parent FK404 | P4 aligned | pass (normal/p4/steps.yaml) |
+| POST | /api/v1/test-case/update | 204 empty; one scenario/modified UPDATE; affected rows0 means404; same-value writes execute | P4 aligned | pass (normal/p4/steps.yaml) |
+| POST | /api/v1/test-case/update-done | 204 empty; one done/modified UPDATE; omitted/null done=false; affected rows0 means404 | P4 aligned | pass (normal/p4/steps.yaml) |
+| POST | /api/v1/test-case/delete | 204 empty; one testcase DELETE; affected rows0 means404; no cascade or reload | P4 aligned | pass (normal/p4/steps.yaml) |
 
 
 ## P3 change/document contracts and concurrency limits

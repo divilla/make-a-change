@@ -2,6 +2,9 @@
 package main
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -55,24 +58,168 @@ func inspect(node *yaml.Node, seen map[*yaml.Node]bool) error {
 	return nil
 }
 
-func validateDirectory(directory string) error {
-	return filepath.WalkDir(directory, func(path string, entry fs.DirEntry, err error) error {
+// These local decoding types mirror the installed APIHydra document shapes.
+// KnownFields rejects malformed unselected defaults just as executable files.
+type defaults struct {
+	BaseURL        string            `yaml:"base_url"`
+	BasePath       string            `yaml:"base_path"`
+	Headers        map[string]string `yaml:"headers"`
+	Timeout        int               `yaml:"timeout"`
+	Retries        int               `yaml:"retries"`
+	DisableCookies *bool             `yaml:"disable_cookies"`
+}
+type step struct {
+	Vars    map[string]string `yaml:"vars"`
+	Request struct {
+		Method   string   `yaml:"method"`
+		Path     string   `yaml:"path"`
+		Query    string   `yaml:"query"`
+		Body     string   `yaml:"body"`
+		Defaults defaults `yaml:"defaults"`
+	} `yaml:"request"`
+	Response struct {
+		Status  int                 `yaml:"expected_status"`
+		Body    string              `yaml:"expected_body"`
+		Types   map[string][]string `yaml:"expected_types"`
+		Capture map[string]string   `yaml:"capture"`
+	} `yaml:"response"`
+}
+type document struct {
+	App      string `yaml:"app"`
+	Kind     string `yaml:"kind"`
+	Metadata struct {
+		Name   string   `yaml:"name"`
+		Labels []string `yaml:"labels"`
+	} `yaml:"metadata"`
+	Spec yaml.Node `yaml:"spec"`
+}
+type manifestEntry struct {
+	Path      string `json:"path"`
+	Hash      string `json:"sha256"`
+	Kind      string `json:"kind"`
+	Phase     string `json:"phase,omitempty"`
+	Selection string `json:"selection,omitempty"`
+	Stage     int    `json:"stage"`
+	Steps     int    `json:"steps"`
+}
+type manifest struct {
+	Phases    []string        `json:"phases"`
+	Documents []manifestEntry `json:"documents"`
+}
+
+func decodeStrict(data []byte, target any) error {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		return fmt.Errorf("expected exactly one YAML document")
+	}
+	return nil
+}
+
+func suiteManifest(directory string) (manifest, error) {
+	result := manifest{Phases: []string{"normal", "outage", "recovery"}}
+	counts := map[string]int{"normal": 0, "outage": 0, "recovery": 0}
+	rootCount := 0
+	defaultsDirs := map[string]bool{}
+	err := filepath.WalkDir(directory, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("suite symlinks prohibited: %s", path)
 		}
 		if entry.IsDir() || (filepath.Ext(path) != ".yaml" && filepath.Ext(path) != ".yml") {
 			return nil
 		}
-		file, err := os.Open(path)
+		data, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}
-		defer file.Close()
-		if err := validate(file); err != nil {
+		if err := validate(bytes.NewReader(data)); err != nil {
 			return fmt.Errorf("%s: %w", path, err)
 		}
+		var doc document
+		if err := decodeStrict(data, &doc); err != nil {
+			return fmt.Errorf("%s: %w", path, err)
+		}
+		if doc.App != "apihydra" {
+			return fmt.Errorf("%s: app must be apihydra", path)
+		}
+		if doc.Spec.Kind != yaml.MappingNode {
+			return fmt.Errorf("%s: spec must be a mapping", path)
+		}
+		rel, err := filepath.Rel(directory, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		item := manifestEntry{Path: rel, Hash: fmt.Sprintf("%x", sha256.Sum256(data)), Kind: doc.Kind, Stage: strings.Count(rel, "/")}
+		spec, err := yaml.Marshal(&doc.Spec)
+		if err != nil {
+			return err
+		}
+		switch doc.Kind {
+		case "root", "defaults":
+			var value defaults
+			if err := decodeStrict(spec, &value); err != nil {
+				return fmt.Errorf("%s: %w", path, err)
+			}
+			if doc.Kind == "root" {
+				rootCount++
+				if filepath.Dir(rel) != "." {
+					return fmt.Errorf("nested root: %s", rel)
+				}
+			} else {
+				dir := filepath.Dir(rel)
+				if defaultsDirs[dir] {
+					return fmt.Errorf("duplicate defaults: %s", dir)
+				}
+				defaultsDirs[dir] = true
+			}
+		case "steps":
+			var value struct {
+				Defaults defaults `yaml:"defaults"`
+				Steps    []step   `yaml:"steps"`
+			}
+			if err := decodeStrict(spec, &value); err != nil {
+				return fmt.Errorf("%s: %w", path, err)
+			}
+			phase, _, found := strings.Cut(rel, "/")
+			if _, ok := counts[phase]; !found || !ok {
+				return fmt.Errorf("unclassified executable: %s", rel)
+			}
+			if len(value.Steps) == 0 {
+				return fmt.Errorf("empty executable: %s", rel)
+			}
+			for _, step := range value.Steps {
+				if step.Request.Method == "" || step.Request.Path == "" || step.Response.Status < 100 || step.Response.Status > 599 {
+					return fmt.Errorf("%s: each step needs method, path and explicit HTTP status", rel)
+				}
+			}
+			item.Phase, item.Selection, item.Steps = phase, phase, len(value.Steps)
+			counts[phase] += len(value.Steps)
+		default:
+			return fmt.Errorf("%s: unknown document kind %q", path, doc.Kind)
+		}
+		result.Documents = append(result.Documents, item)
 		return nil
 	})
+	if err != nil {
+		return result, err
+	}
+	if rootCount != 1 {
+		return result, fmt.Errorf("expected one root document, got %d", rootCount)
+	}
+	for _, phase := range result.Phases {
+		if counts[phase] == 0 {
+			return result, fmt.Errorf("missing/empty phase: %s", phase)
+		}
+	}
+	return result, nil
 }
 
 func main() {
@@ -80,7 +227,11 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage: validate-apih-suite DIRECTORY")
 		os.Exit(2)
 	}
-	if err := validateDirectory(os.Args[1]); err != nil {
+	result, err := suiteManifest(os.Args[1])
+	if err == nil {
+		err = json.NewEncoder(os.Stdout).Encode(result)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

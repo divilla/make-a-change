@@ -1,131 +1,122 @@
-# APIHydra R6 measurement
+# APIHydra final 016 campaign
 
-Measured 2026-09-28 on `change/015-backend-compact-handlers`, published
-implementation `7446652` over merged R5 dev `bbde3fe`; native review passed clean.
-All408 requests in the five unchanged suites pass:96 P4,212 P3,91 P2,7 errors,
-and2 health aliases. The owned instrumented server and APIHydra exit0. The
-runner loads unchanged init/seed and fixtures into its private PostgreSQL
-cluster, then stops/removes only its owned resources.
+Final supervisor verification on 2026-09-28 includes both native recorder-cleanup
+and independently reviewed emergency command fixes. All five required/separate
+checks pass; unit **911/925** and APIHydra **864/925** remain unchanged. Final
+source, command exits and review evidence are in the
+[current checkpoint](../agents/backend-refactor-checkpoint.md#final-supervisor-verification).
+Production source is unchanged from merged R6 `62d9f4f`; tooling and suite
+provenance records the tested branch diff. No future squash hash is claimed.
 
-`make -C backend api-test` exits0 with **837/925 = 90.4865%**, passing>=90%.
-Independent unit coverage is **911/925 = 98.4865%**, passing strict>95%.
-All other required Make targets, including the complete legacy HTTP/SQL suite,
-pass. Legacy and unit counters never enter APIHydra coverage.
+`make -C backend api-test` passes **864/925 = 93.4054%** production statements,
+above the >=90% gate. Independent unit coverage passes **911/925 = 98.4865%**,
+above strict >95%. All required checks and the complete legacy HTTP/SQL suite
+pass. No production code, dependency, database schema or public API changed.
 
-R6 scopes14 one-use mutation errors into their immediate conditionals without
-changing calls, validation, error causes or responses. Go instrumentation reports
-14 fewer statements for those declarations; no retained behavior, production
-package, defensive path or profile is excluded. Domain has no executable
-statements. Unit gaps remain14 process-only main statements; API gaps remain88
-SQL/external-error/startup/config/health/Markdown branches. The
-[checkpoint](../agents/backend-refactor-checkpoint.md) records package counts,
-commands, parity evidence and remaining behavior gaps. Separate016 owns the
-final failure-integration campaign and combined audit.
+## Full campaign and evidence
 
-## Operation inventory and scenarios
+The authoritative command from the repository root is:
 
-The [ledger](../agents/backend-contracts.md) inventories **34 method/path pairs**,
-recalculated from route registration by a passing tooling test.
-**34/34 = 100%** have passing successful contracts: 16 change, 6 project,
-5 epic, 5 testcase, 2 health. Negative-only scenarios do not earn successful
-operation credit. Removed options/move/unknown routes are404 checks, not extra
-registered operations. Operation coverage is separate from statement coverage.
+```sh
+make -C backend api-test
+```
 
-P4 creates its own project/epic/change through ID-only201, associates via204,
-and independently lists cases and reads counters. Two captured testcase IDs
-prove trimmed scenarios, default false and ID ordering. Toggle/edit/same-value
-writes, omitted/null false, deletes and repeated-delete404 are followed by
-independent state/count reads: 0/0/0, 0/2/0, 1/2/50, 2/2/100, 1/2/50, 0/1/0,
-and delete-last0/0/0. Parent deletion409 preserves children and current docs;
-after explicit child deletion, parent delete204 succeeds, then change
-get/documents/set-document and testcase list/create return404. All applicable
-invalid IDs, blank/null scenario, malformed/wrong-type payloads, representable
-large missing IDs and missing parent/case paths assert stable status/envelopes.
-Retries remain -1 to prevent mutation/error replay. No mutation side data is
-used as a read.
+Do not select the suite root with apih: phases require different database states.
+A manual `apih --parallelism 0 backend/apih-tests/normal` selection against an
+independently prepared owned healthy server is diagnostic only, and cannot
+establish full-campaign coverage. The Make target validates all YAML before
+setup, then selects the three copied subtrees explicitly, serially.
 
-Every retained change operation and the two explicit document operations have
-successful contracts with substantive reads. Each successful mutation is followed
-by a separate read. The campaign covers generated and supplied v4 UUIDs,
-duplicate UUID409, trimmed create, ID-only create status, title procedure
-whitespace normalization, phase/epic/open/types/pr-url updates, same-value direct
-updates, ordered type filtering/clearing, specialized brief/spec/pr and generic
-configured documents, repeated same-body writes, raw+sanitized reads, bulk
-artifacts in input order, empty/missing reads, and direct deletion/FK409.
-Malformed JSON, wrong field types, negative/zero IDs, absent targets, empty/null
-content, omitted/null/wrong-type booleans, invalid URLs, cross-project/missing
-epics, unknown phases/kinds and missing selected configuration are exercised.
+| Phase | Requests | Exit | Server PID | Database state |
+| --- | --- | --- | --- | --- |
+| normal | 408 | 0 | 1302702 | Original initialized/seeded cluster |
+| outage | 28 | 0 | 1302702 | Confirmed stopped, no postmaster PID file |
+| recovery | 22 | 0 | 1302702 | Same data directory/socket restarted with pg_ctl readiness |
 
-P2's six original fixture projects, config arrays and relationships remain
-unchanged. The exact initial global list expectation is extended with the three
-P3 fixture projects, retaining all original entries and assertions. P3 projects
-2001/2002/2003 select default/custom/missing config. Their independent changes
-2201–2207 support writes, no-config reads/writes, deletion, empty docs, wide
-counts, and malformed duplicate-current artifacts. Epic2101 matches project2001;
-2102 intentionally belongs to2002. Testcase IDs230001–280000 give change2206
-40000 done/50000 total and completed80, with actual FK conflict on deletion.
-Docs2401–2407 cover retained history, missing-config rendering, duplicate current
-spec rows, a wrong ref_table PR and a noncurrent PR. Dynamic identities remain
-small and are captured; no generated ID is assumed.
+All **458 requests** pass. Server binary SHA256:
+`985bb47273813443fc1efd57cc8f8da535e92c16cf573876e9140bf7a51cf8da`.
+One covered build, one server, one cluster initialization, one init/seed/fixture
+load and one counters directory serve the campaign. No pool replacement or
+HTTP warmup occurs after database restart. Both health aliases' first recovery
+requests pass200. Original server shutdown exits0; final DB stop and cleanup
+pass before counter conversion/reporting.
 
-Current doc ordering is doc_type,id. Historical records are absent from current
-reads; bulk artifacts select latest current rows deterministically if duplicate
-current data exists. Sanitization leaves raw bodies intact. After deleting a
-parent, get/documents/set return404 and bulk artifacts omit it. Missing selected
-configuration blocks config-dependent writes/create but not plain reads or
-unrelated title/open/pr-url/epic/delete operations. No fallback is credited.
+Normal, post-outage/pre-write, and post-recovery SQL postconditions all pass
+with ON_ERROR_STOP. They prove exact retained rows, timestamps, absent attempted
+inserts, restored testcase state, and append-only P3 documents. SQL receives no
+Go coverage credit. Initial HTTP health probes only synchronize startup and can
+contribute counters. No per-phase statement percentage is inferred from the one
+process. Unit and legacy profiles are never merged into APIHydra data.
 
-## Separate SQL/HTTP evidence and tool limits
+Fresh ignored artifacts live under `backend/.coverage/api/`:
 
-`TestChangeDeletionRetainsAppendOnlyDocuments` runs in the complete separate
-owned legacy campaign and proves identical writes append three increasing IDs,
-two historic/one current. A testcase created through the new API blocks deletion
-without removing child/current documents. After API child deletion and parent
-delete204, SQL confirms parent/child absence and exact retained document
-IDs/bodies/current flags. Public writes cannot resurrect removed-parent docs.
-No equivalent runner SQL hook existed in merged P3, so this useful SQL evidence
-was retained and adapted rather than discarded.
+- `suite-manifest.json`: every decoded YAML document, source hash, kind,
+  executable phase/selection, stage depth and request count.
+- `suite-inputs.json`: hashes of all copied files, including the port-substituted
+  root and SQL; `suite/` retains the exact executed input tree.
+- `campaign.json`: ordered phase command/start/end/exit/error, PID/binary hash,
+  DB transitions, SQL postconditions, shutdown and cleanup results. Incomplete
+  runs retain failed/not-reached evidence and remove success reports/profiles.
+- `provenance.json`: HEAD/diff, backend input hashes (including untracked files),
+  actual apih identity/hash, commands and campaign evidence; DB source hashes
+  are in campaign evidence. `denominator.json`/`packages.json`, native counters,
+  `coverage.out`, `report.txt`, `result.json` and runner/server/PG logs preserve
+  the independently audited statement measurement.
 
-`TestChangeIdentityOrderingAndSameValueTimestamps` still proves UUIDv7 and
-change timestamp ordering; `TestTestCaseCurrentStateAndSameValueTimestamps`
-adds testcase same-value modified advancement with preserved created, unrelated
-rows, parent timestamps and independently read counters. All retained
-project/epic/change/health/testcase HTTP and SQL tests pass in the complete
-R3 `make -C backend legacy-api-test` campaign, independently of APIHydra.
-Separate `.coverage/legacy/` counters receive
-**zero APIHydra coverage credit**. The ledger records why nonexistent testcase
-history/version/procedure/cascade and composite-response assertions were removed,
-and maps every retained guarantee to current tests.
+The [checkpoint](../agents/backend-refactor-checkpoint.md) records exact command
+exits, criterion/test mapping and factory handoff. The
+[gap inventory](../agents/final-coverage-gaps.md) lists every production file,
+package total and uncovered function/source block with its practical obstacle.
+Implementation source hashes still match all three measured provenance records;
+reporting Markdown was written after measurement.
 
-Installed `/home/vito/go/bin/apih` is module
-`v0.1.1-0.20260907061551-c3947513e2a4`, revision
-`c3947513e2a4b948ce732dec60e090a5e83be744`. `apih --help` and that exact revision's
-manual were inspected locally with git show; the newer checkout is not authority
-for syntax. Serial invocation is `apih --parallelism 0 <private-suite-copy>`.
-Mutations/errors use `retries: -1` to omit retries; zero inherits retry defaults.
-There are no credentials/auth middleware, Debug breakpoints or partial selections.
+## Operation inventory and behavioral assertions
 
-APIHydra's subset comparison ignores extra object keys; an empty expected body
-skips comparison. Thus it cannot prove exact {id} or truly empty204 bodies.
-`TestTestCaseAPIExactContracts`, `TestTestCaseListExactCurrentFields`,
-`TestChangeAPIContracts` and `TestDocumentAPIShapeAndExplicitBooleans` pin exact
-keys/nulls/empty bodies. Tests separately preserve bind/validation/PG causes.
-Captured IDs and explicit expected_status/body/types use supported syntax.
+The [contract ledger](../agents/backend-contracts.md) and route-constructor/tooling
+tests retain **34/34 = 100%** successfully exercised method/path operations:
+16 change, 6 project, 5 epic, 5 testcase, 2 health. Operation coverage is a
+separate diagnostic, not the statement gate. No operations were omitted.
 
-## Remaining gaps and rerun
+| Selection | Retained or added contract |
+| --- | --- |
+| normal/error-steps.yaml | Seven malformed/missing/unknown-route contracts |
+| normal/health-steps.yaml | Both registered healthy aliases |
+| normal/p2-steps.yaml | 91 project/config/epic assertions; original nine global-list rows remain in order with two reserved projects appended |
+| normal/p3/steps.yaml | 212 change/document assertions: UUIDs, config, current/history reads, explicit mutations, FK failures, sanitization and missing/invalid cases |
+| normal/p4/steps.yaml | 96 testcase lifecycle/count/validation/deletion assertions |
+| outage/steps.yaml | Both503 safe degraded bodies; valid project/epic/change/documents/artifacts/testcase requests return live500 generic envelopes; direct insert/update/delete failures; procedure-preflight failures; invalid request still400 |
+| recovery/steps.yaml | Both health aliases200; independent retained parents/counts/names/scenarios/document reads; update204 followed by read/restore; create201 with phase-local capture, list/count read, delete204 and empty list/count read |
 
-Query/scan/iteration and Exec failures, entropy failure, concurrent FK/parent
-races, degraded health and startup/config/Markdown error branches remain gaps;
-no fabricated HTTP triggers or exclusions were introduced. Testcase's nine API
-uncovered statements are DB failure arms, all unit tested. Both numerical goals
-pass, but overall verification still reports 11 unrelated baseline lint issues.
-The two-read testcase existence/list race is documented without an atomic claim.
+Four original normal files are byte-identical after relocation. P2 changes only
+its initial project-list expectation; every previous row/order/value remains.
+Stage ancestry is preserved beneath normal. Fixture IDs3001/3002,3101/3102,
+3201/3202,3301/3302 and3401 are independent of normal dynamic records. Existing
+P2/P3 fixtures are unchanged. Explicit reserved IDs do not advance identity
+sequences; the bounded campaign's generated identities remain below1000.
+Captures reset per invocation; only recovery-local IDs are consumed in recovery.
+No fixture reload/reset occurs between phases.
 
-First P4 API attempt failed101 because the new file lacked JSON Content-Type;
-that header was fixed and the entire campaign rerun with unchanged assertions.
-Only completed successful runs establish the counts above. No scenarios remain
-failed/skipped/blocked; no outage campaign was added.
+## Limits and historical evidence
 
-Fresh ignored profiles, provenance, source/block inventories, result.json and
-runner/server/PostgreSQL logs live under `backend/.coverage/api/`; unit and
-legacy evidence stay separate. Rerun: `make -C backend api-test`.
+Installed apih remains `v0.1.1-0.20260907061551-c3947513e2a4`, revision
+`c3947513e2a4b948ce732dec60e090a5e83be744`; help and the pinned local manual were
+inspected. Requests use a five-second bound; phase commands have a300-second
+bound. Mutation/error files use `retries: -1`; zero would inherit retries.
+Transport errors/timeouts cannot satisfy expected500. No Debug directives,
+assertion retries, schema corruption, production fault hooks or hidden skipped
+phases were introduced.
+
+APIHydra compares object subsets and skips empty expected bodies. Existing
+`TestAPIRegisteredContracts`, `TestChangeAPIContracts`,
+`TestDocumentAPIShapeAndExplicitBooleans` and `TestTestCaseAPIExactContracts`
+remain authoritative for exact ID-only201 and truly empty204 contracts.
+Separate preflight/query/procedure races and append-only polymorphic document
+semantics remain as documented in the ledger; no atomicity claim was added.
+
+The first016 real run passed normal/outage but failed101 on a timezone-specific
+HTTP timestamp expectation. It produced no valid profile. That assertion was
+replaced with SQL timestamp equality before recovery writes; all subsequent
+complete runs pass. Historical R6 measurement was837/925; the additional27
+covered statements are genuine outage/error/health behavior. The61 API-uncovered
+statements and14 unit-uncovered main statements are listed exactly in the gap
+report. Both targets pass; no required scenario remains failed, skipped or blocked.

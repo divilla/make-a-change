@@ -45,3 +45,21 @@ INSERT INTO public.doc(id,ref_id,ref_table,doc_type,body,current) VALUES
  (2405,2207,'change','spec','Latest duplicate',true),
  (2406,2207,'project','pr','Wrong table',true),
  (2407,2207,'change','pr','Historical PR',false);
+
+-- FV-03/04 reserved outage records: normal never mutates these IDs.
+-- Explicit identities do not advance sequences; the bounded campaign creates
+-- far fewer than 1000 records, leaving dynamic and reserved IDs disjoint.
+INSERT INTO public.project(id,name,created,modified) VALUES
+ (3001,'Outage parent','2024-01-01','2024-01-01'),
+ (3002,'Outage deletable project','2024-01-01','2024-01-01');
+INSERT INTO public.epic(id,project_id,name,created,modified) VALUES
+ (3101,3001,'Outage epic','2024-01-01','2024-01-01'),
+ (3102,3001,'Outage deletable epic','2024-01-01','2024-01-01');
+INSERT INTO public.change(id,project_id,epic_id,title,created,modified) VALUES
+ (3201,3001,3101,'Outage change','2024-01-01','2024-01-01'),
+ (3202,3001,NULL,'Outage deletable change','2024-01-01','2024-01-01');
+INSERT INTO public.testcase(id,change_id,scenario,done,created,modified) VALUES
+ (3301,3201,'Original scenario',false,'2024-01-01','2024-01-01'),
+ (3302,3201,'Retained delete target',true,'2024-01-01','2024-01-01');
+INSERT INTO public.doc(id,ref_id,ref_table,doc_type,body,current,created) VALUES
+ (3401,3201,'change','brief','**Original document**',true,'2024-01-01');
