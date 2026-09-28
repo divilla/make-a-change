@@ -1,3 +1,4 @@
+// Package epic manages project epics and their change completion summaries.
 package epic
 
 import (

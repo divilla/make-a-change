@@ -1,6 +1,6 @@
 # Backend refactor plan
 
-Status: P0–P4, R1, the separate011 validation-cause repair, R3 startup boundaries and R4 configuration isolation are implemented and reviewed; R2 remains no actionable work. R4 preserves408 APIHydra requests/34 operations and full legacy HTTP/SQL parity. Both gates pass: unit925/939 (98.5091%), integration851/939 (90.6283%). Required check remains incomplete for displayed baseline lint diagnostics; R5 will enumerate uncapped findings and repair them without weakening checks. Next are014 local patterns (R5),015 compact-handler reassessment (R6) and separate016 final failure-integration verification. See [the current checkpoint](../backend/agents/backend-refactor-checkpoint.md).
+Status: P0–P4, R1, the separate011 validation-cause repair, R3 startup boundaries and R4 configuration isolation are implemented and reviewed; R2 remains no actionable work. R5 (014) is implemented and passed native review at `1df4646` without findings: all 13 freshly enumerated lint findings are repaired and normal `make -C backend check` passes. All408 APIHydra requests/34 operations and the complete legacy HTTP/SQL suite pass. Fresh gates pass: unit925/939 (98.5091%), integration851/939 (90.6283%). Next: complete the authorized014 dev merge, then015 compact-handler reassessment (R6) and separate016 final failure-integration verification. See [the current checkpoint](../backend/agents/backend-refactor-checkpoint.md).
 Inspected on 2026-09-28 at commit `7a89905`, branch `change/004-refactor-backend`.
 
 ## Recommendation and scope

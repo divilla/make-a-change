@@ -1,3 +1,4 @@
+// Package markdown provides Markdown rendering and HTML sanitization.
 package markdown
 
 import (

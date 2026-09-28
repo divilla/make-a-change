@@ -1,3 +1,4 @@
+// Package project manages projects and their selected database configuration.
 package project
 
 import (

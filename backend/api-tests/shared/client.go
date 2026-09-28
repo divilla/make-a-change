@@ -1,3 +1,4 @@
+// Package shared provides the HTTP client and fixture cleanup for legacy API tests.
 package shared
 
 import (
@@ -16,6 +17,7 @@ import (
 
 const apiTestBaseURL = "http://localhost:19080"
 
+// Client sends requests to the backend owned by the API test run.
 type Client struct {
 	baseURL string
 	http    *http.Client
@@ -25,6 +27,7 @@ type cleanupChange struct {
 	ID int `json:"id"`
 }
 
+// NewClient checks backend connectivity and creates a client with a five-second timeout.
 func NewClient(t *testing.T) *Client {
 	t.Helper()
 
@@ -40,7 +43,7 @@ func NewClient(t *testing.T) *Client {
 
 	res, err := client.http.Do(req)
 	require.NoErrorf(t, err, "backend is not available at %s", client.baseURL)
-	defer res.Body.Close()
+	defer closeResponseBody(t, res.Body, http.MethodGet, "/api/v1/health")
 
 	return client
 }
@@ -58,6 +61,7 @@ func apiTestBaseURLFromEnv() string {
 	return apiTestBaseURL
 }
 
+// CleanupProject deletes a test project's changes and epics before the project.
 func CleanupProject(t *testing.T, client *Client, projectID int) {
 	t.Helper()
 
@@ -85,6 +89,7 @@ func CleanupProject(t *testing.T, client *Client, projectID int) {
 	assert.Contains(t, []int{http.StatusNoContent, http.StatusNotFound}, status)
 }
 
+// Get returns the response status and decodes JSON into out when it is nonnil.
 func (c *Client) Get(t *testing.T, path string, out any) int {
 	t.Helper()
 
@@ -93,7 +98,7 @@ func (c *Client) Get(t *testing.T, path string, out any) int {
 
 	res, err := c.http.Do(req)
 	require.NoError(t, err)
-	defer res.Body.Close()
+	defer closeResponseBody(t, res.Body, http.MethodGet, path)
 
 	if out != nil {
 		require.NoError(t, json.NewDecoder(res.Body).Decode(out))
@@ -102,6 +107,7 @@ func (c *Client) Get(t *testing.T, path string, out any) int {
 	return res.StatusCode
 }
 
+// Post sends a JSON body, returns the status, and decodes JSON into nonnil out.
 func (c *Client) Post(t *testing.T, path string, body any, out any) int {
 	t.Helper()
 
@@ -114,7 +120,7 @@ func (c *Client) Post(t *testing.T, path string, body any, out any) int {
 
 	res, err := c.http.Do(req)
 	require.NoError(t, err)
-	defer res.Body.Close()
+	defer closeResponseBody(t, res.Body, http.MethodPost, path)
 
 	if out != nil {
 		data, err := io.ReadAll(res.Body)
@@ -123,4 +129,8 @@ func (c *Client) Post(t *testing.T, path string, body any, out any) int {
 	}
 
 	return res.StatusCode
+}
+
+func closeResponseBody(t assert.TestingT, body io.Closer, method, path string) {
+	assert.NoErrorf(t, body.Close(), "close %s %s response body", method, path)
 }

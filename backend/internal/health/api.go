@@ -1,3 +1,4 @@
+// Package health reports backend health through database connectivity checks.
 package health
 
 import (
