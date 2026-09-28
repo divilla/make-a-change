@@ -16,7 +16,11 @@
       "TestCLIProgramChangeCRUDAndPartialSuccess",
       "TestCLIProgramChangeDelayedScopeAndShutdown",
       "TestCLIProgramChangeReloadBlocksCachedRows",
-      "TestCLIProgramChangeMalformedReadRecovery"
+      "TestCLIProgramChangeMalformedReadRecovery",
+      "TestCLIProgramTestCaseLifecycle",
+      "TestCLIProgramTestCaseCommittedWriteAndStaleRecovery",
+      "TestCLIProgramTestCaseShutdownCancelsRequest",
+      "TestCLIProgramTestCaseKeyboardCancelsBusyRequest"
     ]
   },
   "pty": {

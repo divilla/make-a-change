@@ -105,6 +105,9 @@ func TestCLIPackageBoundariesFixtures(t *testing.T) {
 	}{
 		{"internal/changes", "internal/app", true},
 		{"internal/changes", "internal/projects", true},
+		{"internal/changes", "internal/testcases", true},
+		{"internal/testcases", "internal/app", true},
+		{"internal/testcases", "pkg/client", true},
 		{"internal/changes", "pkg/client", true},
 		{"internal/changes", "internal/config", true},
 		{"internal/dto", "internal/changes", true},

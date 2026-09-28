@@ -176,7 +176,7 @@ func TestP406DocumentCurrentInsertAndSeparateTestCases(t *testing.T) {
 			_, _ = w.Write([]byte(`{"id":92}`))
 		case "/api/v1/test-case/list":
 			require.Equal(t, map[string]any{"change_id": float64(12)}, body)
-			_, _ = w.Write([]byte(`[{"id":31,"change_id":12,"scenario":"literal","done":false}]`))
+			_, _ = w.Write([]byte(`[{"id":31,"change_id":12,"scenario":"literal","done":false,"created_at":"2026-09-28T10:00:00Z","updated_at":"2026-09-28T11:00:00Z"}]`))
 		default:
 			t.Fatalf("unexpected %s", r.URL.Path)
 		}
@@ -191,7 +191,7 @@ func TestP406DocumentCurrentInsertAndSeparateTestCases(t *testing.T) {
 	require.Equal(t, 92, id)
 	rows, err := c.ListTestCases(context.Background(), 12)
 	require.NoError(t, err)
-	require.Equal(t, "31", rows[0].ID)
+	require.Equal(t, 31, rows[0].ID)
 	require.Len(t, calls, 3)
 }
 

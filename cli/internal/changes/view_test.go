@@ -22,7 +22,7 @@ func TestDetailsViewSeparatesSpecAndTestCases(t *testing.T) {
 		Title:   "Backend Change",
 		Spec:    "Spec text",
 		TestCases: []dto.TestCase{
-			{ID: "31", Scenario: "first scenario", Done: true},
+			{ID: 31, Scenario: "first scenario", Done: true},
 		},
 	})
 
@@ -49,8 +49,8 @@ func TestDetailsViewEmojiRowsDoNotOverflowSelectionWidth(t *testing.T) {
 		Open:    true,
 		Created: "2026-06-29T08:15:00Z",
 		TestCases: []dto.TestCase{
-			{ID: "31", Scenario: "first scenario", Done: true},
-			{ID: "32", Scenario: "second scenario", Done: false},
+			{ID: 31, Scenario: "first scenario", Done: true},
+			{ID: 32, Scenario: "second scenario", Done: false},
 		},
 	}
 

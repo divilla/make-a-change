@@ -1,5 +1,7 @@
 package dto
 
+import "time"
+
 // ChangeView is the change row and detail data used by mch.
 type ChangeView struct {
 	ID            string
@@ -29,10 +31,12 @@ type ChangeView struct {
 
 // TestCase is the test case row data shown on Change details.
 type TestCase struct {
-	ID       string
-	Scenario string
-	Done     bool
-	ChangeID string
+	ID        int
+	Scenario  string
+	Done      bool
+	ChangeID  int
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // ChangeCreateInput is the backend payload for creating a change.

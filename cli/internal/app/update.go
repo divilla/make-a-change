@@ -6,6 +6,7 @@ import (
 	"cli/internal/epics"
 	"cli/internal/navigation"
 	"cli/internal/projects"
+	"cli/internal/testcases"
 	"strconv"
 	"strings"
 
@@ -96,6 +97,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case changes.Result:
 		return m.applyChangeResult(msg)
+	case testcases.Result:
+		return m.applyTestCaseResult(msg)
 	case epics.Result:
 		return m.applyEpicResult(msg)
 	case projects.Result:
@@ -142,7 +145,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "load failed"
 		}
 		m.detailEditField = ""
-		m.activeTestCase = dto.TestCase{}
+		m.testCase = m.testCase.ClearForm()
 		m = m.setPromptValue("")
 		return m, nil
 	case optionCatalogLoadedMsg:
@@ -235,6 +238,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.quitRequested {
+		return m, nil
+	}
+	if m.testCase.Busy {
+		if msg.Type == tea.KeyEsc || msg.Type == tea.KeyCtrlC {
+			m.testCase = m.testCase.Invalidate()
+			return m.handleEsc()
+		}
 		return m, nil
 	}
 	if m.changeList.Busy || m.projectList.Busy || m.epicList.Busy {
@@ -551,6 +561,7 @@ func (m Model) handlePromptCancel() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) requestQuit() (tea.Model, tea.Cmd) {
+	m.testCase = m.testCase.Invalidate()
 	m.changeList = m.changeList.Invalidate()
 	m.epicList = m.epicList.Invalidate()
 	if m.configSaveInFlight {
@@ -579,7 +590,7 @@ func (m Model) handleEsc() (tea.Model, tea.Cmd) {
 		m = m.setPromptValue("")
 		if m.state == TestCaseCreateState || m.state == TestCaseUpdateState {
 			m.detailEditField = ""
-			m.activeTestCase = dto.TestCase{}
+			m.testCase = m.testCase.ClearForm()
 			m = m.setPromptValue("")
 		}
 		return m.arrive(navigation.CancelTarget(m.state), "cancel")
@@ -613,6 +624,10 @@ func (m Model) handleListSelection() (tea.Model, tea.Cmd) {
 		}
 		return m.beginChange(changes.Details, id, changes.Input{})
 	case ChangeDetailsState:
+		if !m.changeDetailLoaded {
+			m.err = "load change details with /retry before editing"
+			return m, nil
+		}
 		next, row, ok := m.changeList.SelectDetailRow(m.changeTableRows(), terminalWidth(m.width))
 		m.changeList = next
 		if !ok {
@@ -702,6 +717,9 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 			return m.beginChange(changes.List, 0, changes.Input{})
 		}
 		if source == ChangeDetailsState {
+			if m.testCase.NeedsRefresh() {
+				return m.beginTestCase(testcases.Refresh, "", "", false)
+			}
 			id, _ := changeNumericID(m.changeList.Detail)
 			return m.beginChange(changes.Details, id, changes.Input{})
 		}
@@ -743,6 +761,10 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 	case "/return":
 		return m.arrive(navigation.ReturnTargets()[source], "return")
 	case "/new-change", "/new-testcase", "/new-test-case", "/new-epic", "/new-project":
+		if source == ChangeDetailsState && (command == "/new-testcase" || command == "/new-test-case") && !m.changeDetailLoaded {
+			m.err = "load change details with /retry before editing"
+			return m, nil
+		}
 		if command == "/new-epic" {
 			return m.epicForm(false)
 		}
@@ -763,10 +785,11 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 			return m.openPromptEditor(ChangeCreateState)
 		}
 		if m.state == TestCaseCreateState {
-			m.activeTestCase = dto.TestCase{}
-			m.input.Placeholder = "Write a Scenario"
+			m.testCase = m.testCase.OpenCreate()
+			form := testcases.CreateForm()
+			m.input.Placeholder = form.Placeholder
 			m = m.setPromptValue("")
-			m.status = "new test case"
+			m.status = form.Status
 			return m, nil
 		}
 		if m.state == ProjectCreateState {
@@ -835,7 +858,7 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 			m = m.setPromptValue("")
 		}
 		if source == TestCaseCreateState || source == TestCaseUpdateState {
-			m.activeTestCase = dto.TestCase{}
+			m.testCase = m.testCase.ClearForm()
 		}
 		return m.arrive(navigation.CancelTarget(source), "cancel")
 	case "/delete":
@@ -905,6 +928,9 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 }
 
 func (m Model) arrive(state State, status string) (tea.Model, tea.Cmd) {
+	if state != ChangeDetailsState && state != TestCaseCreateState && state != TestCaseUpdateState {
+		m.testCase = m.testCase.Invalidate()
+	}
 	m.changeList = m.changeList.Invalidate()
 	m.epicList = m.epicList.Invalidate()
 	if m.state == ChangeCreateState {
@@ -1006,10 +1032,11 @@ func (m Model) beginTestCaseScenarioEdit(row changes.DetailRow) (tea.Model, tea.
 	m.previousState = ChangeDetailsState
 	m.state = TestCaseUpdateState
 	m.detailEditField = detailEditTestCase
-	m.activeTestCase = dto.TestCase{ID: row.TestCaseID, Scenario: row.TestCaseText}
-	m.input.Placeholder = "Write a Scenario"
+	m.testCase = m.testCase.OpenEdit(row.TestCaseID, row.TestCaseText)
+	form := testcases.EditForm()
+	m.input.Placeholder = form.Placeholder
 	m = m.setPromptValue(row.TestCaseText)
-	m.status = "editing test case"
+	m.status = form.Status
 	return m, nil
 }
 
@@ -1040,6 +1067,10 @@ func (m Model) beginDetailFieldSelector(field detailEditField) (tea.Model, tea.C
 }
 
 func (m Model) handleDetailSpaceToggle() (tea.Model, tea.Cmd) {
+	if !m.changeDetailLoaded {
+		m.err = "load change details with /retry before editing"
+		return m, nil
+	}
 	next, row, ok := m.changeList.SelectDetailRow(m.changeTableRows(), terminalWidth(m.width))
 	m.changeList = next
 	if !ok {
@@ -1052,14 +1083,17 @@ func (m Model) handleDetailSpaceToggle() (tea.Model, tea.Cmd) {
 		id, _ := changeNumericID(m.changeList.Detail)
 		return m.beginChange(changes.Open, id, changes.Input{Open: !m.changeList.Detail.Open})
 	case row.TestCaseID != "":
-		m.status = "saving test case"
-		return m, changeDetailTestCaseDoneUpdateCommand(m.client, m.changeList.Detail, row)
+		return m.beginTestCase(testcases.SetDone, row.TestCaseID, "", !row.TestCaseDone)
 	default:
 		return m, nil
 	}
 }
 
 func (m Model) handleDetailDelete() (tea.Model, tea.Cmd) {
+	if !m.changeDetailLoaded {
+		m.err = "load change details with /retry before editing"
+		return m, nil
+	}
 	next, row, ok := m.changeList.SelectDetailRow(m.changeTableRows(), terminalWidth(m.width))
 	m.changeList = next
 	if !ok {
@@ -1069,7 +1103,7 @@ func (m Model) handleDetailDelete() (tea.Model, tea.Cmd) {
 	if row.TestCaseID == "" {
 		return m, nil
 	}
-	m.activeTestCase = dto.TestCase{ID: row.TestCaseID, Scenario: row.TestCaseText}
+	m.testCase = m.testCase.OpenDelete(row.TestCaseID)
 	m.openConfirmation(TestCaseDeleteConfirmation, ChangeDetailsState, ChangeDetailsState)
 	return m, nil
 }

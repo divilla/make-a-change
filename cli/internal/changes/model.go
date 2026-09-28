@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // Filters stores active change list filter selections.
@@ -227,6 +229,11 @@ func (m Model) SelectDetailRow(pageSize int, width int) (Model, DetailRow, bool)
 	return m, row, true
 }
 
+// DetailRowAtSelection identifies a row without changing the viewport.
+func DetailRowAtSelection(change dto.ChangeView, selection int) (DetailRow, bool) {
+	return detailRowForSelection(change, DetailRows(change), selection)
+}
+
 // DetailRows returns Change details as label/text table rows.
 func DetailRows(change dto.ChangeView) []DetailRow {
 	if change.ID == "" && change.Title == "" {
@@ -243,12 +250,16 @@ func DetailRows(change dto.ChangeView) []DetailRow {
 		{Label: "Spec", Text: change.Spec, Selectable: true, DividerAfter: true},
 	}
 	for i, testCase := range change.TestCases {
+		label := fmt.Sprintf("%s (#%d)", testCase.Scenario, testCase.ID)
+		if !testCase.CreatedAt.IsZero() && !testCase.UpdatedAt.IsZero() {
+			label += fmt.Sprintf("  created %s  updated %s", testCase.CreatedAt.Format(time.RFC3339), testCase.UpdatedAt.Format(time.RFC3339))
+		}
 		rows = append(rows, DetailRow{
 			Label:        testCaseDoneIcon(testCase.Done),
-			Text:         fmt.Sprintf("%s (#%s)", testCase.Scenario, testCase.ID),
+			Text:         label,
 			Selectable:   true,
 			DividerAfter: i == len(change.TestCases)-1,
-			TestCaseID:   testCase.ID,
+			TestCaseID:   strconv.Itoa(testCase.ID),
 			TestCaseText: testCase.Scenario,
 			TestCaseDone: testCase.Done,
 		})

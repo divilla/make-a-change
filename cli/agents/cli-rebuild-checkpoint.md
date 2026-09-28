@@ -1,5 +1,141 @@
 # CLI rebuild checkpoint
 
+## P5 review fixes 02 (2026-09-28)
+
+The testcase feature retains the committed operation and create ID through
+repeated failed read-only refreshes. Change-detail `/retry` now uses testcase
+refresh while that outcome is pending; after a successful read it shows the
+saved/deleted outcome with refreshed feedback, then resumes ordinary change
+detail reloads. A new write or scope invalidation clears the pending outcome.
+The testcase feature now supplies create/edit placeholder, help and status text
+to the shell's generic input widget. Unit, visible app and complete-program
+regressions cover both findings. No commit or push was performed.
+
+| Command on revision `74591cc6223f5f0e70c918dc243d016eee4b8811` plus review diff | Exit | Evidence |
+| --- | ---: | --- |
+| Targeted `go test -count=1 ./internal/testcases ./internal/app` | 0 | Feature outcome and form assertions plus visible shell assertions pass. |
+| Targeted `go test -count=1 -timeout=60s ./integration -run '^TestCLIProgramTestCaseCommittedWriteAndStaleRecovery$' -v` | 0 | Two failed read-only retries preserve saved feedback and ID; one create; recovery passes. |
+| `make -C cli check` | 2 | Vet, unit race, architecture and tooling pass. Tracked format failures: `cmd/mch/main.go`, `internal/app/clipboard.go`; package-comment lint in `internal/help/commands.go`, `internal/styles/styles.go`, `internal/ui/layout.go`. |
+| `make -C cli coverage` | 2 | Complete unit campaign **3149/3578 (88.0101%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete program/startup suite passes. |
+| `make -C cli integration-coverage` | 2 | Complete 19-program and real PTY campaign **2689/3578 (75.1537%)**; strict >90% gate fails. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+Both profiles report `complete: true`; their nonzero exits are the numerical
+gates, with no failed or skipped required scenario. Unit package counts include
+app 1553/1806, changes 732/869, testcases 130/132 and client 264/273.
+Terminal counts include app 1297/1806, changes 666/869, testcases 112/132
+and client 207/273. Unit has 429 uncovered statements and terminal has 889.
+The full package/function inventories and raw profiles are in
+`cli/.coverage/{unit,integration}`. Both provenance manifests record sorted
+`inputs_sha256` digest `ff46c89a4891cc4319a99a3f96a6f30383f582ea50cbf52dfc6f4026e6ae3171`;
+the covered child binary SHA256 is
+`b191879b3ddebdb51bf556110ea54f11e28eb2cf34b4f97e9ed9321e046e6eca`.
+This checkpoint and ledger update follows the measured source and changes no
+production or test input. Final rebuild acceptance remains incomplete due to
+the tracked static baseline and coverage shortfalls. No stage or production
+promotion is authorized.
+
+## P5 review fixes 01 (2026-09-28)
+
+The busy testcase key guard now accepts Esc and Ctrl+C, invalidates the
+testcase context and follows the normal cancellation navigation. Other keys,
+including a second Enter, remain blocked while the request is busy. The new
+manifest-selected complete-program test sends both keys during a stalled create
+and a stalled post-create list request. It observes HTTP cancellation, navigation
+back to change details and only one create request. No commit or push was made;
+the caller owns publication and the later dev merge. The P5 implementation
+figures below are historical and are superseded by this review-fix evidence.
+
+| Command on revision `5b252d98bc8c8579ee422ffab63bd58206ca59ca` plus review diff | Exit | Evidence |
+| --- | ---: | --- |
+| Targeted `go test -count=1 -timeout=60s ./integration -run '^TestCLIProgramTestCaseKeyboardCancelsBusyRequest$' -v` | 0 | All four write/refresh × Esc/Ctrl+C cases pass. |
+| `make -C cli check` | 2 | Vet, race unit tests, architecture and tooling pass. Existing formatting failures in `cmd/mch/main.go` and `internal/app/clipboard.go`; sampled package-comment lint in `cmd/mch/main.go`, `internal/styles/styles.go`, `internal/ui/layout.go`. |
+| `make -C cli coverage` | 2 | Complete unit campaign **3130/3558 (87.9708%)**, below strict >95%. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | All complete-program/startup scenarios pass. |
+| `make -C cli integration-coverage` | 2 | Complete 19-program and real PTY campaign **2669/3558 (75.0141%)**, below strict >90%. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+Both campaigns report complete measurements; no required scenario failed or
+skipped. Unit package counts: app 1549/1801, changes 732/869, testcases 115/117,
+client 264/273, with other packages in the raw report. Terminal package counts:
+app 1292/1801, changes 666/869, testcases 97/117, client 207/273, with
+other packages in the raw report. Unit has 428 uncovered statements; terminal
+has 889. The full package and uncovered inventories, scenario list, command
+exits and source hashes are in `cli/.coverage/{unit,integration}`. Both
+provenance manifests share sorted `inputs_sha256` digest
+`6f289a191c670cf85799e315f4d5ca237d390cc3f0b374171d4f203789435e1a`;
+the covered child binary SHA256 is
+`4f1fdfc54509e7330f7f3053bb621f7f30a96fffb3c24509be38c4373a5aecf6`.
+Go is 1.26.8-X:nodwarf5, golangci-lint 2.13.1, govulncheck 1.7.0 and
+socat 1.8.1.1. This checkpoint update follows measurement and changes no
+production or test input.
+
+The review finding is fixed; final rebuild acceptance remains incomplete due
+to the existing static baseline and numerical coverage shortfalls. No stage or
+production promotion is authorized.
+
+## P5 implementation (2026-09-28)
+
+P4/spec023 is actually merged on dev at
+`1904de958e2eeb0393b697f07faaa6d177c795a2`. P5/spec024 uses branch
+`change/024-cli-testcase-management` at `de96ad39c11ca8f8c93b122225bd4612efdc0163`
+plus its uncommitted implementation. The factory caller owns native review,
+implementation/review commits and pushes, and the later dev merge. This child
+performed no Git publication. Earlier P4 entries below are historical and their
+pending-publication status is superseded by the actual merge above.
+
+The testcase adapter now has exact list/create/update/update-done/delete POST
+contracts. Create retains its 201 ID; other writes accept empty 204 responses.
+Typed list rows preserve large integer IDs through the CLI DTO, owner, scenario, explicit false,
+created/updated times and ID order. The testcase feature owns form target and
+validation, cancellation/revision state, committed outcomes and write → list →
+change-details sequencing. The shell routes results into the embedded change
+screen, preserving the selected row and document draft. A committed write followed
+by a failed read reports the committed outcome and offers read-only `/retry`;
+it cannot replay the write. The [ledger](cli-contracts.md) maps every criterion,
+retained assertion and new complete-program/PTY scenario. No live backend or
+database was used.
+
+| Final-source command | Exit | Evidence |
+| --- | ---: | --- |
+| `make -C cli check` | 2 | Vet, race unit tests, architecture and tooling pass. Untouched format baseline: `cmd/mch/main.go`, `internal/app/clipboard.go`. Sampled revive package-comment baseline: `cmd/mch/main.go`, `internal/styles/styles.go`, `internal/ui/layout.go` (earlier run sampled `internal/help/commands.go`). No new static/test failure remains. |
+| `make -C cli coverage` | 2 | Complete unit campaign **3129/3553 (88.0664%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete program/startup suite passes. |
+| `make -C cli integration-coverage` | 2 | Complete selected program and real PTY campaign **2657/3553 (74.7819%)**; strict >90% gate fails. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+Both `cli/.coverage/{unit,integration}/status.json` files say `complete: true`;
+no required scenario failed or skipped. The integration manifest selects 18
+complete-program tests and one real PTY child; the three new testcase programs
+cover lifecycle, committed-write/read-failure recovery, malformed data, stale
+rows and cancellation. The PTY child creates a testcase and redraws/scans the
+detail viewport. Unit leaves 424 and terminal 896 production statements
+uncovered. Significant package gaps: app 1548/1796 unit and 1283/1796 terminal;
+changes 732/869 and 666/869; navigation 25/40 and 17/40; client 264/273 and
+207/273. The touched testcase package is 115/117 unit and 95/117 terminal.
+The full package/function/statement tables and raw profiles are under
+`cli/.coverage/{unit,integration}`. Testless zero-statement `dto` and `styles`
+remain in the inventory.
+
+Both final-source provenance manifests identify base revision
+`de96ad39c11ca8f8c93b122225bd4612efdc0163` and include source/test/tool
+hashes; sorted `inputs_sha256` digest is
+`825cd42deb0ae6c8ed5ddeb66446aec98d2ba25193ba3f2b30c5b60629c8848e`.
+The covered PTY child SHA256 is
+`baa15d01665e141ac76025f92e66b5e45831413cc74b27797cb89c8cf0e19b09`.
+Go is 1.26.8-X:nodwarf5, golangci-lint 2.13.1, govulncheck 1.7.0, and
+socat 1.8.1.1. This checkpoint, plan and implementation-log update follows the
+measured source and does not change production or test inputs.
+
+P5 awaits caller-owned native review, any review fixes/revalidation, and dev
+merge. P6 documents is the next planned pass. Overall CLI rebuild completion
+remains pending because the final coverage thresholds and tracked static
+baseline are unmet. No stage or production promotion is authorized.
+
 ## P4 review fixes 03 (2026-09-28)
 
 The P1 finding is fixed: clearing a change update prompt retains its field, so

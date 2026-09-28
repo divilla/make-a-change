@@ -37,8 +37,14 @@ func testProgramTestCaseRetry(t *testing.T, scenario string, useEditor bool) {
 			writeProgramJSON(w, []any{change})
 		case "/api/v1/change/details":
 			writeProgramJSON(w, change)
-		case "/api/v1/doc/current", "/api/v1/test-case/list":
+		case "/api/v1/doc/current":
 			writeProgramJSON(w, []any{})
+		case "/api/v1/test-case/list":
+			rows := []any{}
+			if len(saved) > 1 {
+				rows = append(rows, map[string]any{"id": 31, "change_id": 12, "scenario": saved[len(saved)-1], "done": false, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T10:00:00Z"})
+			}
+			writeProgramJSON(w, rows)
 		case "/api/v1/test-case/create":
 			var body struct {
 				ChangeID int    `json:"change_id"`
@@ -51,8 +57,8 @@ func testProgramTestCaseRetry(t *testing.T, scenario string, useEditor bool) {
 				http.Error(w, "save rejected", http.StatusInternalServerError)
 				return
 			}
-			change["test_cases"] = []any{map[string]any{"id": 31, "change_id": 12, "scenario": body.Scenario}}
-			writeProgramJSON(w, change)
+			w.WriteHeader(http.StatusCreated)
+			writeProgramJSON(w, map[string]any{"id": 31})
 		default:
 			t.Errorf("unexpected path %s", r.URL.Path)
 			http.NotFound(w, r)

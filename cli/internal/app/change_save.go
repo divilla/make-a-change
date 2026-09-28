@@ -4,7 +4,7 @@ import (
 	"cli/internal/changes"
 	"cli/internal/documents"
 	"cli/internal/dto"
-	"context"
+	"cli/internal/testcases"
 	"fmt"
 	"sort"
 	"strconv"
@@ -13,97 +13,96 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-func (m Model) saveTestCaseCreateValue(scenario string) (tea.Model, tea.Cmd) {
+func (m Model) beginTestCase(op testcases.Operation, rawID, scenario string, done bool) (tea.Model, tea.Cmd) {
+	projectID, err := currentProjectNumericID(m.currentProject.ID)
+	if err != nil {
+		m.err = err.Error()
+		return m, nil
+	}
 	changeID, err := changeNumericID(m.changeList.Detail)
 	if err != nil {
 		m.err = err.Error()
-		m.status = "validation failed"
 		return m, nil
 	}
-	if strings.TrimSpace(scenario) == "" {
-		m.err = "test case scenario is required"
-		m.status = "validation failed"
-		return m, nil
+	var cmd tea.Cmd
+	switch op {
+	case testcases.Create, testcases.Refresh:
+		m.testCase, cmd = m.testCase.Begin(m.ctx, m.client, projectID, changeID, op, 0, scenario, done)
+	case testcases.Edit, testcases.Delete:
+		m.testCase, cmd = m.testCase.BeginTarget(m.ctx, m.client, projectID, changeID, op, scenario, done)
+	default:
+		m.testCase, cmd = m.testCase.BeginRow(m.ctx, m.client, projectID, changeID, op, rawID, scenario, done)
 	}
-	m.status = "saving test case"
-	return m, testCaseCreateCommand(m.client, changeID, scenario)
+	m.status = m.testCase.Status
+	m.err = ""
+	if m.testCase.Err != nil {
+		m.err = m.testCase.Err.Error()
+	}
+	return m, cmd
+}
+
+func (m Model) saveTestCaseCreateValue(scenario string) (tea.Model, tea.Cmd) {
+	return m.beginTestCase(testcases.Create, "", scenario, false)
 }
 
 func (m Model) saveTestCaseUpdateValue(scenario string) (tea.Model, tea.Cmd) {
-	testCaseID, err := testCaseNumericID(m.activeTestCase.ID)
-	if err != nil {
-		m.err = err.Error()
-		m.status = "validation failed"
+	return m.beginTestCase(testcases.Edit, "", scenario, false)
+}
+
+func (m Model) applyTestCaseResult(r testcases.Result) (tea.Model, tea.Cmd) {
+	if m.currentProject.ID != strconv.Itoa(r.ProjectID) || m.changeList.Detail.ID != strconv.Itoa(r.ChangeID) {
 		return m, nil
 	}
-	if strings.TrimSpace(scenario) == "" {
-		m.err = "test case scenario is required"
-		m.status = "validation failed"
+	next, ok := m.testCase.Apply(r)
+	if !ok {
 		return m, nil
 	}
-	m.status = "saving test case"
-	return m, testCaseUpdateCommand(m.client, testCaseID, scenario)
-}
-
-func testCaseCreateCommand(client appClient, changeID int, scenario string) tea.Cmd {
-	return func() tea.Msg {
-		change, err := client.CreateTestCase(changeID, scenario)
-		return changeSavedMsg{source: TestCaseCreateState, change: change, err: err}
+	m.testCase = next
+	m.status, m.err = next.Status, ""
+	if next.Err != nil {
+		m.err = next.Err.Error()
 	}
-}
-
-func testCaseUpdateCommand(client appClient, testCaseID int, scenario string) tea.Cmd {
-	return func() tea.Msg {
-		change, err := client.UpdateTestCase(testCaseID, scenario)
-		return changeSavedMsg{source: TestCaseUpdateState, change: change, err: err}
+	if r.Err != nil {
+		return m, nil
 	}
-}
-
-func testCaseDeleteCommand(client appClient, testCase dto.TestCase) tea.Cmd {
-	return func() tea.Msg {
-		testCaseID, err := testCaseNumericID(testCase.ID)
-		if err != nil {
-			return changeSavedMsg{source: ChangeDetailsState, err: err}
-		}
-		change, err := client.DeleteTestCase(testCaseID)
-		return changeSavedMsg{source: ChangeDetailsState, change: change, err: err}
+	old := m.changeList.Detail
+	selected, offset := m.changeList.DetailSelected, m.changeList.DetailOffset
+	selectedID := ""
+	if row, ok := changes.DetailRowAtSelection(old, selected); ok {
+		selectedID = row.TestCaseID
 	}
-}
-
-func changeDetailTestCaseDoneUpdateCommand(client appClient, change dto.ChangeView, row changes.DetailRow) tea.Cmd {
-	return func() tea.Msg {
-		changeID, err := changeNumericID(change)
-		if err != nil {
-			return changeSavedMsg{source: ChangeDetailsState, err: err}
-		}
-		testCaseID, err := testCaseNumericID(row.TestCaseID)
-		if err != nil {
-			return changeSavedMsg{source: ChangeDetailsState, err: err}
-		}
-		if _, err := client.UpdateTestCaseDone(testCaseID, !row.TestCaseDone); err != nil {
-			return changeSavedMsg{source: ChangeDetailsState, err: err}
-		}
-		wire, err := client.GetChange(context.Background(), changeID)
-		change := changes.Present(wire)
-		if err == nil {
-			change.TestCases, err = client.ListTestCases(context.Background(), changeID)
-		}
-		return changeSavedMsg{source: ChangeDetailsState, change: change, err: err}
+	refreshed := old
+	if r.ChangeErr == nil {
+		refreshed = changes.Present(r.Change)
+		refreshed.Documents = old.Documents
+		refreshed.Brief, refreshed.Spec, refreshed.PR = old.Brief, old.Spec, old.PR
 	}
+	if r.RowsErr == nil {
+		refreshed.TestCases = r.Rows
+	}
+	m.changeList = m.changeList.WithDetail(refreshed)
+	m.changeList.DetailSelected, m.changeList.DetailOffset = selected, offset
+	if selectedID != "" {
+		for i, row := range changes.DetailRows(refreshed) {
+			if row.TestCaseID == selectedID {
+				m.changeList.DetailSelected = i
+				break
+			}
+		}
+	}
+	m.changeList = m.changeList.ClampDetailSelection(m.changeTableRows(), terminalWidth(m.width))
+	m.changeDetailLoaded = r.RefreshErr == nil
+	m.state = ChangeDetailsState
+	m.detailEditField = ""
+	m.testCase = m.testCase.ClearForm()
+	m = m.setPromptValue("")
+	return m, nil
 }
 
 func changeNumericID(change dto.ChangeView) (int, error) {
 	id, err := strconv.Atoi(strings.TrimSpace(change.ID))
 	if err != nil || id <= 0 {
 		return 0, fmt.Errorf("change ID must be a valid positive number")
-	}
-	return id, nil
-}
-
-func testCaseNumericID(idValue string) (int, error) {
-	id, err := strconv.Atoi(strings.TrimSpace(idValue))
-	if err != nil || id <= 0 {
-		return 0, fmt.Errorf("test case ID must be a valid positive number")
 	}
 	return id, nil
 }
@@ -172,6 +171,8 @@ func (m Model) beginChange(op changes.Operation, id int, in changes.Input) (tea.
 	m.changeList, cmd = m.changeList.Begin(m.ctx, m.client, documents.Access{API: m.client, Types: m.optionCatalog.config.ChangeDocs}, op, project, id, in, m.optionCatalog.config)
 	if op == changes.Details && cmd != nil {
 		m.changeDetailLoaded = false
+		m.testCase = m.testCase.Invalidate()
+		m.testCase.Loaded = false
 	}
 	m.status = m.changeList.Status
 	m.err = ""
@@ -197,11 +198,18 @@ func (m Model) applyChangeResult(r changes.Result) (tea.Model, tea.Cmd) {
 	selected, offset := m.changeList.DetailSelected, m.changeList.DetailOffset
 	m.changeList = next
 	m.changeDetailLoaded = next.DetailLoaded
+	if r.Operation == changes.Details && next.DetailLoaded {
+		m.testCase.Rows = append([]dto.TestCase(nil), next.Detail.TestCases...)
+		m.testCase.Loaded = true
+	}
 	if r.Operation != changes.Create && r.Operation != changes.Details && r.Operation != changes.List && r.Operation != changes.Delete {
 		m.changeList.DetailSelected = selected
 		m.changeList.DetailOffset = offset
 	}
 	m.status = next.Status
+	if r.Operation == changes.Details && next.DetailLoaded && len(next.Detail.TestCases) == 0 {
+		m.status += "; " + testcases.Summary(m.testCase)
+	}
 	m.err = ""
 	if next.Err != nil {
 		m.err = next.Err.Error()

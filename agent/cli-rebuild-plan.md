@@ -1,21 +1,15 @@
 # CLI rebuild plan
 
-Status: authorized execution. P0–P3 merged; latest actual dev is P3
-`80c67871aaa29ed92a967aa70b449b29bd88c406`. P4/spec023 implementation resumed
-from snapshot `3ad7aa7`; acceptance inspection and the implementation log are
-finished. Fresh unit/race/program/PTY/architecture/tooling/dependency scenarios
-pass. P4 review fixes01 clear canceled create subfields and bound mutation feedback;
-review fixes02 return edited briefs to the create form before saving and let
-identity rows scroll in short detail panes. Review fixes03 preserve the edited
-field when Ctrl+C clears an update prompt, preventing accidental spec insertion.
-Fresh unit3028/3530 (85.7790%) and terminal2550/3530 (72.2380%) measurements
-still fail strict gates, alongside the tracked static baseline. P4 awaits
-caller-owned publication, further native review and dev merge. See the
-[checkpoint](../cli/agents/cli-rebuild-checkpoint.md) for exact evidence/continuation.
-Supporting document current/insert and testcase reads moved into P4 as required
-to preserve editors while removing embedded change fields; full P5/P6 scope
-remains. Continue the authorized factory through all remaining passes; no
-stage or production promotion.
+Status: authorized execution. P0–P4 are merged on dev; P4's actual merge is
+`1904de958e2eeb0393b697f07faaa6d177c795a2`. P5/spec024 testcase
+management is implemented on `change/024-cli-testcase-management`, based on that
+merge, and awaits caller-owned native review and dev merge. Fresh P5 unit
+3129/3553 (88.0664%) and terminal 2657/3553 (74.7819%) campaigns are complete
+but below the strict final thresholds. Existing unrelated format/package-comment
+findings remain; all test scenarios, including the added program cases and real
+PTY child, pass. See the [checkpoint](../cli/agents/cli-rebuild-checkpoint.md)
+for exact evidence and continuation. P6–P10 and R1–R6 remain. Continue the
+authorized factory without stage or production promotion.
 
 Reference: [backend refactor plan](backend-refactor-plan.md), especially its
 six-step specification → branch → implementation → verification/review → dev

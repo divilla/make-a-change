@@ -254,42 +254,33 @@ func (f *fakeClient) UpdateChangeEpic(_ context.Context, _ int, epicID *int) err
 	return nil
 }
 
-func (f *fakeClient) CreateTestCase(changeID int, scenario string) (dto.ChangeView, error) {
+func (f *fakeClient) CreateTestCase(_ context.Context, changeID int, scenario string) (int, error) {
 	f.requestOrder = append(f.requestOrder, "test-case/create")
 	f.testCaseCreateCalls++
-	f.testCaseCreateInputs = append(f.testCaseCreateInputs, dto.TestCase{ChangeID: fmt.Sprint(changeID), Scenario: scenario})
+	f.testCaseCreateInputs = append(f.testCaseCreateInputs, dto.TestCase{ChangeID: changeID, Scenario: scenario})
 	if f.changeUpdateErr != nil {
-		return dto.ChangeView{}, f.changeUpdateErr
+		return 0, f.changeUpdateErr
 	}
-	return f.gotChange, nil
+	return 31, nil
 }
 
-func (f *fakeClient) UpdateTestCase(id int, scenario string) (dto.ChangeView, error) {
+func (f *fakeClient) UpdateTestCase(_ context.Context, id int, scenario string) error {
 	f.testCaseUpdateCalls++
-	f.testCaseUpdateInputs = append(f.testCaseUpdateInputs, dto.TestCase{ID: fmt.Sprint(id), Scenario: scenario})
-	if f.changeUpdateErr != nil {
-		return dto.ChangeView{}, f.changeUpdateErr
-	}
-	return f.gotChange, nil
+	f.testCaseUpdateInputs = append(f.testCaseUpdateInputs, dto.TestCase{ID: id, Scenario: scenario})
+	return f.changeUpdateErr
 }
 
-func (f *fakeClient) UpdateTestCaseDone(id int, done bool) (dto.ChangeView, error) {
+func (f *fakeClient) UpdateTestCaseDone(_ context.Context, id int, done bool) error {
 	f.testCaseDoneCalls++
 	f.testCaseDoneIDs = append(f.testCaseDoneIDs, id)
 	f.testCaseDoneUpdates = append(f.testCaseDoneUpdates, done)
-	if f.changeUpdateErr != nil {
-		return dto.ChangeView{}, f.changeUpdateErr
-	}
-	return dto.ChangeView{ID: fmt.Sprint(id)}, nil
+	return f.changeUpdateErr
 }
 
-func (f *fakeClient) DeleteTestCase(id int) (dto.ChangeView, error) {
+func (f *fakeClient) DeleteTestCase(_ context.Context, id int) error {
 	f.testCaseDeleteCalls++
 	f.testCaseDeleteIDs = append(f.testCaseDeleteIDs, id)
-	if f.changeUpdateErr != nil {
-		return dto.ChangeView{}, f.changeUpdateErr
-	}
-	return f.gotChange, nil
+	return f.changeUpdateErr
 }
 
 func (f *fakeClient) DeleteChange(_ context.Context, id int) error {
@@ -2103,6 +2094,7 @@ func TestUnknownCommandLeavesStateUnchanged(t *testing.T) {
 func TestChangeDetailsTableSelectionMovesAcrossAllRows(t *testing.T) {
 	m := NewModel()
 	m.state = ChangeDetailsState
+	m.changeDetailLoaded = true
 	m.changeList = m.changeList.WithDetail(dto.ChangeView{
 		ID:          "11",
 		RefUUID:     "11111111-2222-4333-8444-555555555555",
@@ -2604,8 +2596,8 @@ func TestChangeDetailsTestCaseSpaceTogglesAndReloads(t *testing.T) {
 			Ref:   "3",
 			Title: "Backend Change",
 			TestCases: []dto.TestCase{
-				{ID: "31", Scenario: "first", Done: true},
-				{ID: "32", Scenario: "second", Done: true},
+				{ID: 31, Scenario: "first", Done: true},
+				{ID: 32, Scenario: "second", Done: true},
 			},
 		},
 	}
@@ -2616,8 +2608,8 @@ func TestChangeDetailsTestCaseSpaceTogglesAndReloads(t *testing.T) {
 		Ref:   "3",
 		Title: "Backend Change",
 		TestCases: []dto.TestCase{
-			{ID: "31", Scenario: "first", Done: false},
-			{ID: "32", Scenario: "second", Done: true},
+			{ID: 31, Scenario: "first", Done: false},
+			{ID: 32, Scenario: "second", Done: true},
 		},
 	})
 	m.changeList.DetailSelected = 8
@@ -2642,7 +2634,7 @@ func TestChangeDetailsNewTestcaseCreatesAndRefreshes(t *testing.T) {
 			Ref:   "3",
 			Title: "Backend Change",
 			TestCases: []dto.TestCase{
-				{ID: "31", Scenario: "new scenario", Done: false, ChangeID: "12"},
+				{ID: 31, Scenario: "new scenario", Done: false, ChangeID: 12},
 			},
 		},
 	}
@@ -2661,7 +2653,7 @@ func TestChangeDetailsNewTestcaseCreatesAndRefreshes(t *testing.T) {
 	got = applyMsg(got, cmd())
 
 	assert.Equal(t, ChangeDetailsState, got.state)
-	assert.Equal(t, []dto.TestCase{{ChangeID: "12", Scenario: "new scenario"}}, client.testCaseCreateInputs)
+	assert.Equal(t, []dto.TestCase{{ChangeID: 12, Scenario: "new scenario"}}, client.testCaseCreateInputs)
 	require.Len(t, got.changeList.Detail.TestCases, 1)
 	assert.Equal(t, "new scenario", got.changeList.Detail.TestCases[0].Scenario)
 }
@@ -2673,7 +2665,7 @@ func TestChangeDetailsTestcaseEnterEditsScenarioAndRefreshes(t *testing.T) {
 			Ref:   "3",
 			Title: "Backend Change",
 			TestCases: []dto.TestCase{
-				{ID: "31", Scenario: "updated scenario", Done: false, ChangeID: "12"},
+				{ID: 31, Scenario: "updated scenario", Done: false, ChangeID: 12},
 			},
 		},
 	}
@@ -2684,7 +2676,7 @@ func TestChangeDetailsTestcaseEnterEditsScenarioAndRefreshes(t *testing.T) {
 		Ref:   "3",
 		Title: "Backend Change",
 		TestCases: []dto.TestCase{
-			{ID: "31", Scenario: "old scenario", Done: false, ChangeID: "12"},
+			{ID: 31, Scenario: "old scenario", Done: false, ChangeID: 12},
 		},
 	})
 	m.changeList.DetailSelected = 8
@@ -2700,7 +2692,7 @@ func TestChangeDetailsTestcaseEnterEditsScenarioAndRefreshes(t *testing.T) {
 	got = applyMsg(got, cmd())
 
 	assert.Equal(t, ChangeDetailsState, got.state)
-	assert.Equal(t, []dto.TestCase{{ID: "31", Scenario: "updated scenario"}}, client.testCaseUpdateInputs)
+	assert.Equal(t, []dto.TestCase{{ID: 31, Scenario: "updated scenario"}}, client.testCaseUpdateInputs)
 	require.Len(t, got.changeList.Detail.TestCases, 1)
 	assert.Equal(t, "updated scenario", got.changeList.Detail.TestCases[0].Scenario)
 }
@@ -2716,7 +2708,7 @@ func TestChangeDetailsTestcaseDeleteConfirmsAndRefreshes(t *testing.T) {
 		Ref:   "3",
 		Title: "Backend Change",
 		TestCases: []dto.TestCase{
-			{ID: "31", Scenario: "old scenario", Done: false, ChangeID: "12"},
+			{ID: 31, Scenario: "old scenario", Done: false, ChangeID: 12},
 		},
 	})
 	m.changeList.DetailSelected = 8
@@ -2747,6 +2739,7 @@ func TestCtrlNShortcutsCreateChangeAndTestCase(t *testing.T) {
 	detail := NewModelWithClient(&fakeClient{})
 	detail.state = ChangeDetailsState
 	detail.changeList = detail.changeList.WithDetail(dto.ChangeView{ID: "12", Ref: "3", Title: "Backend Change"})
+	detail.changeDetailLoaded = true
 	got, cmd = sendKey(detail, tea.KeyCtrlN)
 	require.Nil(t, cmd)
 	assert.Equal(t, TestCaseCreateState, got.state)
@@ -2908,6 +2901,9 @@ func TestCreateUpdateSaveCancelTransitions(t *testing.T) {
 		t.Run(string(tt.start)+tt.command, func(t *testing.T) {
 			m := NewModel()
 			m.state = tt.start
+			if tt.start == ChangeDetailsState {
+				m.changeDetailLoaded = true
+			}
 
 			got, _ := sendCommand(m, tt.command)
 

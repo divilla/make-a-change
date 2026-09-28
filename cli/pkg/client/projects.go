@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -65,6 +66,13 @@ func (c HTTPClient) projectRequest(ctx context.Context, path string, input any, 
 		return wrap(errors.Join(fmt.Errorf("unexpected status: %s", data), readErr), resp.StatusCode)
 	}
 	if status == http.StatusNoContent {
+		if !strings.HasPrefix(path, "/api/v1/test-case/") {
+			return nil
+		}
+		data, readErr := io.ReadAll(io.LimitReader(resp.Body, 1))
+		if len(data) != 0 || readErr != nil {
+			return wrap(&ContractError{errors.Join(errors.New("unexpected response body"), readErr)}, status)
+		}
 		return nil
 	}
 	decoder := json.NewDecoder(resp.Body)

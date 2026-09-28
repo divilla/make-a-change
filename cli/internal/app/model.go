@@ -7,6 +7,7 @@ import (
 	"cli/internal/epics"
 	"cli/internal/projects"
 	"cli/internal/styles"
+	"cli/internal/testcases"
 	"context"
 	"strconv"
 
@@ -146,10 +147,7 @@ type appClient interface {
 	changes.API
 	epics.API
 	documents.API
-	CreateTestCase(int, string) (dto.ChangeView, error)
-	UpdateTestCase(int, string) (dto.ChangeView, error)
-	UpdateTestCaseDone(int, bool) (dto.ChangeView, error)
-	DeleteTestCase(int) (dto.ChangeView, error)
+	testcases.API
 }
 
 // Model is the root Bubble Tea model for the mch application shell.
@@ -186,7 +184,7 @@ type Model struct {
 	configPath          string
 	dropdown            dropdownModel
 	detailEditField     detailEditField
-	activeTestCase      dto.TestCase
+	testCase            testcases.Model
 }
 
 // NewModel creates the default mch model using local config and HTTP backend access.

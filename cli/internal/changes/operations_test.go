@@ -123,7 +123,7 @@ func (a *changeAPI) UpdateChangePRUrl(ctx context.Context, _ int, v string) erro
 }
 
 func (a *changeAPI) ListTestCases(ctx context.Context, _ int) ([]dto.TestCase, error) {
-	return []dto.TestCase{{ID: "31", Scenario: "Separate"}}, a.call(ctx, "testcases")
+	return []dto.TestCase{{ID: 31, Scenario: "Separate"}}, a.call(ctx, "testcases")
 }
 
 func (a *changeAPI) Load(ctx context.Context, _ int) ([]dto.Document, error) {

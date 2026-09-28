@@ -182,7 +182,7 @@ class CoverageTest(unittest.TestCase):
             'TestCLIProgramOrdinaryDocumentEditor', 'TestCLIStartupWithoutFlowResources',
             'TestCLIProgramProjectCRUDAndPartialSuccess', 'TestCLIProgramProjectSwitchWithPendingConfig',
             'TestCLIProgramShutdownCancelsProjectHTTP', 'TestCLIProgramProjectReloadBlocksCachedSelection',
-            'TestCLIProgramEpicCRUDAndPartialSuccess', 'TestCLIProgramEpicDelayedScopeAndShutdown', 'TestCLIProgramEpicReloadBlocksCachedRows', 'TestCLIProgramChangeCRUDAndPartialSuccess', 'TestCLIProgramChangeDelayedScopeAndShutdown', 'TestCLIProgramChangeReloadBlocksCachedRows', 'TestCLIProgramChangeMalformedReadRecovery'})
+            'TestCLIProgramEpicCRUDAndPartialSuccess', 'TestCLIProgramEpicDelayedScopeAndShutdown', 'TestCLIProgramEpicReloadBlocksCachedRows', 'TestCLIProgramChangeCRUDAndPartialSuccess', 'TestCLIProgramChangeDelayedScopeAndShutdown', 'TestCLIProgramChangeReloadBlocksCachedRows', 'TestCLIProgramChangeMalformedReadRecovery', 'TestCLIProgramTestCaseLifecycle', 'TestCLIProgramTestCaseCommittedWriteAndStaleRecovery', 'TestCLIProgramTestCaseShutdownCancelsRequest', 'TestCLIProgramTestCaseKeyboardCancelsBusyRequest'})
         available='\n'.join(n for suite in manifest.values() for n in suite['tests'])
         with patch.object(coverage,'command',return_value=subprocess.CompletedProcess([],0,available)):
             self.assertEqual(coverage.scenarios(),manifest)

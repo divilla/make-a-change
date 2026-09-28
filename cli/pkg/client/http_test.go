@@ -57,17 +57,22 @@ func TestRetainedTestCaseMutationPayloads(t *testing.T) {
 			"/api/v1/test-case/delete":      {"id": float64(31)},
 		}
 		require.Equal(t, expected[r.URL.Path], body)
-		writeJSON(t, w, map[string]any{"id": 12})
+		if r.URL.Path == "/api/v1/test-case/create" {
+			w.WriteHeader(http.StatusCreated)
+			writeJSON(t, w, map[string]any{"id": 31})
+		} else {
+			w.WriteHeader(http.StatusNoContent)
+		}
 	}))
 	defer server.Close()
 	c := NewHTTPClient(server.URL)
-	_, err := c.CreateTestCase(12, "new scenario")
+	_, err := c.CreateTestCase(context.Background(), 12, "new scenario")
 	require.NoError(t, err)
-	_, err = c.UpdateTestCase(31, "updated scenario")
+	err = c.UpdateTestCase(context.Background(), 31, "updated scenario")
 	require.NoError(t, err)
-	_, err = c.UpdateTestCaseDone(31, true)
+	err = c.UpdateTestCaseDone(context.Background(), 31, true)
 	require.NoError(t, err)
-	_, err = c.DeleteTestCase(31)
+	err = c.DeleteTestCase(context.Background(), 31)
 	require.NoError(t, err)
 	require.Len(t, calls, 4)
 }

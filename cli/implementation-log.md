@@ -33,3 +33,7 @@
 +105 -14 code - +117 -5 tests --- review fixes 02
 +61 -5 code - +53 -3 tests --- review fixes 03
 
+2026-28-09 15:41 024-cli-testcase-management
++554 -403 code - +845 -60 tests --- spec
++53 -5 code - +88 -1 tests --- review fixes 01
++106 -19 code - +99 -5 tests --- review fixes 02

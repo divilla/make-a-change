@@ -107,7 +107,7 @@ func TestPromptSubmissionPreservesSlashPrefixedData(t *testing.T) {
 					m.state = state
 					m.changeList.Detail = dto.ChangeView{ID: "12"}
 					m.projectList.Detail = dto.Project{ID: 7}
-					m.activeTestCase = dto.TestCase{ID: "31"}
+					m.testCase = m.testCase.OpenEdit("31", "")
 					if state == ChangeDetailsState {
 						m.detailEditField = detailEditTitle
 					}
@@ -118,9 +118,9 @@ func TestPromptSubmissionPreservesSlashPrefixedData(t *testing.T) {
 					_ = save()
 					switch state {
 					case TestCaseCreateState:
-						assert.Equal(t, []dto.TestCase{{ChangeID: "12", Scenario: content}}, client.testCaseCreateInputs)
+						assert.Equal(t, []dto.TestCase{{ChangeID: 12, Scenario: content}}, client.testCaseCreateInputs)
 					case TestCaseUpdateState:
-						assert.Equal(t, []dto.TestCase{{ID: "31", Scenario: content}}, client.testCaseUpdateInputs)
+						assert.Equal(t, []dto.TestCase{{ID: 31, Scenario: content}}, client.testCaseUpdateInputs)
 					case ProjectCreateState:
 						assert.Equal(t, []string{content}, client.createNames)
 					case ProjectUpdateState:
@@ -166,7 +166,7 @@ func TestEditorSubmissionPreservesSlashPrefixedData(t *testing.T) {
 				m.state = state
 				m.changeList.Detail = dto.ChangeView{ID: "12"}
 				m.projectList.Detail = dto.Project{ID: 7}
-				m.activeTestCase = dto.TestCase{ID: "31"}
+				m.testCase = m.testCase.OpenEdit("31", "")
 				if state == ChangeDetailsState {
 					m.detailEditField = detailEditTitle
 				}
@@ -184,9 +184,9 @@ func TestEditorSubmissionPreservesSlashPrefixedData(t *testing.T) {
 				_ = save()
 				switch state {
 				case TestCaseCreateState:
-					assert.Equal(t, []dto.TestCase{{ChangeID: "12", Scenario: content}}, client.testCaseCreateInputs)
+					assert.Equal(t, []dto.TestCase{{ChangeID: 12, Scenario: content}}, client.testCaseCreateInputs)
 				case TestCaseUpdateState:
-					assert.Equal(t, []dto.TestCase{{ID: "31", Scenario: content}}, client.testCaseUpdateInputs)
+					assert.Equal(t, []dto.TestCase{{ID: 31, Scenario: content}}, client.testCaseUpdateInputs)
 				case ProjectCreateState:
 					assert.Equal(t, []string{content}, client.createNames)
 				case ProjectUpdateState:
@@ -261,7 +261,7 @@ func TestEditorRetryKeepsLiteralData(t *testing.T) {
 				m.state = state
 				m.changeList.Detail = dto.ChangeView{ID: "12"}
 				m.projectList.Detail = dto.Project{ID: 7}
-				m.activeTestCase = dto.TestCase{ID: "31"}
+				m.testCase = m.testCase.OpenEdit("31", "")
 				if state == ChangeDetailsState {
 					m.detailEditField = detailEditTitle
 				}
@@ -300,11 +300,12 @@ func TestEditorRetryKeepsLiteralData(t *testing.T) {
 func TestEditorDraftEditingAndDiscard(t *testing.T) {
 	for _, draft := range []string{"/cancel", "", "\tkeep raw\n", strings.Repeat("x", 300)} {
 		t.Run(draft[:min(len(draft), 10)], func(t *testing.T) {
-			m := NewModelWithClient(&fakeClient{})
+			m := NewModelWithClient(&fakeClient{changeUpdateErr: errors.New("offline")})
 			m.state = TestCaseCreateState
 			m.changeList.Detail = dto.ChangeView{ID: "12"}
-			next, _ := m.Update(editorFinishedMsg{source: m.state, content: draft})
-			m = next.(Model)
+			m.currentProject = dto.Option{ID: "7"}
+			next, save := m.Update(editorFinishedMsg{source: m.state, content: draft})
+			m = applyCommand(next.(Model), save)
 			lossless := m.input.Value() == draft
 			m, _ = sendKeyMsg(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
 			m = m.insertPromptNewline()
@@ -348,13 +349,12 @@ func TestEditorDraftAsyncPasteRetry(t *testing.T) {
 			m := NewModelWithClient(client)
 			m.state = TestCaseCreateState
 			m.changeList.Detail = dto.ChangeView{ID: "12"}
+			m.currentProject = dto.Option{ID: "7"}
 			// A paste requested before editor completion may arrive afterward.
 			_, paste := sendKey(m, tea.KeyCtrlV)
 			require.NotNil(t, paste)
-			next, _ := m.Update(editorFinishedMsg{source: m.state, content: draft})
-			m = next.(Model)
-			_, save := m.submitPromptValue(draft)
-			m = applyCommand(m, save)
+			next, save := m.Update(editorFinishedMsg{source: m.state, content: draft})
+			m = applyCommand(next.(Model), save)
 			require.Equal(t, "save failed", m.status)
 			representable := m.input.Value() == draft
 			if representable {

@@ -637,3 +637,39 @@ regression now schedules a fresh `/retry`. List/PTY row counts reflect measured
 shell height (seven visible rows at 100x20); scrolling and selection assertions
 remain. Four existing format files/package-comment baselines remain separately
 owned by P5/P10. No backend, database, dependency, Flow resource or live agent changed.
+
+## P5 testcase management (024)
+
+[Specification](../../agent/specs/024-cli-testcase-management.md). The five
+`POST /api/v1/test-case` methods use the backend's exact payloads and statuses:
+list returns ordered typed rows with numeric CLI IDs, create returns the 201 ID, and update,
+update-done and delete accept empty 204 responses. IDs are decoded as integers
+without floating point conversion; `done=false`, ownership and both timestamps
+are required. Context cancellation, finite timeout, typed status/cause, malformed
+responses and read-only retry are retained from the P2 transport.
+
+`testcases` owns validation, operation revisions/cancellation, committed outcomes,
+write → list → change-details sequencing, draft/result state and status rendering.
+The shell injects its small API and composes the separate change detail reads.
+The selected project's change completion comes from `/change/details`, never
+from local testcase rows. A committed write returns to details even when a
+follow-up read fails; `/retry` performs reads only. Cached rows cannot be edited
+while detail loading failed or is in progress. Change and document drafts are
+preserved on failed testcase writes. The embedded entry point, P4 editors,
+project catalogs, filters and scroll behavior are retained.
+
+| Criterion | Named unit assertions | Complete-program / PTY evidence |
+| --- | --- | --- |
+| P5-01 exact routes, fields, status, errors, cancellation | `TestP501TestCaseRoutesPayloadStatusAndOneRequest`, `TestP501ListFieldsOwnerOrderAndLargeIDs`, `TestP501MalformedTestCaseResponsesAndStatusCauses`, `TestP501EachRequiredListFieldRejectsMissingOrInvalid`, `TestP501CanceledTestCaseRequest`; migrated `TestRetainedTestCaseMutationPayloads` | `TestCLIProgramTestCaseLifecycle` checks all mutation payloads and response statuses through the terminal |
+| P5-02 reachable forms, literal data, feedback, stable selection and safe reload | `TestP502TestCaseFormValidationAndLiteralDraft`, `TestP502CreateEditToggleDeleteNavigation`, `TestP502SelectionAfterRefreshAndReloadSafety`, `TestP502EmptyLoadingErrorAndScrollableDetails`; retained detail selection and editor draft tests | `TestCLIProgramTestCaseLifecycle`, `TestCLIProgramTestCaseCommittedWriteAndStaleRecovery`, extended `TestShellNavigationEditorAndScrolling` |
+| P5-03 feature ownership and boundaries | `TestP503FeatureOwnsTestCaseTransitionsAndMessages`, `TestP503FeatureSuppliesCreateAndEditFormText`, `TestP503ShellRoutesTestCaseResultWithoutReimplementingMutation`, `TestP503ShellRendersFeatureSuppliedTestCaseForms`, `TestCLIPackageBoundaries`, `TestCLIPackageBoundariesFixtures` (testcase forbidden imports) | Program lifecycle uses only shell commands with injected fake backend; testcase feature supplies form placeholder, help and status |
+| P5-04 committed writes, refresh failures, retry and stale/canceled results | `TestP504CommittedTestCaseWriteSurvivesRefreshFailure`, `TestP504CommittedOutcomeAcrossRepeatedReadOnlyFailures` (create/delete, two failed retries, ID, recovery, scope/new-write reset), `TestP504FailedWriteRetryAndBusyDeduplication`, `TestP504StaleProjectChangeAndRevisionResults`, `TestP504CanceledTestCaseWorkAndReadOnlyRetry`, `TestP504InvalidScopeOwnerAndReadFailure`; app reload-safety assertion | `TestCLIProgramTestCaseCommittedWriteAndStaleRecovery` asserts one create, visible saved status and ID across two failed read-only retries, successful read, malformed later retry and no write against stale rows; `TestCLIProgramTestCaseShutdownCancelsRequest` proves a pending refresh is canceled on shutdown; `TestCLIProgramTestCaseKeyboardCancelsBusyRequest` sends Esc and Ctrl+C while create or follow-up list stalls, confirms HTTP cancellation and one create after a duplicate Enter |
+| P5-05 separate reads, server completion, P4 draft preservation | `TestP503ShellRoutesTestCaseResultWithoutReimplementingMutation`, `TestP505TestCaseFailureDoesNotCorruptChangeOrDocumentDraft`, retained `TestP404StaleResultsCanceledWorkAndInvisibleRows`, `TestP405CommittedStepsSurviveLaterFailureAndRetryOnlyReads` | `TestCLIProgramTestCaseLifecycle` checks list and details reads after writes; retained change/document program scenarios remain in the manifest |
+| P5-06 complete-program and PTY campaign | `CoverageTest.test_scenario_manifest_rejects_scripts_empty_and_unmatched` asserts all four exact testcase program names and the retained PTY child; `TestCLIPackageBoundariesFixtures` remains tooling-only | `TestCLIProgramTestCaseLifecycle`, `TestCLIProgramTestCaseCommittedWriteAndStaleRecovery`, `TestCLIProgramTestCaseShutdownCancelsRequest`, `TestCLIProgramTestCaseKeyboardCancelsBusyRequest`, extended `TestShellNavigationEditorAndScrolling` |
+
+`TestRetainedTestCaseMutationPayloads` now expects a 201 ID and empty 204 bodies;
+its old entity-return expectation was obsolete. The four testcase program scenarios
+are listed explicitly in `scripts/terminal-scenarios.json`; direct adapter,
+feature, architecture and harness tests supply no terminal coverage counters.
+All test collaborators are fake servers or owned local processes. No live
+backend, database, Flow resources or other feature API changed.

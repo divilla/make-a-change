@@ -110,6 +110,10 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 	send("/", "Commands")
 	send("\x1b", "Type / for commands")
 	send("\r", "loaded change")
+	send("/new-testcase\r", "TestCaseCreateScreen")
+	send("PTY case\r", "saved test case")
+	send("\x1b[6~", "Spec")
+	send("\x1b[6~", "PTY case")
 	send("/title\r", "ChangeUpdateScreen")
 	send("\x05", "saved title")
 	send(strings.Repeat("\x1b[6~", 5), "Complete")
@@ -136,6 +140,7 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 	var mu sync.Mutex
 	epicName := "PTY Epic"
 	changeTitle := "PTY Change"
+	var testCases []map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -181,8 +186,25 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 			}
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 			value = terminalChange(body.ID, changeTitle)
-		case "/api/v1/doc/current", "/api/v1/test-case/list":
+		case "/api/v1/doc/current":
 			value = []any{}
+		case "/api/v1/test-case/list":
+			if testCases == nil {
+				value = []any{}
+			} else {
+				value = testCases
+			}
+		case "/api/v1/test-case/create":
+			var body struct {
+				ChangeID int    `json:"change_id"`
+				Scenario string `json:"scenario"`
+			}
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			assert.Equal(t, 1, body.ChangeID)
+			assert.Equal(t, "PTY case", body.Scenario)
+			testCases = append(testCases, map[string]any{"id": 31, "change_id": body.ChangeID, "scenario": body.Scenario, "done": false, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T10:00:00Z"})
+			w.WriteHeader(201)
+			value = map[string]any{"id": 31}
 		case "/api/v1/change/update-title":
 			var body struct {
 				ID    int    `json:"id"`

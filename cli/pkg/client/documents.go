@@ -4,7 +4,7 @@ import (
 	"cli/internal/dto"
 	"context"
 	"errors"
-	"strconv"
+	"strings"
 	"time"
 )
 
@@ -55,17 +55,19 @@ func (c HTTPClient) InsertDocument(ctx context.Context, input dto.DocumentInput)
 	return c.insertID(ctx, "/api/v1/doc/insert", input)
 }
 
-// ListTestCases is the separate read needed by change details; mutation migration is P5.
+// ListTestCases is the separate read needed by change details.
 func (c HTTPClient) ListTestCases(ctx context.Context, id int) ([]dto.TestCase, error) {
 	const path = "/api/v1/test-case/list"
 	if id <= 0 {
 		return nil, errors.New("change ID must be positive")
 	}
 	var wire []struct {
-		ID       *int    `json:"id"`
-		ChangeID *int    `json:"change_id"`
-		Scenario *string `json:"scenario"`
-		Done     *bool   `json:"done"`
+		ID        *int       `json:"id"`
+		ChangeID  *int       `json:"change_id"`
+		Scenario  *string    `json:"scenario"`
+		Done      *bool      `json:"done"`
+		CreatedAt *time.Time `json:"created_at"`
+		UpdatedAt *time.Time `json:"updated_at"`
 	}
 	if err := c.projectRequest(ctx, path, struct {
 		ChangeID int `json:"change_id"`
@@ -76,11 +78,13 @@ func (c HTTPClient) ListTestCases(ctx context.Context, id int) ([]dto.TestCase, 
 		return nil, contractStatus(path, &ContractError{errors.New("expected testcase array")})
 	}
 	rows := make([]dto.TestCase, 0, len(wire))
+	previous := 0
 	for _, w := range wire {
-		if w.ID == nil || *w.ID <= 0 || w.ChangeID == nil || *w.ChangeID != id || w.Scenario == nil || w.Done == nil {
+		if w.ID == nil || *w.ID <= previous || w.ChangeID == nil || *w.ChangeID != id || w.Scenario == nil || strings.TrimSpace(*w.Scenario) == "" || w.Done == nil || w.CreatedAt == nil || w.UpdatedAt == nil || w.CreatedAt.IsZero() || w.UpdatedAt.IsZero() || w.UpdatedAt.Before(*w.CreatedAt) {
 			return nil, contractStatus(path, &ContractError{errors.New("invalid testcase fields")})
 		}
-		rows = append(rows, dto.TestCase{ID: strconv.Itoa(*w.ID), ChangeID: strconv.Itoa(*w.ChangeID), Scenario: *w.Scenario, Done: *w.Done})
+		previous = *w.ID
+		rows = append(rows, dto.TestCase{ID: *w.ID, ChangeID: *w.ChangeID, Scenario: *w.Scenario, Done: *w.Done, CreatedAt: *w.CreatedAt, UpdatedAt: *w.UpdatedAt})
 	}
 	return rows, nil
 }

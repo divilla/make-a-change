@@ -6,6 +6,7 @@ import (
 	"cli/internal/epics"
 	"cli/internal/projects"
 	"cli/internal/styles"
+	"cli/internal/testcases"
 	"strconv"
 	"strings"
 
@@ -148,8 +149,7 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 			}
 			if previous == ChangeDetailsState && target == ChangeDetailsState {
 				m.state = ChangeDetailsState
-				m.status = "deleting test case"
-				return m, testCaseDeleteCommand(m.client, m.activeTestCase)
+				return m.beginTestCase(testcases.Delete, "", "", false)
 			}
 			return m.arrive(target, "confirmed")
 		case "/no", "/cancel":

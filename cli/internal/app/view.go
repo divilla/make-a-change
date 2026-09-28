@@ -175,8 +175,10 @@ func (m Model) helpText() string {
 		return "<ctrl+n> new change  |  <return> view  |  </> command"
 	case ChangeDetailsState:
 		return "<ctrl+n> new testcase  |  <return> edit  |  <space> toggle  |  <del> delete  |  <ctrl+ins> copy  |  </> command"
-	case TestCaseCreateState, TestCaseUpdateState:
-		return "<return> save  |  <ctrl+c> delete prompt  |  <esc> cancel"
+	case TestCaseCreateState:
+		return testcases.CreateForm().Help
+	case TestCaseUpdateState:
+		return testcases.EditForm().Help
 	case ChangeCreateState:
 		return "<ctrl+t> title | <ctrl+u> optional UUID | <ctrl+e> brief editor | <return> save | <ctrl+c> cancel"
 	case ChangeUpdateState, EpicCreateState, EpicUpdateState, ProjectCreateState, ProjectUpdateState:
