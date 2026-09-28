@@ -9,10 +9,35 @@ import (
 const defaultPromptCharLimit = 240
 
 func (m Model) setPromptValue(value string) Model {
+	m.editorDraft = nil
 	m.applyPromptLimit()
 	m.input.SetValue(value)
 	m.movePromptCursorToEnd()
 	return m
+}
+
+// promptValue keeps editor bytes independent of the textarea's lossy display.
+func (m Model) promptValue() string {
+	if m.editorDraft != nil {
+		return *m.editorDraft
+	}
+	return m.input.Value()
+}
+
+// A draft that the textarea cannot represent must be edited in the editor.
+func (m *Model) canEditPrompt() bool {
+	if m.editorDraft != nil && *m.editorDraft != m.input.Value() {
+		m.err = "Use Ctrl+E to edit this draft, Enter to retry, or Ctrl+C to discard"
+		return false
+	}
+	return true
+}
+
+func (m *Model) syncEditorDraft() {
+	if m.editorDraft != nil {
+		value := m.input.Value()
+		m.editorDraft = &value
+	}
 }
 
 func (m *Model) applyPromptLimit() {
@@ -136,17 +161,25 @@ func (m *Model) mirrorPromptKey(msg tea.KeyMsg) {
 }
 
 func (m Model) updatePromptInput(msg tea.KeyMsg) (Model, tea.Cmd) {
+	if !m.canEditPrompt() {
+		return m, nil
+	}
 	m.preparePromptInput()
 	m.mirrorPromptKey(msg)
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
+	m.syncEditorDraft()
 	m.clampPromptCursor()
 	return m, cmd
 }
 
 func (m Model) insertPromptNewline() Model {
+	if !m.canEditPrompt() {
+		return m
+	}
 	m.preparePromptInput()
 	m.input.InsertString("\n")
+	m.syncEditorDraft()
 	m.insertPromptCursorText("\n")
 	m.clampPromptCursor()
 	return m
@@ -165,8 +198,12 @@ func (m Model) handlePendingShiftEnter(msg tea.KeyMsg) (Model, bool) {
 }
 
 func (m Model) insertPromptLiteral(value string) Model {
+	if !m.canEditPrompt() {
+		return m
+	}
 	m.preparePromptInput()
 	m.input.InsertString(value)
+	m.syncEditorDraft()
 	m.insertPromptCursorText(value)
 	m.clampPromptCursor()
 	return m

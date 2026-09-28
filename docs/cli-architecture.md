@@ -82,8 +82,9 @@ Remove the old Flow system rather than adapting its stage definitions:
 - Flow YAML, help catalogs, stage modes, task statuses/steps, entry/exec/exit hooks,
   and Flow Makefile dispatch.
 - The repository's `.mch/default/` Flow templates, prompts, and scripts, including
-  code, PR, merge, deployment, and branch/commit automation. Replace any needed
-  brief/spec instructions with CLI-owned prompts dedicated to the single workflow.
+  code, PR, merge, deployment, and branch/commit automation. Retain dedicated brief/spec instructions at repository-relative
+  `.mch/default/prompts/{brief-rewrite,brief-resolve,spec-write,spec-review,spec-fix}.md`,
+  per the approved resource override. Preserve `.mch/config.yaml` and `.mch/tmp/`.
 - Old `def-write`, `spec-write`, `pr-write`, review/chat command families, generated
   shared `change-types.md`, and legacy artifact/session restoration conventions.
 - Flow-specific UI states, commands, help, configuration types, compatibility
@@ -103,33 +104,54 @@ with the target above. Existing Flow behavior is not a compatibility requirement
 | Location | Current responsibility |
 | --- | --- |
 | [`cmd/mch/main.go`](../cli/cmd/mch/main.go) | Pass arguments and output to `app.Run`, print errors, and set the exit status. |
-| [`internal/app/`](../cli/internal/app/) | Startup, repository configuration, root model, navigation, commands, forms, selectors, HTTP orchestration, editor and clipboard access, and agent workflow coordination. |
+| [`internal/app/`](../cli/internal/app/) | Startup, repository configuration, root model, navigation, commands, forms, selectors, HTTP orchestration, editor and clipboard access, and editor orchestration; legacy agent coordination is removed. |
 | [`internal/changes/`](../cli/internal/changes/) | Change list/detail state, filtering, artifact parsing, rendering, command names, and an API interface. |
 | [`internal/projects/`](../cli/internal/projects/) | Project state, rendering, command names, and an API interface. |
 | [`internal/epics/`](../cli/internal/epics/), [`internal/testcases/`](../cli/internal/testcases/), [`internal/help/`](../cli/internal/help/) | Screen helpers and command/navigation definitions; epic and testcase models are currently empty. |
-| [`internal/agent/`](../cli/internal/agent/) | Artifact workflow state, workspace files, subprocess execution, prompts, and output parsing. |
+| `internal/agent/` (P8–P9) | Legacy implementation removed in P1; the fixed controller and injected process adapter remain to be implemented. |
 | [`internal/dto/`](../cli/internal/dto/) | Shared CLI data structures, mixing backend data and presentation values. |
 | [`internal/navigation/`](../cli/internal/navigation/) | Screen identifiers and transition helpers. |
 | [`internal/ui/`](../cli/internal/ui/), [`internal/styles/`](../cli/internal/styles/) | Shared terminal layout, tables, and styling. |
 | [`pkg/client/http.go`](../cli/pkg/client/http.go) | Backend HTTP calls, permissive JSON decoding, and selector mapping. |
-| [`integration/`](../cli/integration/) | Complete-program tests, Flow script tests, import-boundary checks, and terminal tests. |
+| [`integration/`](../cli/integration/) | Complete-program tests, import-boundary checks, and terminal tests. |
 
 Startup parses `--version` or launches the interactive application; there are no
-subcommands. It resolves the Git repository root, loads `.mch/config.yaml`, then
-loads Flow configuration from `.mch/default/flow.yaml` and its referenced help
-file. `backend_url` is required; `project_id` records the selected project.
-`RunProgramWithIO` provides controlled input/output, context, repository root,
-UUID generation, and agent runner for complete-program tests.
+subcommands. It resolves the Git repository root (without reading or changing branch
+state) and loads only `.mch/config.yaml`. `RunProgramWithIO` accepts an explicit
+repository root, context, input/output and program lifecycle callback for tests,
+bypassing Git lookup. Startup requires no Flow resources, agent executable, prompt
+generation, or workspace creation.
+
+Local configuration is file-only: `backend_url` is required, `project_id` defaults
+to zero (prompt for selection). Environment variables and `cli/.config/config.yaml`
+do not override or replace it. Missing/malformed config errors identify the path
+and affected key before launching the terminal. `/config` renders the in-memory
+resolved config, with no filesystem reads. Selection takes effect immediately;
+asynchronous saves serialize and atomically replace the file through a sibling
+temporary file. Failure preserves the previous file and selected project in memory,
+and explicitly reports that local persistence failed. Orderly keyboard exits wait
+for in-flight and queued configuration saves; input is paused while saves drain.
+A save failure cancels automatic exit so the error remains visible; the user can
+then select again to retry or explicitly exit.
 
 The root model implements `Init`, `Update`, and `View`. HTTP work is generally
 returned as `tea.Cmd` functions that produce typed result messages. The root
 `Update` handles those messages and routes keyboard events. Feature packages are
 currently mostly helpers rather than independently managed screen models.
 
-Agent artifacts use `.mch/tmp/<ref_uuid>/artifact/`, including `input.md`,
-`output.md`, and a session file. Editor processes use `tea.ExecProcess` so the
-terminal can be handed to the editor and restored. Startup also generates a
-change-type prompt under `.mch/default/prompts/` from backend options.
+Editor processes use `tea.ExecProcess` so the terminal can be handed to the editor
+and restored. Failed editor saves retain the raw returned bytes separately from
+the textarea display. Enter retries that draft as literal data; Ctrl+E reopens it,
+and an unchanged reopen still retries an unsaved draft. Ctrl+C clears the draft.
+Drafts that the textarea cannot represent exactly must be edited with Ctrl+E;
+representable drafts remain editable in the prompt without becoming slash commands.
+Existing ordinary API reads/edits remain pending the typed transport
+and feature migrations P2–P7. `/new-change` currently performs ordinary creation
+through the editor and existing API; it invokes no agent. Epic placeholder saves,
+example data, and unimplemented project deletion are no longer offered as working
+actions. The fixed brief/spec controller, process adapter, and scripted progress UI
+return in P8–P9. Existing user workspaces are preserved but never restored as legacy
+sessions. The obsolete agent→changes parser dependency is removed with that path.
 
 ## Target package boundaries
 
@@ -195,8 +217,9 @@ of terminal widgets and external effects.
 Keep HTTP mechanics in `pkg/client`. Extract configuration loading, editor,
 clipboard, process, and workspace effects from presentation code into focused
 adapters as those boundaries are refactored. Reusable infrastructure belongs in
-`pkg`; the fixed brief-to-spec controller and its prompts live under
-`internal/agent`. It uses an injected runner, not repository Flow scripts.
+`pkg`; the fixed brief-to-spec controller lives under
+`internal/agent`. Its five prompts remain under repository-relative
+`.mch/default/prompts/` per the approved user resource override. It uses an injected runner, not repository Flow scripts.
 
 Adapters must not import the application shell or screen packages. They own
 external-library calls and resource cleanup, and accept explicit dependencies

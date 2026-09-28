@@ -164,3 +164,168 @@ structural zeros for source/function/HTML diagnosis; it adds no hits.
 
 See the [checkpoint](cli-rebuild-checkpoint.md) for real measured results, baseline
 failures and next action. No live backend or real-agent compatibility is claimed.
+
+## P1 startup and Flow-removal migration (020)
+
+P0 rows above are the historical inventory. P1 supersedes their future dispositions
+as follows; current HTTP fixtures still characterize the retained legacy adapter,
+not completed P2 backend compatibility.
+
+| Criterion | Current assertions |
+| --- | --- |
+| P1-01 | `TestStartupConfigIndependentOfAgentAndFlow`, `TestConfigRequiredAndMalformedValues`, retained root-resolution/config tests; `TestCLIProgramStartupNavigationAndSelection`, `TestCLIStartupWithoutFlowResources` |
+| P1-02 | `TestRemovedCommandsCannotDispatchProcesses`, retained exact commands/help/render/navigation assertions; `TestUnavailableEpicActionsNeverClaimSuccess`; full-program navigation and PTY |
+| P1-03 | `TestAtomicConfigReplacementAndFailureCauses`, `TestReplaceFileAtomicallyPreservesExistingFileAfterPartialWriteFailure`, `TestProjectSelectionSaveIsAsynchronousAndKeepsPartialSuccess`, `TestProjectSelectionSerializesOverlappingSaves`; program successful/failed config save |
+| P1-04/P1-05 | `TestFixedPromptInventoryAndResponsibilities`, startup absence of default resources, existing-workspace sentinel in program selection test; scoped tracked-asset diff |
+| P1-06 | Retained ordinary project/change CRUD, parsing, editor errors, selection, rendering, atomic-write and clipboard unit assertions; `TestCLIProgramEditorSaveAndFailure` covers real editor handoff/redraw and failed save |
+| P1-07 | `TestShellNavigationEditorAndScrolling`, `TestCLIProgramStartupNavigationAndSelection`, `TestCLIProgramEditorSaveAndFailure`, `TestCLIStartupWithoutFlowResources`; explicit manifest and eligibility/completeness fixtures |
+
+Prompt inventory inspected before removal: def-rewrite preserved intent, concrete
+examples, fenced code and draft scope; spec-write supplied the implementation-ready
+sections, clarification gate and evidence requirements; spec-review supplied bounded
+review, actionable findings and explicit success. These responsibilities now belong
+to brief-rewrite, brief-resolve, spec-write, spec-review and spec-fix respectively.
+The external spec-file-structure content is incorporated into spec-write; no shared
+change-types file is generated. Session-new, def-review, PR/code/polish/review/fix,
+merge/stage/master and change-types prompts were obsolete workflows or dependencies.
+The inspected Makefile/scripts performed stage dispatch, prompt substitutions,
+session restoration and branch/commit/push/deploy automation. None is a general
+adapter needed by ordinary API/editor startup, so all tracked default scripts,
+Makefile and YAML were removed. Root factory scripts and dependencies are unchanged.
+No `.mch/config.yaml` edit was needed: it had no Flow settings. Existing `.mch/tmp/`
+and unrelated files remain untouched.
+
+All tests from default_flow_test.go and the two Flow-only make tests from
+existing_artifact_program_test.go are removed alongside their explicitly removed
+Flow assets/behavior (including already missing root helper expectations). The five
+UUID/artifact/agent complete-program tests are replaced by the three shell/startup
+manifest tests above. Their synchronized driver, editor subprocess handoff, failure
+reporting, user-file ownership and orderly shutdown assertions survive. Legacy
+workspace/session reuse, stage hooks, branch automation and agent-edit follow-up
+ordering are no longer product behavior. Fixed-controller draft/save ordering and
+revision/error recovery must be added with P8–P9 rather than retain those protocols.
+
+The PTY driver retains its instrumented binary, owned process-group cleanup,
+application exit/counter checks, color, dropdown, editor redraw, and scrolling
+assertions. It now scrolls a real changes list instead of an agent viewport.
+Scripted progress, cancellation, bounded readers and interrupted-agent cleanup must
+return with the general P8 process adapter and P9 controller. The old runner was
+entirely coupled to legacy workspaces/session prompts; it is removed, including the
+pipe/Wait race, not retained as an unused broken adapter. P8 must prove readers finish
+before Wait closes owned pipes with a deterministic subprocess regression.
+
+Agent unit tests for session extraction, workflow environment, workspace replacement,
+restoration, generated-spec testcase creation and event rendering are removed with
+those behaviors. ParseGeneratedChange/QA extraction had no ordinary caller; its
+wrapper and obsolete generated-testcase behavior are removed. Ordinary pure
+ParseSpecStructure/ParseDefStructure/ParseArtifactTypes assertions remain in changes.
+Definition preview syntax coloring had no surviving UI consumer and is removed
+with its preview; ordinary list/details color and wrapping tests remain. Branch
+reconciliation unit tests and assign-flow transport assertions are removed with
+/reference and its obsolete endpoint. Placeholder epic navigation/save assertions
+are replaced by explicit unavailable-action checks, with CRUD owned by P4.
+
+Startup catalog assertions now check in-memory options without shared file generation;
+config Flow option/validation assertions are replaced by local config errors and
+absence-of-resource checks. Ordinary artifact editor assertions now use document text
+without session files. Project editor failures preserve the edited text for recovery.
+
+`TestCLIProgramOrdinaryDocumentEditor` rehomes the old def/spec/PR program editor
+and save-order assertions without agent runs or session files. Each document runs
+success and follow-up type-save failure, checks the committed text survives, and
+proves user writes never carry agent_edit=true.
+`TestOrdinaryDocumentSaveRetainsCommittedTextAfterFollowUpFailure` also covers
+refresh failures and underlying causes. This preserves ordinary partial-success
+semantics while the transport/document ownership migration remains with P2/P7.
+
+P1 review fixes 01 retain ordinary creation partial success in
+`TestChangeCreateRetainsCommittedChangeAfterTypeFailure`: the committed change ID
+survives type-update failure, details remain reachable, and repeating save cannot
+create a duplicate. `TestEditorSubmissionPreservesSlashPrefixedData` distinguishes
+interactive commands from literal editor data for testcase/project forms and title
+edits, including `/cancel`. The existing manifest-selected
+`TestCLIProgramEditorSaveAndFailure/slash-prefixed_testcase` exercises Ctrl+E,
+exact saved scenario content, redraw and orderly navigation through the complete
+program. No existing assertions were removed and no manifest expansion was needed.
+
+### P1 review fixes 02 — artifact editor fidelity and unchanged exits
+
+P1-06/P1-07 retain original document ownership across the editor handoff.
+`TestArtifactEditorSeedsOriginalDocument` checks def/spec/PR temp-file bytes for
+tabs and documents beyond the textarea line limit.
+`TestArtifactEditorUnchangedExitSkipsPersistence` checks empty and nonempty
+unchanged results, independent selected types, redraw-only commands, and cleared
+edit state. No unchanged result is persisted or parsed for type updates.
+`TestCLIProgramOrdinaryDocumentEditor` retains its save-order and partial-failure
+assertions, adding real editor input capture, newline-only edits, unchanged exits,
+redraw and temporary-file cleanup. It remains eligible through the existing
+manifest entry. Current backend document-contract migration still belongs to P6;
+these fixes change no HTTP route or payload contract and remove no assertions.
+
+### P1 review fixes 03 — failed editor save recovery
+
+P1-06/P1-07 now cover repeated failed saves without draft loss.
+`TestArtifactDraftSurvivesFailedSaveAndRetry` exercises def/spec/PR with literal
+tabs and more than 10,000 lines, failed persistence, raw Ctrl+E seeds, unchanged
+reopens, another failed attempt, and exact Enter retry bytes.
+`TestEditorRetryKeepsLiteralData` checks failed testcase create/update, project
+create/update and title submissions with `/api/v1/health returns 200` and literal
+`/cancel`. `TestEditorDraftEditingAndDiscard` checks editable short drafts,
+protection of lossy previews, empty drafts, and explicit discard restoring command
+semantics. Successful saves clear draft ownership through the normal prompt reset.
+
+Existing manifest-selected program tests add first-save failure followed by Enter
+and unchanged Ctrl+E retries for all three document fields, and literal testcase
+retries including `/cancel`. They retain exact HTTP content, editor seed, redraw,
+cleanup, save ordering and committed follow-up failure assertions. No tests or
+manifest scenarios were removed; no backend contract or route was changed.
+
+### P1 review fixes 04 — clipboard retries and config permissions
+
+P1-06 `TestEditorDraftAsyncPasteRetry` delivers the real textarea asynchronous
+paste result using owned clipboard executables. It verifies failed-save drafts
+include pasted content and further typing on retry, slash-prefixed data stays
+literal, and delayed paste preserves an unrepresentable raw draft.
+P1-03 `TestAtomicConfigReplacementPreservesPermissions` checks 0600, 0640 and 0644
+replacement, new-file defaults, and lookup failure without replacing the path.
+P1-07 `TestCLIProgramStartupNavigationAndSelection` now verifies successful
+project selection preserves a private config's 0600 permissions. Existing save
+failure, in-memory selection and user-file preservation assertions remain.
+No tests or manifest entries were removed; no backend API contract changed.
+
+### P1 review fixes 05 — drain configuration saves before exit
+
+P1-03 `TestQuitDrainsProjectSelectionSaves` holds asynchronous save completion
+until after Escape, `/quit`, or Ctrl+C requests exit. It checks single and queued
+saves, final project 9 persistence after project 8, and ignored repeated exit/editor
+input during the drain. `TestQuitSaveFailureRemainsVisible` proves save errors
+cancel automatic exit without dropping the latest queued save or in-memory
+selection, and that a subsequent explicit exit remains possible.
+P1-07 `TestCLIProgramStartupNavigationAndSelection` now sends selection and exit
+in one input burst and checks the persisted project after full program shutdown.
+These subtests remain eligible through the existing manifest entry. No HTTP
+contract, tests or manifest entries were removed or changed.
+
+### P1 review fixes 06 — require loaded documents before editing
+
+P1-06 `TestDocumentEditorRequiresSuccessfulDetailLoad` holds the detail result,
+checks all four retained editable text fields before and after failure, then
+verifies exact loaded bytes and rejects readiness from a prior selection.
+`TestArtifactEditorSeedsOriginalDocument` now includes successfully loaded empty
+documents. P1-07 `TestCLIProgramOrdinaryDocumentEditor` adds delayed and failed
+fake-server detail responses, `/edit-spec` while unavailable, recovery through
+reselection, exact editor seeds and no writes on unchanged exit. Its existing
+manifest entry includes these subtests. No assertions or scenarios were removed;
+current HTTP transport migration remains assigned to its existing owning passes.
+
+### P1 review fixes 07 — ordinary slash-prefixed form data
+
+P1-06 `TestPromptSubmissionPreservesSlashPrefixedData` verifies ordinary Enter
+submits exact slash-prefixed testcase/project/title data, including command-like
+sentences and commands unavailable on that screen.
+`TestPromptSubmissionDispatchesRecognizedFormCommands` retains exact `/cancel`
+dispatch in forms and unknown-command errors on the main screen. P1-07's existing
+`TestCLIProgramEditorSaveAndFailure` adds bracketed paste of a slash-prefixed
+scenario and Enter retry after save failure, asserting both HTTP payloads.
+Editor literal-data cases remain intact. No assertions or manifest scenarios
+were removed, and no HTTP route or payload contract changed.

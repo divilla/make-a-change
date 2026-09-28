@@ -1,3 +1,0 @@
-Output exactly:
-
-Done.

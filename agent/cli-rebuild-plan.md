@@ -1,12 +1,14 @@
 # CLI rebuild plan
 
 Status: authorized execution, 2026-09-28. P0 specification 019 is implemented
-and native review pass 04 of `06042fd` is clean; dev merge is the next action.
+and merged to dev (`e46bf64`). P1 specification 020 is implemented through `307340d`; native review pass08
+is clean. Its dev merge and P2 typed transport/projects are next. Actual
+validation and review evidence are recorded in the compact checkpoint.
 The user authorized the sequential
 specification → implementation → review → dev-merge factory; helpers own Git
 publication. No stage or production promotion is authorized. See the
 [CLI checkpoint](../cli/agents/cli-rebuild-checkpoint.md) for actual command exits,
-independent statement counts, baseline failures and the next P1 action.
+independent statement counts, baseline failures and the next P2 action after P1 review/dev merge.
 Full architecture scope, retained resources and final-result coverage policy
 remain confirmed below.
 

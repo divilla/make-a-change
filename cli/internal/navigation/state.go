@@ -1,3 +1,4 @@
+// Package navigation defines shell screen identifiers and navigation targets.
 package navigation
 
 // State identifies an mch screen, overlay, or confirmation state.
@@ -9,9 +10,6 @@ const (
 	ChangesListState           State = "ChangesListState"
 	ChangeDetailsState         State = "ChangeDetailsState"
 	TestCaseDetailsState       State = "TestCaseDetailsState"
-	CreateDefState             State = "CreateDefState"
-	UpdateDefState             State = "UpdateDefState"
-	RewriteDefState            State = "RewriteDefState"
 	ChangeCreateState          State = "ChangeCreateState"
 	ChangeUpdateState          State = "ChangeUpdateState"
 	TestCaseCreateState        State = "TestCaseCreateState"

@@ -2,18 +2,16 @@
   "program": {
     "package": "./integration",
     "tests": [
-      "TestCLIProgramNewChangeScenarios",
-      "TestCLIProgramExistingSpecUsesUUIDArtifactWorkspaceAndSpecWrite",
-      "TestCLIProgramExistingDefinitionUsesUUIDArtifactWorkspaceAndDefWrite",
-      "TestCLIProgramExistingPRUsesUUIDArtifactWorkspaceAndPRWrite",
-      "TestCLIProgramExistingSpecKeepsPersistedArtifactAfterFollowUpFailure",
-      "TestCLIStartupRebuildsChangeTypeSlugsPrompt"
+      "TestCLIProgramStartupNavigationAndSelection",
+      "TestCLIProgramEditorSaveAndFailure",
+      "TestCLIProgramOrdinaryDocumentEditor",
+      "TestCLIStartupWithoutFlowResources"
     ]
   },
   "pty": {
     "package": "./integration/terminal",
     "tests": [
-      "TestRewriteScreenUsesColoredBlackScrollableViewport"
+      "TestShellNavigationEditorAndScrolling"
     ]
   }
 }

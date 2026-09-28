@@ -1,37 +1,20 @@
 package app
 
 import (
+	"cli/internal/dto"
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestAppConfigLoadsRepositoryMCHConfigFlowAndHelp(t *testing.T) {
-	root := t.TempDir()
-	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n"+"project_id: 7\n")
-
-	cfg, err := loadAppConfig(root)
-
-	require.NoError(t, err)
-	assert.Equal(t, root, cfg.RepositoryRoot)
-	assert.Equal(t, filepath.Join(root, ".mch", "config.yaml"), cfg.ConfigPath)
-	assert.Equal(t, "http://backend.test", cfg.BackendURL)
-	assert.Equal(t, 7, cfg.ProjectID)
-	assert.Equal(t, filepath.Join(root, ".mch", "default"), cfg.FlowDir)
-	assert.Equal(t, "default", cfg.Flow.Slug)
-	require.Len(t, cfg.Flow.Steps, 3)
-	assert.Equal(t, "def-write", cfg.Flow.Steps[0].Slug)
-	assert.Equal(t, "edit", cfg.Flow.Steps[0].Type)
-	assert.Equal(t, "def-review", cfg.Flow.Steps[1].Slug)
-	assert.Equal(t, "make def-review-exec", cfg.Flow.Steps[1].Exec)
-	assert.Equal(t, []string{"skip", "prompt", "exec"}, flowOptionSlugs(cfg.FlowHelp.StageModes))
-	assert.Equal(t, []string{"queued", "running", "paused", "stopped", "waiting", "completed", "failed"}, flowOptionSlugs(cfg.FlowHelp.TaskStatuses))
-	assert.Equal(t, []string{"none", "entry", "prompt", "agent", "exit", "done"}, flowOptionSlugs(cfg.FlowHelp.TaskSteps))
-}
 
 func TestAppConfigAllowsMissingAndZeroProjectID(t *testing.T) {
 	root := t.TempDir()
@@ -102,203 +85,292 @@ func TestAppConfigErrorsWithoutFallbackToLegacyConfig(t *testing.T) {
 	assert.True(t, os.IsNotExist(statErr))
 }
 
-func TestAppConfigErrorsOnMalformedFlowAndEmptyHelpSlugs(t *testing.T) {
-	root := t.TempDir()
-	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n")
-	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "default", "flow.yaml"), []byte("version: 1\nslug: default\nname: Default\nhelp: help.yaml\nmakefile: Makefile\nsteps: []\n"), 0o644))
-
-	_, err := loadAppConfig(root)
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "flow steps are required")
-
-	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n")
-	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "default", "help.yaml"), []byte("stage_modes:\n  - slug: ''\n"), 0o644))
-
-	_, err = loadAppConfig(root)
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "stage_modes option slug is required")
-}
-
-func TestAppConfigErrorsOnDuplicateFlowStepSlugAndMissingType(t *testing.T) {
-	root := t.TempDir()
-	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n")
-	flow := `version: 1
-slug: default
-name: Default
-help: help.yaml
-makefile: Makefile
-steps:
-  - slug: custom
-    type: edit
-  - slug: custom
-    type: exec
-`
-	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "default", "flow.yaml"), []byte(flow), 0o644))
-
-	_, err := loadAppConfig(root)
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "duplicates slug \"custom\"")
-
-	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n")
-	flow = `version: 1
-slug: default
-name: Default
-help: help.yaml
-makefile: Makefile
-steps:
-  - slug: custom
-    type:
-`
-	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "default", "flow.yaml"), []byte(flow), 0o644))
-
-	_, err = loadAppConfig(root)
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "flow step 1 type is required")
-}
-
-func TestAppConfigAllowsCustomAndMissingFlowHelpOptions(t *testing.T) {
-	root := t.TempDir()
-	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n")
-	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "default", "help.yaml"), []byte("stage_modes:\n  - slug: custom-mode\n    help: custom mode\n"), 0o644))
-
-	cfg, err := loadAppConfig(root)
-
-	require.NoError(t, err)
-	assert.Equal(t, []string{"custom-mode"}, flowOptionSlugs(cfg.FlowHelp.StageModes))
-	assert.Empty(t, cfg.FlowHelp.TaskStatuses)
-	assert.Empty(t, cfg.FlowHelp.TaskSteps)
-}
-
 func testAppConfig(overrides appConfig) appConfig {
-	cfg := appConfig{
-		RepositoryRoot: "/repo",
-		ConfigPath:     "/repo/.mch/config.yaml",
-		BackendURL:     defaultBackendURL,
-		FlowDir:        "/repo/.mch/default",
-		Flow: flowConfig{
-			Version:        1,
-			Slug:           "default",
-			Name:           "Default Change Automation",
-			Description:    "Default test Flow.",
-			Help:           "help.yaml",
-			Makefile:       "Makefile",
-			Steps:          []flowStep{{Slug: "def", Help: "capture def", Type: "prompt", Prompt: "prompts/change-def.md", Entry: "make def-entry", Exec: "make def-exec", Exit: "make def-exit"}},
-			UtilityPrompts: map[string]string{"change-def-tmp": "prompts/change-def-tmp.md"},
-		},
-		FlowHelp: flowHelpConfig{
-			Version:      1,
-			StageModes:   []flowOption{{Slug: "skip", Help: "skip"}, {Slug: "prompt", Help: "prompt"}, {Slug: "exec", Help: "exec"}},
-			TaskStatuses: []flowOption{{Slug: "queued", Help: "queued"}, {Slug: "running", Help: "running"}, {Slug: "paused", Help: "paused"}, {Slug: "stopped", Help: "stopped"}, {Slug: "waiting", Help: "waiting"}, {Slug: "completed", Help: "completed"}, {Slug: "failed", Help: "failed"}},
-			TaskSteps:    []flowOption{{Slug: "none", Help: "none"}, {Slug: "entry", Help: "entry"}, {Slug: "prompt", Help: "prompt"}, {Slug: "agent", Help: "agent"}, {Slug: "exit", Help: "exit"}, {Slug: "done", Help: "done"}},
-		},
+	if overrides.RepositoryRoot == "" {
+		overrides.RepositoryRoot = "/repo"
 	}
-	if overrides.RepositoryRoot != "" {
-		cfg.RepositoryRoot = overrides.RepositoryRoot
+	if overrides.ConfigPath == "" {
+		overrides.ConfigPath = "/repo/.mch/config.yaml"
 	}
-	if overrides.ConfigPath != "" {
-		cfg.ConfigPath = overrides.ConfigPath
+	if overrides.BackendURL == "" {
+		overrides.BackendURL = defaultBackendURL
 	}
-	if overrides.BackendURL != "" {
-		cfg.BackendURL = overrides.BackendURL
-	}
-	if overrides.ProjectID != 0 {
-		cfg.ProjectID = overrides.ProjectID
-	}
-	if overrides.FlowDir != "" {
-		cfg.FlowDir = overrides.FlowDir
-	}
-	if overrides.Flow.Slug != "" {
-		cfg.Flow = overrides.Flow
-	}
-	if len(overrides.FlowHelp.StageModes) > 0 {
-		cfg.FlowHelp = overrides.FlowHelp
-	}
-	return cfg
+	return overrides
 }
 
-func writeMCHFixture(t *testing.T, root string, config string) {
+func writeMCHFixture(t *testing.T, root, config string) {
 	t.Helper()
-	flowDir := filepath.Join(root, ".mch", "default")
-	require.NoError(t, os.MkdirAll(filepath.Join(flowDir, "prompts"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, ".mch"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "config.yaml"), []byte(config), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(flowDir, "flow.yaml"), []byte(testFlowYAML()), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(flowDir, "help.yaml"), []byte(testHelpYAML()), 0o644))
 }
 
-func testFlowYAML() string {
-	return `version: 1
-slug: default
-name: Default Change Automation
-description: Test Flow.
-help: help.yaml
-makefile: Makefile
-steps:
-  - slug: def-write
-    help: write def
-    type: edit
-  - slug: def-review
-    help: review def
-    type: exec
-    prompt: prompts/def-review.md
-    entry: make def-review-entry
-    exec: make def-review-exec
-    exit: make def-review-exit
-  - slug: def-refine
-    help: refine def
-    type: prompt
-utility_prompts:
-  change-def-tmp: prompts/change-def-tmp.md
-`
+func TestStartupConfigIndependentOfAgentAndFlow(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("BACKEND_URL", "http://ignored.test")
+	writeMCHFixture(t, root, "backend_url: http://configured.test\nproject_id: 7\n")
+	cfg, err := loadAppConfig(root)
+	require.NoError(t, err)
+	assert.Equal(t, "http://configured.test", cfg.BackendURL)
+	assert.Equal(t, 7, cfg.ProjectID)
+	assert.NoDirExists(t, filepath.Join(root, ".mch/default"))
+	assert.NoDirExists(t, filepath.Join(root, ".mch/tmp"))
 }
 
-func testHelpYAML() string {
-	return `version: 1
-stage_modes:
-  - slug: skip
-    help: stage will not execute
-  - slug: prompt
-    help: stage will run an interactive session
-  - slug: exec
-    help: stage will run an automated agent
-task_statuses:
-  - slug: queued
-    help: task is waiting to start
-  - slug: running
-    help: task is actively executing
-  - slug: paused
-    help: task is temporarily paused
-  - slug: stopped
-    help: task was manually stopped
-  - slug: waiting
-    help: task is waiting for input
-  - slug: completed
-    help: task finished successfully
-  - slug: failed
-    help: task finished with an error
-task_steps:
-  - slug: none
-    help: task has not started yet
-  - slug: entry
-    help: entry script is executing
-  - slug: prompt
-    help: prompt is being prepared or shown
-  - slug: agent
-    help: automated agent is executing
-  - slug: exit
-    help: exit script is executing
-  - slug: done
-    help: task has finished
-`
-}
-
-func flowOptionSlugs(options []flowOption) []string {
-	slugs := make([]string, 0, len(options))
-	for _, option := range options {
-		slugs = append(slugs, option.Slug)
+func TestConfigRequiredAndMalformedValues(t *testing.T) {
+	for _, body := range []string{"", "backend_url: ''\n", "backend_url: [\n", "backend_url: http://test\nproject_id: nope\n"} {
+		t.Run(body, func(t *testing.T) {
+			root := t.TempDir()
+			writeMCHFixture(t, root, body)
+			_, err := loadAppConfig(root)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "config.yaml")
+		})
 	}
-	return slugs
+	_, err := loadAppConfig("")
+	require.ErrorContains(t, err, "repository root is required")
+}
+
+func TestAtomicConfigReplacementAndFailureCauses(t *testing.T) {
+	root := t.TempDir()
+	writeMCHFixture(t, root, "backend_url: http://old\nproject_id: 7\n")
+	path := filepath.Join(root, ".mch/config.yaml")
+	old, err := os.Open(path)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, old.Close()) }()
+	require.NoError(t, saveAppConfig(path, appConfig{BackendURL: "http://new", ProjectID: 8}))
+	oldBody, err := io.ReadAll(old)
+	require.NoError(t, err)
+	assert.Contains(t, string(oldBody), "http://old")
+	current, err := loadAppConfig(root)
+	require.NoError(t, err)
+	assert.Equal(t, 8, current.ProjectID)
+	require.ErrorContains(t, saveAppConfig(path, appConfig{}), "backend_url is required")
+	assert.Contains(t, readTestFile(t, path), "http://new")
+	err = saveAppConfig(filepath.Join(root, "missing/config.yaml"), current)
+	require.ErrorIs(t, err, os.ErrNotExist)
+	assert.Contains(t, err.Error(), "save config")
+	destination := filepath.Join(root, "directory")
+	require.NoError(t, os.Mkdir(destination, 0o755))
+	require.Error(t, saveAppConfig(destination, current))
+	entries, err := filepath.Glob(filepath.Join(root, ".directory.tmp-*"))
+	require.NoError(t, err)
+	assert.Empty(t, entries)
+}
+
+func TestAtomicConfigReplacementPreservesPermissions(t *testing.T) {
+	for _, mode := range []os.FileMode{0o600, 0o640, 0o644} {
+		t.Run(fmt.Sprintf("%o", mode), func(t *testing.T) {
+			root := t.TempDir()
+			writeMCHFixture(t, root, "backend_url: http://old\nproject_id: 7\n")
+			path := filepath.Join(root, defaultConfigPath)
+			require.NoError(t, os.Chmod(path, mode))
+			require.NoError(t, saveAppConfig(path, appConfig{BackendURL: "http://new", ProjectID: 8}))
+			info, err := os.Stat(path)
+			require.NoError(t, err)
+			assert.Equal(t, mode, info.Mode().Perm())
+			cfg, err := loadAppConfig(root)
+			require.NoError(t, err)
+			assert.Equal(t, 8, cfg.ProjectID)
+		})
+	}
+	t.Run("new file", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "config.yaml")
+		require.NoError(t, saveAppConfig(path, appConfig{BackendURL: "http://new"}))
+		info, err := os.Stat(path)
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0o644), info.Mode().Perm())
+	})
+	t.Run("stat failure", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "config.yaml")
+		require.NoError(t, os.Symlink(path, path))
+		_, cause := os.Stat(path)
+		require.Error(t, cause)
+		err := saveAppConfig(path, appConfig{BackendURL: "http://new"})
+		require.ErrorIs(t, err, cause.(*os.PathError).Err)
+		assert.Contains(t, err.Error(), "save config")
+		target, err := os.Readlink(path)
+		require.NoError(t, err)
+		assert.Equal(t, path, target, "failed stat must not replace the existing path")
+	})
+}
+
+func TestProjectSelectionSaveIsAsynchronousAndKeepsPartialSuccess(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		t.Run(fmt.Sprint(fail), func(t *testing.T) {
+			root := t.TempDir()
+			writeMCHFixture(t, root, "backend_url: http://backend.test\nproject_id: 7\n")
+			path := filepath.Join(root, ".mch/config.yaml")
+			cfg, err := loadAppConfig(root)
+			require.NoError(t, err)
+			if fail {
+				cfg.ConfigPath = filepath.Join(root, "missing/config.yaml")
+			}
+			m := newModelWithConfig(&fakeClient{projects: []dto.Option{{ID: "8", Label: "Eight"}}}, cfg)
+			m, cmd := sendCommand(m, "/select-project")
+			m = applyCommand(m, cmd)
+			m, save := sendKey(m, tea.KeyEnter)
+			require.NotNil(t, save)
+			assert.Equal(t, "8", m.currentProject.ID)
+			assert.Equal(t, 8, m.appConfig.ProjectID)
+			assert.Contains(t, readTestFile(t, path), "project_id: 7", "Update and View must not write config")
+			_ = m.View()
+			assert.Contains(t, readTestFile(t, path), "project_id: 7")
+			msg := save().(configSavedMsg)
+			if fail {
+				require.ErrorIs(t, msg.err, os.ErrNotExist)
+			}
+			m = applyMsg(m, msg)
+			assert.Equal(t, "8", m.currentProject.ID)
+			if fail {
+				assert.Contains(t, m.err, "selected in memory")
+				assert.Contains(t, readTestFile(t, path), "project_id: 7")
+			} else {
+				assert.Empty(t, m.err)
+				assert.Contains(t, readTestFile(t, path), "project_id: 8")
+			}
+		})
+	}
+}
+
+func TestProjectSelectionSerializesOverlappingSaves(t *testing.T) {
+	root := t.TempDir()
+	writeMCHFixture(t, root, "backend_url: http://test\nproject_id: 7\n")
+	cfg, err := loadAppConfig(root)
+	require.NoError(t, err)
+	m := newModelWithConfig(&fakeClient{}, cfg)
+	m.appConfig.ProjectID = 8
+	m, first := m.persistCurrentProject()
+	m.appConfig.ProjectID = 9
+	m, second := m.persistCurrentProject()
+	require.Nil(t, second)
+	next, last := m.Update(first())
+	m = next.(Model)
+	require.NotNil(t, last)
+	m = applyCommand(m, last)
+	assert.False(t, m.configSaveInFlight)
+	saved, err := loadAppConfig(root)
+	require.NoError(t, err)
+	assert.Equal(t, 9, saved.ProjectID)
+}
+
+func TestOrdinaryDocumentSaveRetainsCommittedTextAfterFollowUpFailure(t *testing.T) {
+	for _, field := range []detailEditField{detailEditDef, detailEditSpec, detailEditPullRequest} {
+		t.Run(string(field), func(t *testing.T) {
+			cause := errors.New("follow-up failed")
+			for _, typesFailure := range []bool{false, true} {
+				client := &fakeClient{}
+				if typesFailure {
+					client.changeTypesUpdateErr = cause
+				} else {
+					client.changeGetErr = cause
+				}
+				original := dto.Change{ID: "12", Title: "Existing"}
+				text := "# Existing\n\nTypes: feature\n\nSaved text"
+				msg := changeDetailTextUpdateCommand(client, ChangeDetailsState, original, field, text)().(changeSavedMsg)
+				require.NoError(t, msg.err)
+				require.ErrorIs(t, msg.reloadErr, cause)
+				m := NewModelWithClient(client)
+				m.state = ChangeDetailsState
+				m = applyMsg(m, msg)
+				switch field {
+				case detailEditDef:
+					assert.Equal(t, text, m.changeList.Detail.Def)
+				case detailEditSpec:
+					assert.Equal(t, text, m.changeList.Detail.Spec)
+				case detailEditPullRequest:
+					assert.Equal(t, text, m.changeList.Detail.PR)
+				}
+				assert.Contains(t, m.err, "saved")
+			}
+		})
+	}
+}
+
+func TestQuitDrainsProjectSelectionSaves(t *testing.T) {
+	for _, exit := range []string{"esc", "/quit", "ctrl+c"} {
+		for _, queued := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/queued=%t", exit, queued), func(t *testing.T) {
+				root := t.TempDir()
+				writeMCHFixture(t, root, "backend_url: http://test\nproject_id: 7\n")
+				cfg, err := loadAppConfig(root)
+				require.NoError(t, err)
+				m := newModelWithConfig(&fakeClient{}, cfg)
+				m.appConfig.ProjectID = 8
+				m, first := m.persistCurrentProject()
+				want := 8
+				if queued {
+					want = 9
+					m.appConfig.ProjectID = want
+					var cmd tea.Cmd
+					m, cmd = m.persistCurrentProject()
+					require.Nil(t, cmd)
+				}
+				var quit tea.Cmd
+				switch exit {
+				case "esc":
+					m, quit = sendKey(m, tea.KeyEsc)
+				case "ctrl+c":
+					m, quit = sendKey(m, tea.KeyCtrlC)
+				default:
+					m, quit = sendCommand(m, exit)
+				}
+				require.Nil(t, quit, "must await the save result before quitting")
+				assert.False(t, m.quitting)
+				assert.Contains(t, m.View(), "saving project selection before exit")
+				// Repeated exit and editor input cannot interrupt the drain.
+				m, quit = sendKey(m, tea.KeyEsc)
+				require.Nil(t, quit)
+				m, quit = sendKey(m, tea.KeyCtrlE)
+				require.Nil(t, quit)
+				next, cmd := m.Update(first())
+				m = next.(Model)
+				require.NotNil(t, cmd)
+				if queued {
+					assert.False(t, m.quitting)
+					next, cmd = m.Update(cmd())
+					m = next.(Model)
+				}
+				require.NotNil(t, cmd)
+				assert.IsType(t, tea.QuitMsg{}, cmd())
+				assert.True(t, m.quitting)
+				assert.Equal(t, DoneState, m.state)
+				assert.False(t, m.configSaveInFlight)
+				saved, err := loadAppConfig(root)
+				require.NoError(t, err)
+				assert.Equal(t, want, saved.ProjectID)
+			})
+		}
+	}
+}
+
+func TestQuitSaveFailureRemainsVisible(t *testing.T) {
+	for _, failFirst := range []bool{false, true} {
+		t.Run(fmt.Sprintf("first=%t", failFirst), func(t *testing.T) {
+			m := NewModelWithClient(&fakeClient{})
+			m.appConfig.ProjectID = 9
+			m.currentProject = dto.Option{ID: "9", Label: "Nine"}
+			m.configSaveInFlight = true
+			m.configSavePending = failFirst
+			m, quit := sendKey(m, tea.KeyEsc)
+			require.Nil(t, quit)
+			next, pending := m.Update(configSavedMsg{projectID: 8, err: errors.New("disk full")})
+			m = next.(Model)
+			assert.Contains(t, m.View(), "failed to save project_id: disk full")
+			assert.False(t, m.quitting)
+			if failFirst {
+				require.NotNil(t, pending, "a failed old save must still drain the latest selection")
+				next, pending = m.Update(pending())
+				m = next.(Model)
+			}
+			require.Nil(t, pending, "failure must cancel automatic exit")
+			assert.Equal(t, "9", m.currentProject.ID)
+			assert.Contains(t, m.View(), "disk full")
+			// The user can acknowledge the error with another exit request.
+			m, quit = sendKey(m, tea.KeyEsc)
+			require.NotNil(t, quit)
+			assert.IsType(t, tea.QuitMsg{}, quit())
+			assert.True(t, m.quitting)
+		})
+	}
 }

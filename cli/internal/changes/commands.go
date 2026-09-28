@@ -1,3 +1,4 @@
+// Package changes provides change list, detail, and editing presentation helpers.
 package changes
 
 // ListCommands returns slash commands for the changes list screen.
@@ -7,5 +8,5 @@ func ListCommands() []string {
 
 // DetailCommands returns slash commands for change details.
 func DetailCommands() []string {
-	return []string{"/reference", "/new-testcase", "/phase", "/epic", "/types", "/edit-spec", "/delete", "/return"}
+	return []string{"/new-testcase", "/phase", "/epic", "/types", "/edit-spec", "/delete", "/return"}
 }

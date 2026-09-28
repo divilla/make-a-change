@@ -176,11 +176,15 @@ class CoverageTest(unittest.TestCase):
         manifest=json.loads((coverage.CLI/'scripts/terminal-scenarios.json').read_text())
         self.assertNotIn('TestCLIProgramDefReviewUsesDefinitionPromptAndSharedArtifactSession',manifest['program']['tests'])
         self.assertNotIn('TestCLIProgramArtifactChatResumesSharedArtifactSession',manifest['program']['tests'])
+        self.assertEqual(manifest['pty']['tests'], ['TestShellNavigationEditorAndScrolling'])
+        self.assertEqual(set(manifest['program']['tests']), {
+            'TestCLIProgramStartupNavigationAndSelection', 'TestCLIProgramEditorSaveAndFailure',
+            'TestCLIProgramOrdinaryDocumentEditor', 'TestCLIStartupWithoutFlowResources'})
         available='\n'.join(n for suite in manifest.values() for n in suite['tests'])
         with patch.object(coverage,'command',return_value=subprocess.CompletedProcess([],0,available)):
             self.assertEqual(coverage.scenarios(),manifest)
             for name in ['', 'TestHTTPClient', 'TestCLIProgramMissing',
-                         'TestCLIProgramArtifactChatResumesSharedArtifactSession']:
+                         'TestCLIProgramArtifactChatResumesSharedArtifactSession', 'TestRewriteScreenUsesColoredBlackScrollableViewport']:
                 candidate=json.loads(json.dumps(manifest)); candidate['program']['tests']=[name] if name else []
                 with patch.object(Path,'read_text',return_value=json.dumps(candidate)), self.assertRaises(ValueError):
                     coverage.scenarios()
@@ -408,7 +412,7 @@ with patch.object(coverage, 'CLI', root), \\
 
     def test_campaign_requires_socat_and_both_suites_preserving_first_failure(self):
         manifest={'program':{'package':'./integration','tests':['TestCLIProgramFixture']},
-                  'pty':{'package':'./integration/terminal','tests':['TestRewriteScreenFixture']}}
+                  'pty':{'package':'./integration/terminal','tests':['TestShellFixture']}}
         meta={'packages':['cli/cmd/mch']}
         with patch.object(coverage,'scenarios',return_value=manifest), patch.object(coverage.shutil,'which',return_value=None):
             with self.assertRaisesRegex(ValueError,'socat is required'):
@@ -428,7 +432,7 @@ with patch.object(coverage, 'CLI', root), \\
 
     def test_campaign_arguments_never_import_unit_counters(self):
         manifest={'program':{'package':'./integration','tests':['TestCLIProgramFixture']},
-                  'pty':{'package':'./integration/terminal','tests':['TestRewriteScreenFixture']}}
+                  'pty':{'package':'./integration/terminal','tests':['TestShellFixture']}}
         seen=[]
         def run(directory,label,args,**kwargs):
             seen.append((label,args,kwargs))

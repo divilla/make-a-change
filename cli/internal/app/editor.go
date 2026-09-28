@@ -10,13 +10,17 @@ import (
 )
 
 func (m Model) openPromptEditor(source State) (tea.Model, tea.Cmd) {
+	return m.openTextEditor(source, m.promptValue())
+}
+
+func (m Model) openTextEditor(source State, original string) (tea.Model, tea.Cmd) {
 	file, err := os.CreateTemp("", "mch-project-*.md")
 	if err != nil {
 		m.err = fmt.Errorf("failed to create editor file: %w", err).Error()
 		return m, nil
 	}
 	path := file.Name()
-	if _, err := file.WriteString(m.input.Value()); err != nil {
+	if _, err := file.WriteString(original); err != nil {
 		_ = file.Close()
 		_ = os.Remove(path)
 		m.err = fmt.Errorf("failed to write editor file: %w", err).Error()
@@ -27,14 +31,10 @@ func (m Model) openPromptEditor(source State) (tea.Model, tea.Cmd) {
 		m.err = fmt.Errorf("failed to close editor file: %w", err).Error()
 		return m, nil
 	}
-	return m.openEditorPath(source, path, true)
+	return m.openEditorPath(source, path, true, original)
 }
 
-func (m Model) openPersistentEditor(source State, path string) (tea.Model, tea.Cmd) {
-	return m.openEditorPath(source, path, false)
-}
-
-func (m Model) openEditorPath(source State, path string, removeAfter bool) (tea.Model, tea.Cmd) {
+func (m Model) openEditorPath(source State, path string, removeAfter bool, original string) (tea.Model, tea.Cmd) {
 	m.status = "editor"
 	cmd := tea.ExecProcess(editorCommand(path), func(err error) tea.Msg {
 		content, readErr := os.ReadFile(path)
@@ -47,7 +47,7 @@ func (m Model) openEditorPath(source State, path string, removeAfter bool) (tea.
 		if readErr != nil {
 			return editorFinishedMsg{source: source, err: readErr}
 		}
-		return editorFinishedMsg{source: source, content: string(content)}
+		return editorFinishedMsg{source: source, original: original, content: string(content)}
 	})
 	return m, cmd
 }

@@ -267,7 +267,7 @@ def scenarios():
             raise ValueError('invalid or empty scenario selection')
         # Restrict to known program-boundary test families. Architecture, Flow,
         # adapters and harness unit tests cannot accidentally enter the campaign.
-        prefix = ('TestCLIProgram', 'TestCLIStartup') if group == 'program' else ('TestRewriteScreen',)
+        prefix = ('TestCLIProgram', 'TestCLIStartup') if group == 'program' else ('TestShell',)
         if any(name in ('TestCLIProgramDefReviewUsesDefinitionPromptAndSharedArtifactSession',
                          'TestCLIProgramArtifactChatResumesSharedArtifactSession') or not name.startswith(prefix) or not re.fullmatch(r'Test\w+', name) for name in names):
             raise ValueError('non-program scenario selection')

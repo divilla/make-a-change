@@ -49,7 +49,7 @@ coverage: ## Fresh independent unit statements with a strict >95% gate
 coverage-html: ## Unit coverage plus HTML, including valid below-target profiles
 	python3 -B scripts/coverage.py --html
 
-integration-test: ## Retained program, startup and legacy Flow checks (no coverage claim)
+integration-test: ## Complete-program and standalone startup checks (no coverage claim)
 	$(GO) test -count=1 -timeout=3m ./integration -skip '^TestCLIPackageBoundaries'
 
 terminal-test: ## Real PTY checks; missing socat fails visibly
