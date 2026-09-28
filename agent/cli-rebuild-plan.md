@@ -1,15 +1,12 @@
 # CLI rebuild plan
 
-Status: authorized execution. P0–P4 are merged on dev; P4's actual merge is
-`1904de958e2eeb0393b697f07faaa6d177c795a2`. P5/spec024 testcase
-management is implemented on `change/024-cli-testcase-management`, based on that
-merge, and awaits caller-owned native review and dev merge. Fresh P5 unit
-3129/3553 (88.0664%) and terminal 2657/3553 (74.7819%) campaigns are complete
-but below the strict final thresholds. Existing unrelated format/package-comment
-findings remain; all test scenarios, including the added program cases and real
-PTY child, pass. See the [checkpoint](../cli/agents/cli-rebuild-checkpoint.md)
-for exact evidence and continuation. P6–P10 and R1–R6 remain. Continue the
-authorized factory without stage or production promotion.
+Status: authorized execution. P0–P5 are merged on dev; P5/spec024 is
+`4d58701ca317ee6f73b5e5443f5112e6c691dd64`, followed by the factory
+settings pass at `4190a427734c14152b6e6882a183ed9f8256edd9`. P6/spec026
+document management is implemented on `change/026-cli-document-management` and
+awaits caller-owned review and dev merge. The [checkpoint](../cli/agents/cli-rebuild-checkpoint.md)
+records fresh P6 checks and numerical shortfalls. P7–P10 and R1–R6 remain.
+Continue the authorized factory without stage or production promotion.
 
 Reference: [backend refactor plan](backend-refactor-plan.md), especially its
 six-step specification → branch → implementation → verification/review → dev

@@ -673,3 +673,33 @@ are listed explicitly in `scripts/terminal-scenarios.json`; direct adapter,
 feature, architecture and harness tests supply no terminal coverage counters.
 All test collaborators are fake servers or owned local processes. No live
 backend, database, Flow resources or other feature API changed.
+
+## P6 document management (026)
+
+[Specification](../../agent/specs/026-cli-document-management.md). `documents`
+owns owner-scoped catalog/history/current/detail/insert state, draft validation,
+request cancellation and revision checks, committed insert IDs reported before read-only recovery,
+and bounded terminal presentation. The shell routes `/documents` from project,
+epic and change details, generic editor input, and return navigation. The HTTP
+adapter uses one exact POST per operation and rejects invalid full rows, wrong
+owners, malformed arrays, order violations and unexpected response fields.
+Configured types retain their exact values; history remains readable with an
+empty catalog. Raw body and backend HTML are separate values and only terminal
+presentation escapes controls. Ordinary UI inserts send `agent_edit=false`;
+the injected feature capability accepts explicit `true` for later workflow use.
+
+| Criterion | Named unit assertions | Complete-program / PTY evidence |
+| --- | --- | --- |
+| P6-01 exact transport and full data | `TestP601DocumentRoutesPayloadStatusAndOneRequest`, `TestP601FullRowsHistoryCurrentAndWideIDs`, `TestP601MalformedDocumentResponsesAndOwnerMismatch`, `TestP601DocumentStatusCausesAndCancellation`; retained `TestP406DocumentCurrentInsertAndSeparateTestCases` | `TestCLIProgramDocumentOwnersAndHistory`, `TestCLIProgramDocumentAppendAndRecovery`, `TestCLIProgramDocumentMalformedAndStaleScope` |
+| P6-02 owners, catalogs, history/details, viewport | `TestP602OwnerCatalogsAndEmptyReadAccess`, `TestP602HistorySelectionDetailsAndViewport`, `TestP602DocumentHeadersStayWithinViewportWidth`, `TestP602ProjectEpicChangeNavigationAndScope`, `TestP602StaleOwnerSelectionCannotAct`, `TestP602ProjectDetailsLoadedOnlyAfterSuccessfulRead`, `TestP602DocumentsRequireLoadedOwnerDetails`, `TestP602CatalogRetryRestoresDocumentInsertion`, `TestP602HistorySelectionVisibleWithCatalogError`, `TestP602SelectedVersionVisibleAfterDetailsAndRefresh` | `TestCLIProgramDocumentOwnersAndHistory`, `TestCLIProgramDocumentMalformedAndStaleScope`, `TestShellNavigationEditorAndScrolling` |
+| P6-03 feature ownership and editor form | `TestP603DocumentFeatureOwnsTransitionsAndForms`, `TestP603ProvenanceAndLiteralEditorBody`, `TestP603ShellRoutesDocumentMessagesWithoutMutationLogic`, `TestCLIPackageBoundariesFixtures` | `TestCLIProgramDocumentAppendAndRecovery` and the PTY append exercise ordinary provenance |
+| P6-04 commit/refresh, draft, stale/cancel | `TestP604CommittedInsertSurvivesFailedRefreshAndReadOnlyRetry`, `TestP604FailedInsertDraftAndBusyDeduplication`, `TestP604StaleOwnerRevisionAndCancellation`, `TestP604HistorySelectionAfterAppendAndReloadSafety`, `TestP604CommittedDetailsRefreshRequiresVisibleMatchingVersion`, `TestP604ShellCommittedDocumentRetryAndDraftPreservation` | `TestCLIProgramDocumentAppendAndRecovery`, `TestCLIProgramDocumentNavigationCancelsRequest`, `TestCLIProgramDocumentShutdownCancelsRequest` |
+| P6-05 preserved editors and future provenance | `TestP605ExistingChangeEditorsAndPartialSuccess`, `TestP605DocumentCapabilitySupportsAgentProvenanceWithoutRunningAgent`; retained P4/P5 editor, testcase and project/epic tests | Existing `TestCLIProgramOrdinaryDocumentEditor`, change/testcase programs and PTY scenario remain selected |
+| P6-06 complete-program and PTY inventory | `TestP606ScenarioManifestIncludesDocumentsAndPTY`, `CoverageTest.test_scenario_manifest_rejects_scripts_empty_and_unmatched` | Five exact `TestCLIProgramDocument*` scenarios and extended `TestShellNavigationEditorAndScrolling` are in the explicit manifest |
+
+The complete-program backend is a fake HTTP server. It checks owner-scoped
+history/current/details, configured type choice, empty history, append bytes/status,
+wrong-owner details, malformed list, failed insert followed by draft retry, two failed read-only refreshes,
+and cancellation of an in-flight read when changing owners or shutting down. The
+PTY child pages through long project history, redraws and appends a human
+version. Direct client/model assertions remain outside terminal counters.

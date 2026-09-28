@@ -2,6 +2,7 @@ package app
 
 import (
 	"cli/internal/changes"
+	"cli/internal/documents"
 	"cli/internal/dto"
 	"cli/internal/epics"
 	"cli/internal/help"
@@ -10,6 +11,7 @@ import (
 )
 
 var commandsByState = map[State][]string{
+	DocumentState:        documents.Commands(),
 	MainState:            {"/changes", "/epics", "/projects", "/select-project", "/config", "/help", "/quit"},
 	ChangesListState:     changes.ListCommands(),
 	ChangeDetailsState:   changes.DetailCommands(),

@@ -24,5 +24,6 @@ func (m Model) SelectDetail() (Model, dto.Project, bool) {
 		return m, dto.Project{}, false
 	}
 	m.Detail = m.Rows[m.Selected]
+	m.DetailLoaded = false
 	return m, m.Detail, true
 }

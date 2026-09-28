@@ -88,6 +88,12 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 	send("/projects\r", "ProjectsListScreen")
 	send("/new-project\r", "ProjectCreateScreen")
 	send("/editor\r", "ProjectDetailsScreen")
+	send("/documents\r", "DocumentScreen")
+	send("\x1b[6~", "#80")
+	send("\x1b[5~", "#90")
+	send("/new-document\r", "Document draft:")
+	send("PTY document\r", "saved document #91")
+	send("/return\r", "ProjectDetailsScreen")
 	assert.Contains(t, capture.after(0), "\x1b[2J", "editor restoration redraws screen")
 	send("/return\r", "ProjectsListScreen")
 	send("/return\r", "MainScreen")
@@ -141,6 +147,10 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 	epicName := "PTY Epic"
 	changeTitle := "PTY Change"
 	var testCases []map[string]any
+	docs := make([]map[string]any, 0, 20)
+	for id := 90; id >= 71; id-- {
+		docs = append(docs, map[string]any{"id": id, "ref_id": 7, "ref_table": "project", "doc_type": "notes", "body": fmt.Sprintf("historical body %d", id), "agent_edit": false, "current": id == 90, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z", "html": "<p>rendered</p>"})
+	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -149,7 +159,7 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 		var value any
 		switch r.URL.Path {
 		case "/api/v1/project/config":
-			value = map[string]any{"slug": "pty", "project_docs": []string{}, "epic_docs": []string{}, "change_docs": []string{"brief", "spec"}, "change_phases": []string{"backlog"}, "change_colors": []string{"12"}, "change_types": []string{}}
+			value = map[string]any{"slug": "pty", "project_docs": []string{"notes"}, "epic_docs": []string{}, "change_docs": []string{"brief", "spec"}, "change_phases": []string{"backlog"}, "change_colors": []string{"12"}, "change_types": []string{}}
 		case "/api/v1/project/create":
 			w.WriteHeader(201)
 			value = map[string]any{"id": 7}
@@ -187,7 +197,66 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 			value = terminalChange(body.ID, changeTitle)
 		case "/api/v1/doc/current":
-			value = []any{}
+			var request struct {
+				RefID    int    `json:"ref_id"`
+				RefTable string `json:"ref_table"`
+			}
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+			if request.RefTable == "project" {
+				current := []map[string]any{}
+				for _, d := range docs {
+					if d["current"] == true {
+						current = append(current, d)
+					}
+				}
+				value = current
+			} else {
+				value = []any{}
+			}
+		case "/api/v1/doc/list":
+			var request struct {
+				RefID    int    `json:"ref_id"`
+				RefTable string `json:"ref_table"`
+			}
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+			require.Equal(t, 7, request.RefID)
+			require.Equal(t, "project", request.RefTable)
+			value = docs
+		case "/api/v1/doc/details":
+			var request struct {
+				ID int `json:"id"`
+			}
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+			for _, d := range docs {
+				if d["id"] == request.ID {
+					value = d
+					break
+				}
+			}
+			if value == nil {
+				http.NotFound(w, r)
+				return
+			}
+		case "/api/v1/doc/insert":
+			var request struct {
+				RefID     int    `json:"ref_id"`
+				RefTable  string `json:"ref_table"`
+				DocType   string `json:"doc_type"`
+				Body      string `json:"body"`
+				AgentEdit bool   `json:"agent_edit"`
+			}
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+			require.Equal(t, 7, request.RefID)
+			require.Equal(t, "project", request.RefTable)
+			require.Equal(t, "notes", request.DocType)
+			require.Equal(t, "PTY document", request.Body)
+			require.False(t, request.AgentEdit)
+			for _, d := range docs {
+				d["current"] = false
+			}
+			docs = append([]map[string]any{{"id": 91, "ref_id": 7, "ref_table": "project", "doc_type": "notes", "body": request.Body, "agent_edit": false, "current": true, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z", "html": "<p>rendered</p>"}}, docs...)
+			w.WriteHeader(201)
+			value = map[string]any{"id": 91}
 		case "/api/v1/test-case/list":
 			if testCases == nil {
 				value = []any{}

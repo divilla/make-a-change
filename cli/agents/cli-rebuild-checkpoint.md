@@ -1,5 +1,224 @@
 # CLI rebuild checkpoint
 
+## P6 review fixes 03 (2026-09-28)
+
+The document screen now limits every rendered row to the terminal width before
+applying the viewport offset. Long catalogs, catalog errors and version headers
+cannot wrap behind the renderer's row count. The detail header puts version
+status and provenance first so they remain visible at narrow widths.
+`TestP602DocumentHeadersStayWithinViewportWidth` reproduced a 249-cell `Types:`
+row in a 24-column viewport before the fix, then passed after it.
+
+| Command on revision `d4491fa25d57c5966eade8b16447b47bc36b9421` plus review diff | Exit | Evidence |
+| --- | ---: | --- |
+| Targeted `go test ./internal/documents ./internal/app -count=1` | 0 | Document and shell tests pass; touched-file formatter reports no diff. |
+| `make -C cli check` | 2 | Vet, unit race, architecture and tooling pass. Existing format failures remain only in `cmd/mch/main.go` and `internal/app/clipboard.go`; package-comment lint remains in `internal/help/commands.go`, `internal/styles/styles.go` and `internal/ui/layout.go`. |
+| `make -C cli coverage` | 2 | Complete unit campaign **3583/4084 (87.7326%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete-program and startup tests pass. |
+| `make -C cli integration-coverage` | 2 | Complete 24-program plus one real PTY campaign **3082/4084 (75.4652%)**; strict >90% gate fails. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+Both coverage status files say `complete: true`; all required scenarios passed.
+The nonzero coverage exits are numerical gate failures. The 115 inputs in each
+campaign's provenance manifest share sorted path/hash digest
+`0e789db13bca6a93f52c599d81cf6f81372ad6c1f16052f7ae97c8cf988a1e24`.
+The toolchain is `go1.26.8-X:nodwarf5`; covered PTY child SHA256 is
+`eadd095f625e78ba1103ece65f3eec697e4e6eed411cc5cb7598359afc15781c`.
+This checkpoint and implementation log were updated after the campaigns;
+production and test inputs remain unchanged. Raw profiles, uncovered ranges,
+package totals, scenario results and command journals are under
+`cli/.coverage/{unit,integration}`.
+
+| Package | Unit | Terminal |
+| --- | ---: | ---: |
+| `cmd/mch` | 0/3 | 1/3 |
+| `internal/app` | 1693/2014 | 1439/2014 |
+| `internal/changes` | 732/869 | 666/869 |
+| `internal/documents` | 268/273 | 223/273 |
+| `internal/dto` | 0/0 | 0/0 |
+| `internal/epics` | 214/214 | 187/214 |
+| `internal/help` | 6/6 | 6/6 |
+| `internal/navigation` | 25/40 | 18/40 |
+| `internal/projects` | 217/227 | 196/227 |
+| `internal/styles` | 0/0 | 0/0 |
+| `internal/testcases` | 130/132 | 112/132 |
+| `internal/ui` | 8/8 | 8/8 |
+| `pkg/client` | 290/298 | 226/298 |
+| **Total** | **3583/4084** | **3082/4084** |
+
+There are 501 uncovered unit statements and 1002 uncovered terminal statements.
+The largest remaining gaps are `internal/app` (321 unit, 575 terminal) and
+`internal/changes` (137 unit, 203 terminal). No live backend or database was
+used. No commit or push was made.
+
+## P6 review fixes 02 (2026-09-28)
+
+Returning from version details and completing a history refresh now position the
+history viewport around the selected version using the actual terminal height.
+The shared document model owns this positioning for keyboard movement as well.
+`TestP602SelectedVersionVisibleAfterDetailsAndRefresh` selects a deep history
+row, scrolls its details, returns to history, refreshes after a new row arrives,
+and checks that the same selected ID remains visible.
+
+| Command on revision `71a46075310dc453e6c2af8c747aafd3944b955d` plus review diff | Exit | Evidence |
+| --- | ---: | --- |
+| Targeted `go test ./internal/documents ./internal/app -run 'TestP602SelectedVersionVisibleAfterDetailsAndRefresh\|TestP602HistorySelectionVisibleWithCatalogError\|TestP602HistorySelectionDetailsAndViewport' -count=1` | 0 | New regression and adjacent viewport tests pass. |
+| `make -C cli check` | 2 | Vet, unit race, architecture and tooling pass. Existing format failures: `cmd/mch/main.go`, `internal/app/clipboard.go`; package-comment lint: `internal/help/commands.go`, `internal/styles/styles.go`, `internal/ui/layout.go`. |
+| `make -C cli coverage` | 2 | Complete unit campaign **3581/4082 (87.7266%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete-program/startup suite passes. |
+| `make -C cli integration-coverage` | 2 | Complete 24-program plus real PTY campaign **3080/4082 (75.4532%)**; strict >90% gate fails. |
+| `python3 -B -m unittest discover -s scripts -p 'documentation_test.py' -v` (from `cli/`) | 0 | Three documentation checks pass. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+Both coverage profiles report `complete: true`; all required scenarios passed.
+During test refinement, an initial targeted run failed on an assertion that
+compared a detail line with a history line; the corrected final run passed. A
+`go test` attempted from the repository root also failed because the Go module
+is under `cli/`.
+The 115 input hashes in both provenance manifests share sorted path/hash digest
+`915de8f329a58707886c938aa44b0ec231e602a285ef43c2b5a429a5ad72ca72`
+(SHA256 over sorted `path\0hash\n` records). Toolchain:
+`go1.26.8-X:nodwarf5`; covered PTY child binary SHA256:
+`9f9ceb835e24da3e53b8f227faea3ddebf51afff5e8b3b158ad1a2b490365706`.
+Raw profiles, uncovered statements/functions, package totals and command
+journals are in `cli/.coverage/{unit,integration}`. Exact package counts:
+
+| Package | Unit | Terminal |
+| --- | ---: | ---: |
+| `cmd/mch` | 0/3 | 1/3 |
+| `internal/app` | 1693/2014 | 1439/2014 |
+| `internal/changes` | 732/869 | 666/869 |
+| `internal/documents` | 266/271 | 221/271 |
+| `internal/dto` | 0/0 | 0/0 |
+| `internal/epics` | 214/214 | 187/214 |
+| `internal/help` | 6/6 | 6/6 |
+| `internal/navigation` | 25/40 | 18/40 |
+| `internal/projects` | 217/227 | 196/227 |
+| `internal/styles` | 0/0 | 0/0 |
+| `internal/testcases` | 130/132 | 112/132 |
+| `internal/ui` | 8/8 | 8/8 |
+| `pkg/client` | 290/298 | 226/298 |
+| **Total** | **3581/4082** | **3080/4082** |
+
+Unit has 501 uncovered statements; terminal has 1002. Largest gaps remain
+in app (321 unit, 575 terminal) and changes (137 unit, 203 terminal). This
+review used no live backend or database. No commit or push was made.
+
+## P6 review fixes 01 (2026-09-28)
+
+Document entry now requires confirmed project or epic details. Project selection
+and failed detail reads clear that confirmation, and a successful detail read
+restores it. Document `/retry` reloads the owner's catalog as well as history
+and current rows, so insertion recovers after a transient catalog failure.
+History scrolling positions the selected row from the rendered header, including
+the catalog-error line. New unit and shell regressions cover each finding.
+
+| Command on revision `5925b8f18837fda3ec6f391ac5477a9284288122` plus review diff | Exit | Evidence |
+| --- | ---: | --- |
+| Targeted `go test ./internal/projects ./internal/documents ./internal/app` | 0 | Owner load, catalog retry and selection visibility tests pass. |
+| `make -C cli check` | 2 | Vet, unit race, architecture and tooling pass. Untouched format baseline: `cmd/mch/main.go`, `internal/app/clipboard.go`; package-comment lint: `internal/help/commands.go`, `internal/styles/styles.go`, `internal/ui/layout.go`. |
+| `make -C cli coverage` | 2 | Complete unit campaign **3569/4073 (87.6258%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete-program/startup suite passes. |
+| `make -C cli integration-coverage` | 2 | Complete 24-program plus real PTY campaign **3069/4073 (75.3499%)**; strict >90% gate fails. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+Both coverage profiles report `complete: true`; all required scenarios passed,
+and the nonzero coverage exits reflect numerical gates. The 115 source-file
+hashes in each provenance manifest share sorted path/hash digest
+`26d6172355bab2efa5683b6329f36c004d14ddeb16486b91ba3fc44cdbf16cbe`
+(SHA256 over sorted `path\0hash\n` records). The toolchain is
+`go1.26.8-X:nodwarf5`; the covered PTY child binary SHA256 is
+`5501d89d6901cdb677de416e5a8da1421f5169b70339b5d219592e9e22d9c324`.
+The checkpoint, contract ledger and implementation log were updated after the
+campaigns; production and test inputs remained unchanged.
+Raw profiles, uncovered statements/functions, package totals and command
+journals are in `cli/.coverage/{unit,integration}`. Exact package counts:
+
+| Package | Unit | Terminal |
+| --- | ---: | ---: |
+| `cmd/mch` | 0/3 | 1/3 |
+| `internal/app` | 1689/2013 | 1438/2013 |
+| `internal/changes` | 732/869 | 666/869 |
+| `internal/documents` | 258/263 | 213/263 |
+| `internal/dto` | 0/0 | 0/0 |
+| `internal/epics` | 214/214 | 187/214 |
+| `internal/help` | 6/6 | 6/6 |
+| `internal/navigation` | 25/40 | 18/40 |
+| `internal/projects` | 217/227 | 194/227 |
+| `internal/styles` | 0/0 | 0/0 |
+| `internal/testcases` | 130/132 | 112/132 |
+| `internal/ui` | 8/8 | 8/8 |
+| `pkg/client` | 290/298 | 226/298 |
+| **Total** | **3569/4073** | **3069/4073** |
+
+Unit has 504 uncovered statements; terminal has 1004. The largest gaps remain
+in app (324 unit, 575 terminal) and changes (137 unit, 203 terminal). This
+review did not use a live backend or database. No commit or push was made.
+
+## P6 implementation (2026-09-28)
+
+P6/spec026 is implemented on `change/026-cli-document-management` based on
+`3be9207cf2344b186248c8a096fdab14d32b04fe`; caller-owned review and
+publication remain. The shared document feature opens from project, epic and
+change details, loads that owner's configured types, browses current and
+historical versions, fetches scoped details, and appends exact editor bytes.
+An insert result reaches the UI with its committed ID before a separate
+history/current/details refresh. Failed refresh and `/retry` preserve that ID
+without replaying insertion. P4 change editors and P5 testcase scenarios pass.
+
+| Command on base revision plus P6 implementation | Exit | Evidence |
+| --- | ---: | --- |
+| Targeted `go test ./... -count=1` | 0 | All Go packages, including new client/model/app/program and PTY assertions, pass. |
+| `make -C cli check` | 2 | Vet, unit race, architecture and tooling pass. Untouched format baseline: `cmd/mch/main.go`, `internal/app/clipboard.go`. Sampled package-comment lint baseline: `cmd/mch/main.go`, `internal/styles/styles.go`, `internal/ui/layout.go`. No touched-file static failure remains. |
+| `make -C cli coverage` | 2 | Complete unit campaign **3534/4064 (86.9587%)**, strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete-program/startup tests pass. |
+| `make -C cli integration-coverage` | 2 | Complete 24-program plus real PTY campaign **3063/4064 (75.3691%)**, strict >90% gate fails. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+Both coverage profiles report `complete: true`; the coverage exits reflect
+numerical gates, with no failed or skipped required scenario. Unit and terminal
+profiles remain separate. Exact production package statement counts:
+
+| Package | Unit | Terminal |
+| --- | ---: | ---: |
+| `cmd/mch` | 0/3 | 1/3 |
+| `internal/app` | 1663/2013 | 1439/2013 |
+| `internal/changes` | 732/869 | 666/869 |
+| `internal/documents` | 255/260 | 210/260 |
+| `internal/dto` | 0/0 | 0/0 |
+| `internal/epics` | 214/214 | 187/214 |
+| `internal/help` | 6/6 | 6/6 |
+| `internal/navigation` | 25/40 | 18/40 |
+| `internal/projects` | 211/221 | 190/221 |
+| `internal/styles` | 0/0 | 0/0 |
+| `internal/testcases` | 130/132 | 112/132 |
+| `internal/ui` | 8/8 | 8/8 |
+| `pkg/client` | 290/298 | 226/298 |
+| **Total** | **3534/4064** | **3063/4064** |
+
+Unit has 530 uncovered statements; terminal has 1001. The largest remaining
+unit gaps are app (350 statements) and changes (137); terminal gaps are app
+(574), changes (203), client (72), and documents (50). Full uncovered
+statement ranges, function percentages, raw profiles, command journals and
+scenario results are preserved under `cli/.coverage/unit/` and
+`cli/.coverage/integration/`. The campaigns used Go
+`go1.26.8-X:nodwarf5`; both provenance manifests record base revision
+`3be9207cf2344b186248c8a096fdab14d32b04fe` and an identical sorted
+input-hash digest
+`c3de08fbac54edf2ed2bd7d791bb72dfd0a3a924496ce2d270e64451bf798e1c`.
+The covered child binary SHA256 is
+`390c3460b446f6401a2e5dc03365641f7078166caa4fe3d4cc2a1ef029a01b65`.
+The manifest includes five new document programs and the extended PTY child.
+Later checkpoint/ledger/plan edits only update documentation. No live backend,
+database, Flow resource, agent executable, stage or production environment was
+used. The final rebuild still needs the strict coverage gates and tracked
+static baselines repaired in owning passes.
+
+
 ## P5 review fixes 02 (2026-09-28)
 
 The testcase feature retains the committed operation and create ID through

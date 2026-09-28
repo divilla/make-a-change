@@ -169,7 +169,7 @@ func TestP406DocumentCurrentInsertAndSeparateTestCases(t *testing.T) {
 		switch r.URL.Path {
 		case "/api/v1/doc/current":
 			require.Equal(t, map[string]any{"ref_id": float64(12), "ref_table": "change"}, body)
-			_ = json.NewEncoder(w).Encode([]dto.Document{{ID: 91, RefID: 12, RefTable: "change", DocType: "brief", Body: "raw\tbytes\n", Current: true}})
+			_ = json.NewEncoder(w).Encode([]dto.Document{{ID: 91, RefID: 12, RefTable: "change", DocType: "brief", Body: "raw\tbytes\n", Current: true, CreatedAt: time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC), HTML: "<p>raw</p>"}})
 		case "/api/v1/doc/insert":
 			require.Equal(t, map[string]any{"ref_id": float64(12), "ref_table": "change", "doc_type": "brief", "body": "raw\tbytes\n", "agent_edit": false}, body)
 			w.WriteHeader(201)

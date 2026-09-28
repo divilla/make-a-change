@@ -8,5 +8,5 @@ func ListCommands() []string {
 
 // DetailCommands returns slash commands for project details.
 func DetailCommands() []string {
-	return []string{"/edit", "/delete", "/project-config", "/retry", "/help", "/find", "/return"}
+	return []string{"/edit", "/delete", "/documents", "/project-config", "/retry", "/help", "/find", "/return"}
 }

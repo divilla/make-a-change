@@ -20,7 +20,12 @@
       "TestCLIProgramTestCaseLifecycle",
       "TestCLIProgramTestCaseCommittedWriteAndStaleRecovery",
       "TestCLIProgramTestCaseShutdownCancelsRequest",
-      "TestCLIProgramTestCaseKeyboardCancelsBusyRequest"
+      "TestCLIProgramTestCaseKeyboardCancelsBusyRequest",
+      "TestCLIProgramDocumentOwnersAndHistory",
+      "TestCLIProgramDocumentAppendAndRecovery",
+      "TestCLIProgramDocumentMalformedAndStaleScope",
+      "TestCLIProgramDocumentNavigationCancelsRequest",
+      "TestCLIProgramDocumentShutdownCancelsRequest"
     ]
   },
   "pty": {

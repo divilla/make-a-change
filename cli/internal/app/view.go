@@ -2,6 +2,7 @@ package app
 
 import (
 	"cli/internal/changes"
+	"cli/internal/documents"
 	"cli/internal/epics"
 	"cli/internal/help"
 	"cli/internal/projects"
@@ -25,6 +26,8 @@ func (m Model) View() string {
 			lines[epicIndex] = changes.TableViewport(m.changeList, m.changeFilters(), width, height, phaseColorMap(m.optionCatalog.phases))
 		case ChangeDetailsState:
 			lines[epicIndex] = changes.DetailsViewport(m.changeList, width, height, phaseColorMap(m.optionCatalog.phases))
+		case DocumentState:
+			lines[epicIndex] = documents.View(m.document, width, height)
 		case EpicDetailsState:
 			lines[epicIndex] = epics.DetailsViewport(m.epicList, width, height)
 		default:
@@ -49,6 +52,13 @@ func (m Model) viewLines() ([]string, int) {
 		lines = append(lines, epics.HelpView())
 	}
 	if m.state == EpicsListState && !m.hasDropdown() {
+		lines = append(lines, "", "")
+		epicIndex = len(lines) - 1
+	}
+	if m.state == DocumentState {
+		if m.documentForm {
+			lines = append(lines, "Document draft: "+m.document.OwnerTable+" #"+fmt.Sprint(m.document.OwnerID)+" | type "+documents.SafeLine(m.document.DraftType)+" | agent_edit=false")
+		}
 		lines = append(lines, "", "")
 		epicIndex = len(lines) - 1
 	}
@@ -97,7 +107,7 @@ func (m Model) viewLines() ([]string, int) {
 		lines = append(lines, m.inputBand(width))
 	}
 	if m.err != "" {
-		lines = append(lines, styles.Default.Error.Render("Error: "+m.err))
+		lines = append(lines, styles.Default.Error.Render("Error: "+m.visibleDocumentText(m.err)))
 	}
 	if m.helpQuery != "" {
 		lines = append(lines, styles.Default.Success.Render("Highlight: "+m.helpQuery))
@@ -171,6 +181,11 @@ func (m Model) helpText() string {
 		return "<return> select  |  <esc> cancel"
 	}
 	switch m.state {
+	case DocumentState:
+		if m.documentForm {
+			return "<return> append selected type  |  <ctrl+e> editor  |  <esc> cancel draft"
+		}
+		return documents.Help(m.document)
 	case ChangesListState:
 		return "<ctrl+n> new change  |  <return> view  |  </> command"
 	case ChangeDetailsState:
@@ -265,7 +280,7 @@ func promptValueLines(value string) []string {
 func (m Model) footerText() string {
 	currentProject := "Current Project: " + m.currentProjectFooter()
 	if m.status != "" {
-		return fmt.Sprintf("%s  |  status %s  |  %s  |  %s", m.helpText(), m.status, currentProject, footerColorStrip())
+		return fmt.Sprintf("%s  |  status %s  |  %s  |  %s", m.helpText(), m.visibleDocumentText(m.status), currentProject, footerColorStrip())
 	}
 	return m.helpText() + "  |  " + currentProject + "  |  " + footerColorStrip()
 }
@@ -305,6 +320,7 @@ func (m Model) currentProjectFooter() string {
 
 func screenTitle(state State) string {
 	titles := map[State]string{
+		DocumentState:              documents.DetailTitle(),
 		MainState:                  "MainScreen - Title: Main",
 		ChangesListState:           changes.ListTitle(),
 		ChangeDetailsState:         changes.DetailTitle(),
@@ -356,4 +372,11 @@ func (m Model) changeTableRows() int {
 		extra = 2
 	}
 	return max(1, m.epicViewportHeight(lines)-extra)
+}
+
+func (m Model) visibleDocumentText(value string) string {
+	if m.state == DocumentState {
+		return documents.SafeLine(value)
+	}
+	return value
 }

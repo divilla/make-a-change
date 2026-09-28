@@ -15,8 +15,15 @@ type API interface {
 	InsertDocument(context.Context, dto.DocumentInput) (int, error)
 }
 
+// ScreenAPI adds history, details and configuration to ordinary document access.
+type ScreenAPI interface {
+	API
+	ListDocuments(context.Context, int, string) ([]dto.Document, error)
+	DocumentDetails(context.Context, int) (dto.Document, error)
+	GetProjectConfig(context.Context, int) (dto.ProjectConfig, error)
+}
+
 // Access binds ordinary change editors to the selected project's document catalog.
-// Full owner navigation and history are implemented in P6.
 type Access struct {
 	API   API
 	Types []string

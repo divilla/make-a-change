@@ -6,5 +6,5 @@ func ListCommands() []string { return []string{"/new-epic", "/retry", "/help", "
 
 // DetailCommands returns discoverable epic detail actions.
 func DetailCommands() []string {
-	return []string{"/edit", "/delete", "/retry", "/help", "/find", "/return"}
+	return []string{"/edit", "/delete", "/documents", "/retry", "/help", "/find", "/return"}
 }

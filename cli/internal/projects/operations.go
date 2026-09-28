@@ -60,6 +60,9 @@ func (m Model) Begin(ctx context.Context, api API, op Operation, id int, name st
 	m.Err = nil
 	m.Status = "loading project"
 	m.Loading = true
+	if op == Details || op == List {
+		m.DetailLoaded = false
+	}
 	if op == List {
 		m.Rows = nil
 		m.Selected = 0
@@ -167,16 +170,19 @@ func (m Model) Apply(r Result) (Model, bool) {
 		}
 	case Details:
 		m.Detail = r.Project
+		m.DetailLoaded = true
 		m.Status = "loaded project"
 	case Config:
 		m.Catalog = r.Config
 		m.Status = "loaded project configuration"
 	case Create, Edit:
 		m.Detail = r.Project
+		m.DetailLoaded = r.RefreshErr == nil
 		m.Draft = ""
 		m.Status = "saved project"
 	case Delete:
 		m.Detail = dto.Project{}
+		m.DetailLoaded = false
 		m.Rows = r.Rows
 		m.Selected = 0
 		m.Status = "deleted project"

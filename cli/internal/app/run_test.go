@@ -3005,6 +3005,7 @@ func TestChangeDetailsCommandsAreExact(t *testing.T) {
 		"/types",
 		"/edit-spec",
 		"/delete",
+		"/documents",
 		"/return",
 	}, commandsByState[ChangeDetailsState])
 }
@@ -3711,6 +3712,14 @@ func (f *fakeClient) UpdateChangeAfterChange(_ context.Context, _ int, _ *int) e
 
 func (f *fakeClient) CurrentDocuments(_ context.Context, id int, _ string) ([]dto.Document, error) {
 	return []dto.Document{{ID: 1, RefID: id, DocType: "brief", Body: f.gotChange.Brief}, {ID: 2, RefID: id, DocType: "spec", Body: f.gotChange.Spec}, {ID: 3, RefID: id, DocType: "pr", Body: f.gotChange.PR}}, nil
+}
+
+func (f *fakeClient) ListDocuments(_ context.Context, _ int, _ string) ([]dto.Document, error) {
+	return []dto.Document{}, f.err
+}
+
+func (f *fakeClient) DocumentDetails(_ context.Context, id int) (dto.Document, error) {
+	return dto.Document{ID: id, RefID: 12, RefTable: "change", DocType: "spec"}, f.err
 }
 
 func (f *fakeClient) InsertDocument(_ context.Context, in dto.DocumentInput) (int, error) {

@@ -76,6 +76,9 @@ func (c HTTPClient) projectRequest(ctx context.Context, path string, input any, 
 		return nil
 	}
 	decoder := json.NewDecoder(resp.Body)
+	if strings.HasPrefix(path, "/api/v1/doc/") {
+		decoder.DisallowUnknownFields()
+	}
 	if err := decoder.Decode(output); err != nil {
 		return wrap(&ContractError{err}, status)
 	}

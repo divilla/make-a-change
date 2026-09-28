@@ -8,7 +8,7 @@ func ListCommands() []string {
 
 // DetailCommands returns slash commands for change details.
 func DetailCommands() []string {
-	return []string{"/find", "/document", "/title", "/brief", "/pr-url", "/after-change", "/open", "/retry", "/help", "/new-testcase", "/phase", "/epic", "/types", "/edit-spec", "/delete", "/return"}
+	return []string{"/find", "/document", "/title", "/brief", "/pr-url", "/after-change", "/open", "/retry", "/help", "/new-testcase", "/phase", "/epic", "/types", "/edit-spec", "/delete", "/documents", "/return"}
 }
 
 // HelpView describes ordinary change operations and safe recovery.

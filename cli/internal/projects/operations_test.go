@@ -75,6 +75,28 @@ func TestP203ProjectActionsStatesAndAllDisplayedFields(t *testing.T) {
 	assert.Contains(t, TableView(Model{Loading: true}, 80), "loading")
 }
 
+func TestP602ProjectDetailsLoadedOnlyAfterSuccessfulRead(t *testing.T) {
+	failure := errors.New("project missing")
+	api := &projectAPI{readErr: failure}
+	m := Model{Rows: []dto.Project{{ID: 7, Name: "Listed"}}, Detail: dto.Project{ID: 7}, DetailLoaded: true}
+	m, _, ok := m.SelectDetail()
+	require.True(t, ok)
+	require.False(t, m.DetailLoaded)
+	m, cmd := m.Begin(context.Background(), api, Details, 7, "")
+	require.False(t, m.DetailLoaded)
+	m, ok = m.Apply(cmd().(Result))
+	require.True(t, ok)
+	require.ErrorIs(t, m.Err, failure)
+	require.Equal(t, 7, m.Detail.ID)
+	require.False(t, m.DetailLoaded)
+	api.readErr = nil
+	m, cmd = m.Begin(context.Background(), api, Details, 7, "")
+	m, ok = m.Apply(cmd().(Result))
+	require.True(t, ok)
+	require.True(t, m.DetailLoaded)
+	require.NoError(t, m.Err)
+}
+
 func TestP204MutationSuccessFailurePartialSuccessAndReadOnlyRetry(t *testing.T) {
 	failure := errors.New("unavailable")
 	for _, op := range []Operation{Create, Edit, Delete} {

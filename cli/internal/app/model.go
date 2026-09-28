@@ -146,7 +146,7 @@ type appClient interface {
 	projects.API
 	changes.API
 	epics.API
-	documents.API
+	documents.ScreenAPI
 	testcases.API
 }
 
@@ -185,6 +185,9 @@ type Model struct {
 	dropdown            dropdownModel
 	detailEditField     detailEditField
 	testCase            testcases.Model
+	document            documents.Model
+	documentReturn      State
+	documentForm        bool
 }
 
 // NewModel creates the default mch model using local config and HTTP backend access.

@@ -2,6 +2,7 @@ package app
 
 import (
 	"cli/internal/changes"
+	"cli/internal/documents"
 	"cli/internal/dto"
 	"cli/internal/epics"
 	"cli/internal/navigation"
@@ -99,6 +100,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.applyChangeResult(msg)
 	case testcases.Result:
 		return m.applyTestCaseResult(msg)
+	case documents.Result:
+		return m.applyDocumentResult(msg)
 	case epics.Result:
 		return m.applyEpicResult(msg)
 	case projects.Result:
@@ -180,6 +183,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.currentProject = dto.Option{ID: m.currentProject.ID, Label: strings.TrimSpace(msg.project.Name)}
 		return m, nil
 	case editorFinishedMsg:
+		if m.state == DocumentState && m.documentForm && msg.source == DocumentState {
+			if msg.err != nil {
+				m.err = msg.err.Error()
+				m.status = "editor failed; draft retained"
+				return m, tea.ClearScreen
+			}
+			m = m.setPromptValue(documents.SafeText(msg.content))
+			m.editorDraft = &msg.content
+			m.document.DraftBody = msg.content
+			m.status = "document draft ready; Enter saves"
+			return m, tea.ClearScreen
+		}
 		if m.state != msg.source {
 			return m, nil
 		}
@@ -238,6 +253,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.quitRequested {
+		return m, nil
+	}
+	if m.document.Busy && m.state == DocumentState {
+		if msg.Type == tea.KeyEsc || msg.Type == tea.KeyCtrlC {
+			return m.leaveDocuments()
+		}
 		return m, nil
 	}
 	if m.testCase.Busy {
@@ -317,6 +338,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleListNavigationKey(key string, msg tea.KeyMsg) (Model, tea.Cmd, bool) {
+	if next, cmd, ok := m.documentKey(key, msg); ok {
+		return next, cmd, true
+	}
 	if m.editorDraft != nil || m.input.Value() != "" {
 		return m, nil, false
 	}
@@ -460,6 +484,9 @@ func (m Model) submitPrompt() (tea.Model, tea.Cmd) {
 		return m.submitPromptValue(value)
 	}
 	trimmed := strings.TrimSpace(value)
+	if m.state == DocumentState && m.documentForm {
+		return m.submitPromptValue(value)
+	}
 	if (commandAllowed(m.state, "/save") || m.detailEditField != "") && !commandAllowed(m.state, trimmed) {
 		return m.submitPromptValue(value)
 	}
@@ -475,6 +502,9 @@ func (m Model) submitPrompt() (tea.Model, tea.Cmd) {
 
 // submitPromptValue submits data, including editor output, without command dispatch.
 func (m Model) submitPromptValue(value string) (tea.Model, tea.Cmd) {
+	if m.state == DocumentState && m.documentForm {
+		return m.beginDocumentInsert(value)
+	}
 	if m.detailEditField != "" && (m.state == ChangeDetailsState || m.state == ChangeUpdateState || m.state == ChangeCreateState) {
 		return m.saveChangeDetailTextValue(value)
 	}
@@ -562,6 +592,7 @@ func (m Model) handlePromptCancel() (tea.Model, tea.Cmd) {
 
 func (m Model) requestQuit() (tea.Model, tea.Cmd) {
 	m.testCase = m.testCase.Invalidate()
+	m.document = m.document.Invalidate()
 	m.changeList = m.changeList.Invalidate()
 	m.epicList = m.epicList.Invalidate()
 	if m.configSaveInFlight {
@@ -578,6 +609,15 @@ func (m Model) handleEsc() (tea.Model, tea.Cmd) {
 	switch m.state {
 	case MainState:
 		return m.requestQuit()
+	case DocumentState:
+		if m.documentForm {
+			m.documentForm = false
+			m.document.DraftBody = ""
+			m = m.setPromptValue("")
+			m.status = "document draft canceled"
+			return m, nil
+		}
+		return m.documentCommand("/return")
 	case ChangeUpdateState:
 		if m.detailEditField != "" {
 			m.detailEditField = ""
@@ -695,7 +735,12 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		return m, nil
 	}
 
+	if source == DocumentState {
+		return m.documentCommand(command)
+	}
 	switch command {
+	case "/documents":
+		return m.openDocuments(source)
 	case "/quit":
 		if source != MainState {
 			m.err = "/quit is only available from MainState"

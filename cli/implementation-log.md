@@ -37,3 +37,9 @@
 +554 -403 code - +845 -60 tests --- spec
 +53 -5 code - +88 -1 tests --- review fixes 01
 +106 -19 code - +99 -5 tests --- review fixes 02
+
+2026-28-09 16:49 026-cli-document-management
++1015 -65 code - +1290 -4 tests --- spec
++89 -21 code - +106 -1 tests --- review fixes 01
++77 -8 code - +38 -0 tests --- review fixes 02
++57 -2 code - +27 -0 tests --- review fixes 03
