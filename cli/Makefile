@@ -1,39 +1,73 @@
-PKG := "mch"
-PKG_LIST := $(shell go list ${PKG}/... | grep -v '/api-tests' | grep -v '/integration')
+SHELL := /bin/sh
+.SHELLFLAGS := -eu -c
+.DEFAULT_GOAL := help
+GO ?= go
+GOLANGCI_LINT ?= golangci-lint
+GOVULNCHECK ?= govulncheck
+GOLANGCI_LINT_VERSION := v2.13.1
+GOVULNCHECK_VERSION := v1.7.0
+GOLANGCI_LINT_CACHE ?= $(CURDIR)/.coverage/lint-cache
+export GO GOLANGCI_LINT GOVULNCHECK GOLANGCI_LINT_CACHE
+goversion ?= $(shell awk '$$1 == "go" { print $$2; exit }' go.mod)
 
-.DEFAULT_GOAL := check
-check: lint vet race integration-test terminal-test ## Check project
+.PHONY: help init format format-check lint vet test race check architecture coverage coverage-html integration-test terminal-test integration-coverage deps-audit tooling-test benchmark test_version
 
-init:
-	@go install golang.org/x/lint/golint@latest
-	@go install honnef.co/go/tools/cmd/staticcheck@latest
+help: ## Display CLI verification commands (default)
+	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "%-23s %s\n", $$1, $$2}' Makefile
 
-lint: ## Lint the files
-	@goimports -w .
-	@staticcheck ${PKG_LIST}
-	@golint -set_exit_status ${PKG_LIST}
+init: ## Install pinned formatter/linter and vulnerability scanner
+	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	$(GO) install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
 
-vet: ## Vet the files
-	@go vet ${PKG_LIST}
+format: ## Explicitly apply gofumpt/goimports to all Go source including tests
+	python3 -B scripts/verify.py format
 
-test: ## Run tests
-	@go test -short ${PKG_LIST}
+format-check: ## Check formatting without writing source
+	python3 -B scripts/verify.py format-check
 
-race: ## Run tests with data race detector
-	@go test -race ${PKG_LIST}
+lint: ## Read-only standard checks plus revive, including test source
+	python3 -B scripts/verify.py lint
 
-integration-test: ## Run CLI and default Flow program integration tests
-	@go test ./integration
+vet: ## Vet all source including integration tests
+	python3 -B scripts/verify.py vet
 
-terminal-test: ## Run CLI pseudo-terminal integration tests
-	@go test ./integration/terminal/...
+test: ## Run uncached short unit tests across the audited production inventory
+	python3 -B scripts/verify.py test
 
-benchmark: ## Run benchmarks
-	@go test -run="-" -benchmem -bench=".*" ${PKG_LIST}
+race: ## Run uncached unit tests with race detection
+	python3 -B scripts/verify.py race
 
-help: ## Display this help screen
-	@grep -h -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+check: ## Run all static, unit race, architecture and tooling checks, retaining failures
+	$(MAKE) -k format-check lint vet race architecture tooling-test
 
-goversion ?= "1.25"
-test_version: ## Run tests inside Docker with given version (defaults to 1.25 oldest supported). Example: make test_version goversion=1.25
-	@docker run --rm -it -v $(shell pwd):/project golang:$(goversion) /bin/sh -c "cd /project && make init check"
+architecture: ## Check actual module import boundaries separately from terminal coverage
+	$(GO) test -count=1 ./integration -run '^TestCLIPackageBoundaries$$'
+
+coverage: ## Fresh independent unit statements with a strict >95% gate
+	python3 -B scripts/coverage.py
+
+coverage-html: ## Unit coverage plus HTML, including valid below-target profiles
+	python3 -B scripts/coverage.py --html
+
+integration-test: ## Retained program, startup and legacy Flow checks (no coverage claim)
+	$(GO) test -count=1 -timeout=3m ./integration -skip '^TestCLIPackageBoundaries'
+
+terminal-test: ## Real PTY checks; missing socat fails visibly
+	$(GO) test -count=1 -timeout=2m -v ./integration/terminal
+
+integration-coverage: ## Independent complete-program and covered-child PTY campaign; strict >90%
+	python3 -B scripts/coverage.py --integration
+
+deps-audit: ## Scan dependencies and report all failures
+	python3 -B scripts/verify.py deps-audit
+
+tooling-test: ## Isolated tooling, coverage accounting and harness tests
+	python3 -B -m unittest discover -s scripts -p '*_test.py' -v
+	$(GO) test -count=1 ./integration -run '^TestCLIPackageBoundariesFixtures$$'
+	$(GO) test -count=1 ./integration/terminal -run '^TestHarness'
+
+benchmark: ## Run benchmarks without ordinary tests
+	python3 -B scripts/verify.py benchmark
+
+test_version: ## Docker checks using go.mod version; override with goversion=X
+	docker run --rm -v "$(CURDIR)/..:/project" -w /project/cli "golang:$(goversion)" sh -eu -c 'command -v python3 >/dev/null || { apt-get update && apt-get install -y --no-install-recommends python3; }; go version; make init check'

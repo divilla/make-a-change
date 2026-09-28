@@ -41,11 +41,14 @@ func TestCLIStartupRebuildsChangeTypeSlugsPrompt(t *testing.T) {
 	promptPath := filepath.Join(promptsDir, "change-types.md")
 	require.NoError(t, os.WriteFile(promptPath, []byte("stale\n"), 0o644))
 
-	binPath := filepath.Join(t.TempDir(), "mch")
-	build := exec.Command("go", "build", "-o", binPath, "./cmd/mch")
-	build.Dir = repositoryRoot(t) + string(os.PathSeparator) + "cli"
-	buildOutput, err := build.CombinedOutput()
-	require.NoError(t, err, string(buildOutput))
+	binPath := os.Getenv("MCH_COVER_BINARY")
+	if binPath == "" {
+		binPath = filepath.Join(t.TempDir(), "mch")
+		build := exec.Command("go", "build", "-o", binPath, "./cmd/mch")
+		build.Dir = repositoryRoot(t) + string(os.PathSeparator) + "cli"
+		buildOutput, err := build.CombinedOutput()
+		require.NoError(t, err, string(buildOutput))
+	}
 
 	outputPath := filepath.Join(t.TempDir(), "mch-output.log")
 	output, err := os.Create(outputPath)
@@ -53,7 +56,7 @@ func TestCLIStartupRebuildsChangeTypeSlugsPrompt(t *testing.T) {
 	defer output.Close()
 	cmd := exec.Command(binPath)
 	cmd.Dir = repo
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "GOCOVERDIR="+os.Getenv("MCH_COVER_DIR"))
 	stdin, err := cmd.StdinPipe()
 	require.NoError(t, err)
 	cmd.Stdout = output

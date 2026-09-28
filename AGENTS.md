@@ -2,6 +2,27 @@
 
 Follow these instructions when working on code in this repository.
 
+## Authorized CLI rebuild factory
+
+The user authorized execution of `agent/cli-rebuild-plan.md`, including sequential
+specification, implementation, review, and dev-merge passes. For CLI rebuild
+specifications, the approved user scope explicitly overrides generic skill
+defaults: use `docs/cli-architecture.md`, current backend HTTP contracts, and the
+CLI plan rather than missing `skeleton/` or unrelated PRD references. Write the
+change-code/change-fix-findings implementation log to
+`cli/implementation-log.md`, using the skill's block format; do not create a
+repository-root implementation log. This is an authorized exception, not an
+unresolved contract conflict requiring another user confirmation. The factory
+helpers own implementation/review commits and pushes; implementation children
+must not invoke another factory or perform Git publication themselves.
+
+Final CLI coverage targets are strictly >95% unit and >90% terminal integration
+production statements. Integration combines complete-program tests using injected
+I/O and fake collaborators with real PTY tests; HTTP-client-only tests do not
+count. Keep separate profiles and strict gates, but continue intermediate dev
+merges with passing tests and honestly reported numerical shortfalls. Record
+baseline issues and repair new regressions. Do not promote to stage or production.
+
 ## Development Commands
 
 Backend commands belong to `backend/Makefile`. From the repository root, use
@@ -146,3 +167,63 @@ The backend follows Screaming Architecture:
      `echo`, `validate`, or `pgx`.
   3. **Repository (`repo`)** imports `pgx` and contains only code that cannot
      work without `pgx`.
+
+## CLI commands and completion policy
+
+CLI commands belong to `cli/Makefile`; use `make -C cli <target>` from the root.
+Bare `make -C cli` shows help. `init` installs pinned tools. `format` explicitly
+writes source; `format-check`, `lint`, and `vet` include test source and are
+read-only. `test` and `race` run uncached unit tests over the audited production
+inventory; `benchmark` runs benchmarks only. `check` runs formatting, lint, vet,
+unit race, architecture, and isolated tooling checks, retaining failures while
+continuing the other checks. It does not run the terminal campaign.
+
+For CLI production changes and review fixes, run:
+
+```sh
+make -C cli check
+make -C cli coverage
+make -C cli deps-audit
+make -C cli integration-coverage
+```
+
+`coverage-html` adds HTML to the unit campaign, including valid below-target
+results. `integration-test` retains complete-program, standalone startup, and
+legacy Flow checks outside coverage; it excludes architecture checks.
+`terminal-test` runs the real PTY scenario plus its harness tests. Missing socat
+fails visibly. `integration-coverage` selects the explicit manifest at
+`cli/scripts/terminal-scenarios.json`: complete-program tests plus the covered
+startup child and real PTY child. Flow script tests, architecture, harness unit
+tests and direct adapter tests contribute no terminal counters. Use the campaign
+as evidence for its constituent tests without repeating the same PTY run.
+`architecture` and `tooling-test` are independently runnable. `test_version` uses
+the go.mod Go version in Docker without a TTY; override with `goversion=X`.
+
+Keep unit and terminal profiles independent. Both denominators contain all
+production statements under cmd/internal/pkg and any additional production
+packages discovered by the inventory audit, including packages without tests.
+Only integration and scripts are classified as harness/tooling trees. The final
+strict gates use integer counts: `100*covered > 95*total` for unit and
+`100*covered > 90*total` for terminal integration. Exactly 95% or 90% fails.
+A campaign must finish all required scenarios without skips, missing counters,
+assertion failures, crashes, timeouts or cleanup failures to establish coverage.
+A package with no tests is not a skipped unit scenario and still counts in the
+denominator. Preserve valid below-target profiles and raw failed-run diagnostics;
+never present incomplete runs as passing or combine unit hits with terminal hits.
+
+Artifacts live in ignored `cli/.coverage/unit` and `cli/.coverage/integration`;
+each campaign replaces its previous artifacts under an exclusive lock. Record
+revision/source hashes, tool versions, commands/exits, scenarios, child binary
+hash, raw profiles, exact package totals and uncovered statements/functions.
+Use `cli/agents/cli-rebuild-checkpoint.md` for current evidence and
+`cli/agents/cli-contracts.md` for the assertion reuse/API ledger. Implementation
+blocks belong to `cli/implementation-log.md`. For tooling-only passes, run
+`tooling-test` and affected real targets. Do not mutate production source merely
+to make an existing format/lint baseline green; track those issues by owning pass.
+
+The authorized intermediate-merge policy above applies: numerical shortfalls
+alone may continue to dev with passing tests and honest gates. Repair new
+regressions; expose pre-existing failures. Final rebuild completion still requires
+all contracts, tests, checks, >95% unit and >90% terminal coverage. Do not promote
+to stage or production. No live backend/database use is implied by CLI tests;
+P0 uses fake servers and owned local processes only.

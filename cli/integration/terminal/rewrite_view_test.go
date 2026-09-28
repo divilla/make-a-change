@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 
@@ -22,17 +21,14 @@ import (
 
 func TestRewriteScreenUsesColoredBlackScrollableViewport(t *testing.T) {
 	if _, err := exec.LookPath("socat"); err != nil {
-		t.Skip("socat is required for PTY coverage")
+		t.Fatal("socat is required for PTY execution")
 	}
 
 	cliRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	require.NoError(t, err)
 	testRoot := t.TempDir()
-	binPath := filepath.Join(testRoot, "mch")
-	build := exec.Command("go", "build", "-o", binPath, "./cmd/mch")
-	build.Dir = cliRoot
-	build.Env = append(os.Environ(), "GOCACHE=/tmp/project-manager-cli-go-build")
-	require.NoError(t, build.Run())
+	binPath, err := terminalBinary(cliRoot, testRoot, os.Getenv("MCH_COVER_BINARY"), os.Getenv("MCH_COVER_DIR"))
+	require.NoError(t, err)
 
 	backend := newTerminalBackend(t)
 	repoRoot := filepath.Join(testRoot, "repo")
@@ -49,8 +45,10 @@ func TestRewriteScreenUsesColoredBlackScrollableViewport(t *testing.T) {
 	codexReleasePath := filepath.Join(testRoot, "codex.release")
 	writeTerminalFile(t, filepath.Join(stubDir, "codex"), terminalCodexStub(), 0o755)
 
+	childPIDPath := filepath.Join(testRoot, "mch.pid")
+	childExitPath := filepath.Join(testRoot, "mch.exit")
 	wrapper := filepath.Join(testRoot, "run-mch")
-	writeTerminalFile(t, wrapper, "#!/bin/sh\nstty rows 20 cols 100\nexec \"$MCH_PTY_BINARY\"\n", 0o755)
+	writeTerminalFile(t, wrapper, "#!/bin/sh\nstty rows 20 cols 100\nprintf '%s\\n' \"$$\" > \"$MCH_PTY_CHILD_PID\"\n\"$MCH_PTY_BINARY\"\nresult=$?\nprintf '%s\\n' \"$result\" > \"$MCH_PTY_CHILD_EXIT\"\nexit \"$result\"\n", 0o755)
 	cmd := exec.Command("socat", "EXEC:"+wrapper+",pty,setsid,ctty,stderr", "STDIO")
 	cmd.Dir = repoRoot
 	cmd.Env = append(os.Environ(),
@@ -58,6 +56,9 @@ func TestRewriteScreenUsesColoredBlackScrollableViewport(t *testing.T) {
 		"EDITOR="+filepath.Join(stubDir, "editor"),
 		"PATH="+stubDir+":"+os.Getenv("PATH"),
 		"MCH_PTY_BINARY="+binPath,
+		"MCH_PTY_CHILD_PID="+childPIDPath,
+		"MCH_PTY_CHILD_EXIT="+childExitPath,
+		"GOCOVERDIR="+os.Getenv("MCH_COVER_DIR"),
 		"MCH_PTY_CODEX_PID="+codexPIDPath,
 		"MCH_PTY_CODEX_RELEASE="+codexReleasePath,
 	)
@@ -67,16 +68,24 @@ func TestRewriteScreenUsesColoredBlackScrollableViewport(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, cmd.Start())
 
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	finished := false
+	t.Cleanup(func() {
+		_ = stdin.Close()
+		if !finished {
+			// The agent stub belongs to this test and exits when released.
+			if err := os.WriteFile(codexReleasePath, []byte("release\n"), 0o600); err != nil {
+				t.Error(err)
+			}
+			if err := cleanupTerminal(cmd, done, childPIDPath, 3*time.Second); err != nil {
+				t.Error(err)
+			}
+		}
+	})
 	capture := newTerminalCapture(stdout)
 	_, err = stdin.Write([]byte("\x1b]11;rgb:0000/0000/0000\x1b\\\x1b[1;1R"))
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		_ = cmd.Process.Signal(syscall.SIGTERM)
-		_, _ = cmd.Process.Wait()
-		if content, readErr := os.ReadFile(codexPIDPath); readErr == nil {
-			_ = exec.Command("kill", strings.TrimSpace(string(content))).Run()
-		}
-	})
 
 	require.NoError(t, capture.waitFor("MainScreen", 5*time.Second))
 	_, err = io.WriteString(stdin, "/changes\r")
@@ -125,6 +134,27 @@ func TestRewriteScreenUsesColoredBlackScrollableViewport(t *testing.T) {
 	_, err = stdin.Write([]byte{'/'})
 	require.NoError(t, err)
 	require.NoError(t, capture.waitForAfter("Commands", beforeCommand, 5*time.Second))
+	// Close the dropdown, then navigate back to MainScreen and quit normally.
+	_, err = stdin.Write([]byte{'\x1b'})
+	require.NoError(t, err)
+	for _, screen := range []string{"ChangesListScreen", "MainScreen"} {
+		offset := capture.len()
+		_, err = io.WriteString(stdin, "/return\r")
+		require.NoError(t, err)
+		require.NoError(t, capture.waitForAfter(screen, offset, 5*time.Second))
+	}
+	_, err = io.WriteString(stdin, "/quit\r")
+	require.NoError(t, err)
+	require.NoError(t, waitTerminal(done, 5*time.Second))
+	finished = true
+	childExit, err := os.ReadFile(childExitPath)
+	require.NoError(t, err)
+	require.Equal(t, "0", strings.TrimSpace(string(childExit)), "application child exit")
+	if directory := os.Getenv("MCH_COVER_DIR"); directory != "" {
+		counters, err := filepath.Glob(filepath.Join(directory, "covcounters.*"))
+		require.NoError(t, err)
+		require.NotEmpty(t, counters, "orderly child exit must flush coverage")
+	}
 }
 
 func terminalCodexStub() string {

@@ -1,10 +1,14 @@
 # CLI rebuild plan
 
-Status: plan prepared, 2026-09-28. Implementation has not started. Full architecture
-scope, retained resources, integration-test composition, and final-result coverage
-policy are confirmed below. No planning clarification remains open.
-This task writes the plan only; it does not create implementation branches, run
-the factory, commit, push, merge, or promote.
+Status: authorized execution, 2026-09-28. P0 specification 019 is implemented
+and native review pass 04 of `06042fd` is clean; dev merge is the next action.
+The user authorized the sequential
+specification → implementation → review → dev-merge factory; helpers own Git
+publication. No stage or production promotion is authorized. See the
+[CLI checkpoint](../cli/agents/cli-rebuild-checkpoint.md) for actual command exits,
+independent statement counts, baseline failures and the next P1 action.
+Full architecture scope, retained resources and final-result coverage policy
+remain confirmed below.
 
 Reference: [backend refactor plan](backend-refactor-plan.md), especially its
 six-step specification → branch → implementation → verification/review → dev
@@ -290,11 +294,12 @@ Keep generated artifacts under `cli/` or temporary storage. Reports must show
 covered/total statements and percentages separately for each suite, package gaps,
 failed/skipped/blocked scenarios, and provenance. Rounding cannot change a gate.
 
-## Planned verification interface
+## Verification interface
 
-These are **target interfaces for P0**, not claims that all targets exist today.
-Use the backend Makefile's proven patterns where applicable, adapting them to
-terminal testing rather than copying its API runner.
+P0 implements these interfaces in `cli/Makefile`, using the backend tooling
+patterns for inventory and accounting while keeping the terminal campaign
+independent of backend/API lifecycle tooling. Current failures remain visible in
+the checkpoint.
 
 | Command from repository root | Intended contract |
 | --- | --- |
@@ -302,7 +307,7 @@ terminal testing rather than copying its API runner.
 | `make -C cli format` | Explicitly apply formatting; inspect the diff. |
 | `make -C cli check` | Read-only format check, lint, vet, uncached unit race tests, architecture and tooling checks; include integration source in static checks. |
 | `make -C cli coverage` | Fresh unit coverage across all CLI production packages, strict >95% gate. |
-| `make -C cli integration-test` | Complete-program behavioral suite with no unit-coverage claim. |
+| `make -C cli integration-test` | Retained complete-program, startup and legacy Flow checks, excluding architecture; no coverage claim. |
 | `make -C cli terminal-test` | Real PTY behavioral suite; missing prerequisites visibly prevent full validation. |
 | `make -C cli integration-coverage` | Complete program and PTY campaign with instrumented production code, independent strict >90% gate, and explicit scenario/PTY completeness checks. |
 | `make -C cli deps-audit` | Vulnerability scan of CLI dependencies with visible findings/failures. |
