@@ -2,11 +2,11 @@ package testcase
 
 import (
 	"context"
-	"os"
-	"testing"
-
 	"mch_api/internal/change"
 	"mch_api/internal/domain"
+	apperror "mch_api/internal/error"
+	"os"
+	"testing"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -75,7 +75,7 @@ func TestRepositoryHistoryProcedures(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, change.NewRepo(pool).Delete(ctx, domain.ChangeIDRequest{ID: changeID}))
 	_, err = repo.Create(ctx, domain.TestCaseCreateRequest{ChangeID: changeID, Scenario: "Missing parent"})
-	require.ErrorIs(t, err, ErrNotFound)
+	require.ErrorIs(t, err, apperror.ErrTestCaseNotFound)
 
 	type historyEntry struct {
 		ID       int

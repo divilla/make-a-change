@@ -2,12 +2,10 @@ package testcase
 
 import (
 	"context"
-	"errors"
-
 	"mch_api/internal/domain"
+	apperror "mch_api/internal/error"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -57,7 +55,7 @@ func (r *Repo) List(ctx context.Context, changeID int) ([]domain.TestCase, error
 func (r *Repo) Create(ctx context.Context, req domain.TestCaseCreateRequest) (domain.TestCaseMutationResponse, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return domain.TestCaseMutationResponse{}, err
+		return domain.TestCaseMutationResponse{}, apperror.Database(err, nil, nil)
 	}
 	defer tx.Rollback(ctx)
 
@@ -72,11 +70,7 @@ func createTestCase(ctx context.Context, tx pgx.Tx, changeID int, scenario strin
 	var id int
 	err := tx.QueryRow(ctx, "select public.fn_test_case_insert($1, $2)", changeID, scenario).Scan(&id)
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
-			return domain.TestCase{}, ErrNotFound
-		}
-		return domain.TestCase{}, err
+		return domain.TestCase{}, apperror.Database(err, nil, apperror.ErrTestCaseNotFound)
 	}
 	return getTestCase(ctx, tx, id)
 }
@@ -85,7 +79,7 @@ func createTestCase(ctx context.Context, tx pgx.Tx, changeID int, scenario strin
 func (r *Repo) Update(ctx context.Context, req domain.TestCaseUpdateRequest) (domain.TestCaseMutationResponse, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return domain.TestCaseMutationResponse{}, err
+		return domain.TestCaseMutationResponse{}, apperror.Database(err, nil, nil)
 	}
 	defer tx.Rollback(ctx)
 
@@ -105,7 +99,7 @@ func (r *Repo) Update(ctx context.Context, req domain.TestCaseUpdateRequest) (do
 
 func updateTestCaseScenario(ctx context.Context, tx pgx.Tx, id int, scenario string) (domain.TestCase, error) {
 	if _, err := tx.Exec(ctx, "call public.sp_test_case_update_scenario($1, $2)", id, scenario); err != nil {
-		return domain.TestCase{}, err
+		return domain.TestCase{}, apperror.Database(err, nil, nil)
 	}
 	return getTestCase(ctx, tx, id)
 }
@@ -114,7 +108,7 @@ func updateTestCaseScenario(ctx context.Context, tx pgx.Tx, id int, scenario str
 func (r *Repo) UpdateDone(ctx context.Context, req domain.TestCaseUpdateDoneRequest) (domain.TestCaseMutationResponse, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return domain.TestCaseMutationResponse{}, err
+		return domain.TestCaseMutationResponse{}, apperror.Database(err, nil, nil)
 	}
 	defer tx.Rollback(ctx)
 
@@ -127,7 +121,7 @@ func (r *Repo) UpdateDone(ctx context.Context, req domain.TestCaseUpdateDoneRequ
 
 func updateTestCaseDone(ctx context.Context, tx pgx.Tx, id int, done bool) (domain.TestCase, error) {
 	if _, err := tx.Exec(ctx, "call public.sp_test_case_update_done($1, $2)", id, done); err != nil {
-		return domain.TestCase{}, err
+		return domain.TestCase{}, apperror.Database(err, nil, nil)
 	}
 	return getTestCase(ctx, tx, id)
 }
@@ -136,7 +130,7 @@ func updateTestCaseDone(ctx context.Context, tx pgx.Tx, id int, done bool) (doma
 func (r *Repo) Delete(ctx context.Context, req domain.TestCaseIDRequest) (domain.TestCaseMutationResponse, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return domain.TestCaseMutationResponse{}, err
+		return domain.TestCaseMutationResponse{}, apperror.Database(err, nil, nil)
 	}
 	defer tx.Rollback(ctx)
 
@@ -145,7 +139,7 @@ func (r *Repo) Delete(ctx context.Context, req domain.TestCaseIDRequest) (domain
 		return domain.TestCaseMutationResponse{}, err
 	}
 	if _, err := tx.Exec(ctx, "call public.sp_test_case_delete($1)", req.ID); err != nil {
-		return domain.TestCaseMutationResponse{}, err
+		return domain.TestCaseMutationResponse{}, apperror.Database(err, nil, nil)
 	}
 	return finishMutation(ctx, tx, current.ChangeID, nil)
 }
@@ -160,7 +154,7 @@ func finishMutation(ctx context.Context, tx pgx.Tx, responseChangeID int, testCa
 		return domain.TestCaseMutationResponse{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return domain.TestCaseMutationResponse{}, err
+		return domain.TestCaseMutationResponse{}, apperror.Database(err, nil, nil)
 	}
 	return domain.TestCaseMutationResponse{TestCase: testCase, Change: change, TestCases: testCases}, nil
 }
@@ -171,11 +165,8 @@ func getTestCase(ctx context.Context, tx pgx.Tx, id int) (domain.TestCase, error
 		from public.test_case
 		where id = $1
 	`, id))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.TestCase{}, ErrNotFound
-	}
 	if err != nil {
-		return domain.TestCase{}, err
+		return domain.TestCase{}, apperror.Database(err, apperror.ErrTestCaseNotFound, nil)
 	}
 	return testCase, nil
 }
@@ -183,10 +174,10 @@ func getTestCase(ctx context.Context, tx pgx.Tx, id int) (domain.TestCase, error
 func ensureChangeExists(ctx context.Context, q queryer, id int) error {
 	var exists bool
 	if err := q.QueryRow(ctx, "select exists(select 1 from public.change where id = $1)", id).Scan(&exists); err != nil {
-		return err
+		return apperror.Database(err, nil, nil)
 	}
 	if !exists {
-		return ErrNotFound
+		return apperror.ErrTestCaseNotFound
 	}
 	return nil
 }
@@ -199,7 +190,7 @@ func listTestCases(ctx context.Context, q queryer, changeID int) ([]domain.TestC
 		order by id
 	`, changeID)
 	if err != nil {
-		return nil, err
+		return nil, apperror.Database(err, nil, nil)
 	}
 	defer rows.Close()
 	testCases := make([]domain.TestCase, 0)
@@ -210,7 +201,7 @@ func listTestCases(ctx context.Context, q queryer, changeID int) ([]domain.TestC
 		}
 		testCases = append(testCases, testCase)
 	}
-	return testCases, rows.Err()
+	return testCases, apperror.Database(rows.Err(), nil, nil)
 }
 
 func scanTestCase(row pgx.Row) (domain.TestCase, error) {
@@ -219,15 +210,15 @@ func scanTestCase(row pgx.Row) (domain.TestCase, error) {
 		&testCase.ID, &testCase.Version, &testCase.Scenario, &testCase.Done,
 		&testCase.ChangeID, &testCase.Created, &testCase.Modified,
 	)
-	return testCase, err
+	return testCase, apperror.Database(err, nil, nil)
 }
 
 func getChange(ctx context.Context, q queryer, id int) (domain.Change, error) {
 	change, err := scanChange(q.QueryRow(ctx, "select "+changeColumns+" from public.vw_change_details where id = $1", id))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.Change{}, ErrNotFound
+	if err != nil {
+		return domain.Change{}, apperror.Database(err, apperror.ErrTestCaseNotFound, nil)
 	}
-	return change, err
+	return change, nil
 }
 
 func scanChange(row pgx.Row) (domain.Change, error) {
@@ -244,7 +235,7 @@ func scanChange(row pgx.Row) (domain.Change, error) {
 		&change.TotalTC, &change.Completed, &change.Created, &change.Modified,
 	)
 	if err != nil {
-		return domain.Change{}, err
+		return domain.Change{}, apperror.Database(err, nil, nil)
 	}
 	if refUUID.Valid {
 		change.RefUUID = refUUID.String()

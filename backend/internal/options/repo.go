@@ -2,8 +2,8 @@ package options
 
 import (
 	"context"
-
 	"mch_api/internal/domain"
+	apperror "mch_api/internal/error"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -36,7 +36,7 @@ func (r *Repo) ChangePhases(ctx context.Context) ([]domain.ChangePhase, error) {
 		order by priority, slug
 	`)
 	if err != nil {
-		return nil, err
+		return nil, apperror.Database(err, nil, nil)
 	}
 	defer rows.Close()
 
@@ -44,18 +44,18 @@ func (r *Repo) ChangePhases(ctx context.Context) ([]domain.ChangePhase, error) {
 	for rows.Next() {
 		var item domain.ChangePhase
 		if err := rows.Scan(&item.Slug, &item.Priority, &item.Color); err != nil {
-			return nil, err
+			return nil, apperror.Database(err, nil, nil)
 		}
 		items = append(items, item)
 	}
-	return items, rows.Err()
+	return items, apperror.Database(rows.Err(), nil, nil)
 }
 
 // ChangeTypes executes ChangeTypes behavior.
 func (r *Repo) ChangeTypes(ctx context.Context) ([]domain.ChangeType, error) {
 	rows, err := r.pool.Query(ctx, "select slug, priority from public.change_type order by priority, slug")
 	if err != nil {
-		return nil, err
+		return nil, apperror.Database(err, nil, nil)
 	}
 	defer rows.Close()
 
@@ -63,9 +63,9 @@ func (r *Repo) ChangeTypes(ctx context.Context) ([]domain.ChangeType, error) {
 	for rows.Next() {
 		var item domain.ChangeType
 		if err := rows.Scan(&item.Slug, &item.Priority); err != nil {
-			return nil, err
+			return nil, apperror.Database(err, nil, nil)
 		}
 		items = append(items, item)
 	}
-	return items, rows.Err()
+	return items, apperror.Database(rows.Err(), nil, nil)
 }

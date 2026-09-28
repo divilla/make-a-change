@@ -1,10 +1,9 @@
 package testcase
 
 import (
-	"errors"
-	"net/http"
-
 	"mch_api/internal/domain"
+	apperror "mch_api/internal/error"
+	"net/http"
 
 	"github.com/labstack/echo/v5"
 )
@@ -36,11 +35,11 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 func (a *API) listTestCases(c *echo.Context) error {
 	var req domain.TestCaseListRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid test case list payload")
+		return apperror.InvalidPayload(err, "invalid test case list payload")
 	}
 	res, err := a.s.ListTestCases(c.Request().Context(), req)
 	if err != nil {
-		return testCaseError(err)
+		return apperror.HTTP(err)
 	}
 	return c.JSON(http.StatusOK, &res)
 }
@@ -48,11 +47,11 @@ func (a *API) listTestCases(c *echo.Context) error {
 func (a *API) createTestCase(c *echo.Context) error {
 	var req domain.TestCaseCreateRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid test case create payload")
+		return apperror.InvalidPayload(err, "invalid test case create payload")
 	}
 	res, err := a.s.CreateTestCase(c.Request().Context(), req)
 	if err != nil {
-		return testCaseError(err)
+		return apperror.HTTP(err)
 	}
 	return c.JSON(http.StatusCreated, &res)
 }
@@ -60,11 +59,11 @@ func (a *API) createTestCase(c *echo.Context) error {
 func (a *API) updateTestCase(c *echo.Context) error {
 	var req domain.TestCaseUpdateRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid test case update payload")
+		return apperror.InvalidPayload(err, "invalid test case update payload")
 	}
 	res, err := a.s.UpdateTestCase(c.Request().Context(), req)
 	if err != nil {
-		return testCaseError(err)
+		return apperror.HTTP(err)
 	}
 	return c.JSON(http.StatusOK, &res)
 }
@@ -72,11 +71,11 @@ func (a *API) updateTestCase(c *echo.Context) error {
 func (a *API) updateTestCaseDone(c *echo.Context) error {
 	var req domain.TestCaseUpdateDoneRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid test case done payload")
+		return apperror.InvalidPayload(err, "invalid test case done payload")
 	}
 	res, err := a.s.UpdateTestCaseDone(c.Request().Context(), req)
 	if err != nil {
-		return testCaseError(err)
+		return apperror.HTTP(err)
 	}
 	return c.JSON(http.StatusOK, &res)
 }
@@ -84,22 +83,11 @@ func (a *API) updateTestCaseDone(c *echo.Context) error {
 func (a *API) deleteTestCase(c *echo.Context) error {
 	var req domain.TestCaseIDRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid test case delete payload")
+		return apperror.InvalidPayload(err, "invalid test case delete payload")
 	}
 	res, err := a.s.DeleteTestCase(c.Request().Context(), req)
 	if err != nil {
-		return testCaseError(err)
+		return apperror.HTTP(err)
 	}
 	return c.JSON(http.StatusOK, &res)
-}
-
-func testCaseError(err error) error {
-	switch {
-	case errors.Is(err, ErrInvalidInput):
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid test case payload")
-	case errors.Is(err, ErrNotFound):
-		return echo.NewHTTPError(http.StatusNotFound, "test case not found")
-	default:
-		return err
-	}
 }

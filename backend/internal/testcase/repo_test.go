@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	apperror "mch_api/internal/error"
 	"testing"
 	"time"
 
@@ -41,10 +42,10 @@ func TestCreateTestCaseErrors(t *testing.T) {
 		want error
 	}{
 		{"function", []pgx.Row{errorRow{failure}}, failure},
-		{"missing parent", []pgx.Row{errorRow{missingParent}}, ErrNotFound},
-		{"wrapped missing parent", []pgx.Row{errorRow{fmt.Errorf("insert: %w", missingParent)}}, ErrNotFound},
+		{"missing parent", []pgx.Row{errorRow{missingParent}}, apperror.ErrTestCaseNotFound},
+		{"wrapped missing parent", []pgx.Row{errorRow{fmt.Errorf("insert: %w", missingParent)}}, apperror.ErrTestCaseNotFound},
 		{"other postgres error", []pgx.Row{errorRow{otherPostgresError}}, otherPostgresError},
-		{"missing testcase", []pgx.Row{schemaRow{17}, errorRow{pgx.ErrNoRows}}, ErrNotFound},
+		{"missing testcase", []pgx.Row{schemaRow{17}, errorRow{pgx.ErrNoRows}}, apperror.ErrTestCaseNotFound},
 		{"read", []pgx.Row{schemaRow{17}, errorRow{failure}}, failure},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -95,7 +96,7 @@ func TestUpdateTestCaseDoneErrors(t *testing.T) {
 		want error
 	}{
 		{"procedure", &doneTx{execErr: failure}, failure},
-		{"missing testcase", &doneTx{row: errorRow{pgx.ErrNoRows}}, ErrNotFound},
+		{"missing testcase", &doneTx{row: errorRow{pgx.ErrNoRows}}, apperror.ErrTestCaseNotFound},
 		{"read", &doneTx{row: errorRow{failure}}, failure},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -129,7 +130,7 @@ func TestUpdateTestCaseScenarioErrors(t *testing.T) {
 		want error
 	}{
 		{"procedure", &doneTx{execErr: failure}, failure},
-		{"missing testcase", &doneTx{row: errorRow{pgx.ErrNoRows}}, ErrNotFound},
+		{"missing testcase", &doneTx{row: errorRow{pgx.ErrNoRows}}, apperror.ErrTestCaseNotFound},
 		{"read", &doneTx{row: errorRow{failure}}, failure},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -162,4 +163,27 @@ func (tx *doneTx) QueryRow(_ context.Context, _ string, args ...any) pgx.Row {
 	}
 	tx.queryArgs = args
 	return tx.row
+}
+
+func TestRepositoryTranslationKeepsExternalCauses(t *testing.T) {
+	cause := &pgconn.PgError{Code: "23503", Message: "private constraint"}
+	tx := &createTx{rows: []pgx.Row{errorRow{fmt.Errorf("nested: %w", cause)}}}
+	_, err := createTestCase(context.Background(), tx, 42, "scenario")
+	require.ErrorIs(t, err, apperror.ErrTestCaseNotFound)
+	require.ErrorIs(t, err, cause)
+	var actual *pgconn.PgError
+	require.ErrorAs(t, apperror.HTTP(err), &actual)
+	require.Same(t, cause, actual)
+	tx = &createTx{rows: []pgx.Row{errorRow{pgx.ErrNoRows}}}
+	_, err = getTestCase(context.Background(), tx, 42)
+	require.ErrorIs(t, err, apperror.ErrTestCaseNotFound)
+	require.ErrorIs(t, err, pgx.ErrNoRows)
+}
+
+func TestMutationChangeMissingCause(t *testing.T) {
+	cause := apperror.Wrap(pgx.ErrNoRows, "nested scan")
+	tx := &createTx{rows: []pgx.Row{errorRow{cause}}}
+	_, err := getChange(context.Background(), tx, 7)
+	require.ErrorIs(t, err, apperror.ErrTestCaseNotFound)
+	require.ErrorIs(t, err, cause)
 }

@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	apperror "mch_api/internal/error"
 	"mch_api/pkg/config"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -97,4 +100,52 @@ func TestStartCancelRealServer(t *testing.T) {
 	require.NoError(t, run(ctx, func() (application, error) {
 		return start(ctx, &config.Config{Port: "0", CORSOrigins: "http://localhost"})
 	}))
+}
+
+func TestInstalledJSONErrorContracts(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		code int
+		body string
+	}{
+		{"invalid", apperror.ErrChangeInvalidInput, 400, `{"message":"invalid change payload"}`},
+		{"missing", apperror.ErrProjectNotFound, 404, `{"message":"project not found"}`},
+		{"conflict", apperror.ErrEpicHasChanges, 409, `{"message":"epic has changes and cannot be deleted"}`},
+		{"unknown", errors.New("private database details"), 500, `{"message":"Internal Server Error"}`},
+		{"wrapped", fmt.Errorf("outer: %w", apperror.ErrTestCaseNotFound), 404, `{"message":"test case not found"}`},
+		{"bind", apperror.InvalidPayload(errors.New("decode"), "invalid project get payload"), 400, `{"message":"invalid project get payload"}`},
+		{"echo internal", echo.NewHTTPError(500, "secret"), 500, `{"message":"Internal Server Error"}`},
+		{"wrapped echo", fmt.Errorf("outer: %w", echo.NewHTTPError(400, "safe message")), 400, `{"message":"safe message"}`},
+		{"router", echo.ErrNotFound, 404, `{"message":"Not Found"}`},
+		{"method", echo.ErrMethodNotAllowed, 405, `{"message":"Method Not Allowed"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := echo.New()
+			e.HTTPErrorHandler = jsonErrorHandler
+			e.GET("/test", func(_ *echo.Context) error { return tc.err })
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/test", nil))
+			require.Equal(t, tc.code, rec.Code)
+			require.Equal(t, tc.body+"\n", rec.Body.String())
+			require.Equal(t, "application/json", rec.Header().Get("Content-Type"))
+		})
+	}
+	// Exercise actual router-produced errors using the installed handler.
+	e := echo.New()
+	e.HTTPErrorHandler = jsonErrorHandler
+	e.GET("/test", func(_ *echo.Context) error { return nil })
+	for _, tc := range []struct {
+		method, path string
+		code         int
+		body         string
+	}{
+		{http.MethodGet, "/missing", 404, `{"message":"Not Found"}`},
+		{http.MethodPost, "/test", 405, `{"message":"Method Not Allowed"}`},
+	} {
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, nil))
+		require.Equal(t, tc.code, rec.Code)
+		require.Equal(t, tc.body+"\n", rec.Body.String())
+	}
 }

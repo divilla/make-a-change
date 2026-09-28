@@ -1,6 +1,7 @@
 package config
 
 import (
+	apperror "mch_api/internal/error"
 	"os"
 	"strings"
 
@@ -8,9 +9,7 @@ import (
 	"github.com/gookit/config/v2/yaml"
 )
 
-var (
-	cfg Config
-)
+var cfg Config
 
 type (
 	// Config defines Config values.
@@ -26,11 +25,11 @@ func New() {
 	config.WithOptions(config.ParseEnv)
 	config.AddDriver(yaml.Driver)
 	if err := config.LoadFiles("config/dev.yaml"); err != nil {
-		panic(err)
+		panic(apperror.Wrap(err, "configuration"))
 	}
 	//fmt.Printf("config data: \n %#v\n", config.Data()["db-ws"])
 	if err := config.Decode(&cfg); err != nil {
-		panic(err)
+		panic(apperror.Wrap(err, "configuration"))
 	}
 
 	applyDefaults()

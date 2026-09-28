@@ -1,6 +1,7 @@
 package options
 
 import (
+	apperror "mch_api/internal/error"
 	"net/http"
 
 	"github.com/labstack/echo/v5"
@@ -28,7 +29,7 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 func (a *API) changePhases(c *echo.Context) error {
 	res, err := a.s.ChangePhases(c.Request().Context())
 	if err != nil {
-		return err
+		return apperror.HTTP(err)
 	}
 	return c.JSON(http.StatusOK, &res)
 }
@@ -36,7 +37,7 @@ func (a *API) changePhases(c *echo.Context) error {
 func (a *API) changeTypes(c *echo.Context) error {
 	res, err := a.s.ChangeTypes(c.Request().Context())
 	if err != nil {
-		return err
+		return apperror.HTTP(err)
 	}
 	return c.JSON(http.StatusOK, &res)
 }

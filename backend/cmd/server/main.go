@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"mch_api/internal/change"
 	"mch_api/internal/epic"
+	apperror "mch_api/internal/error"
 	"mch_api/internal/health"
 	"mch_api/internal/options"
 	"mch_api/internal/project"
@@ -58,7 +58,7 @@ type application struct {
 func run(ctx context.Context, startup func() (application, error)) error {
 	app, err := startup()
 	if err != nil {
-		return err
+		return apperror.Wrap(err, "startup")
 	}
 	closeApp := sync.OnceFunc(app.close)
 	defer closeApp()
@@ -67,7 +67,7 @@ func run(ctx context.Context, startup func() (application, error)) error {
 	var serveErr error
 	select {
 	case serveErr = <-served:
-		return serveErr
+		return apperror.Wrap(serveErr, "serve")
 	case <-ctx.Done():
 	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -77,24 +77,21 @@ func run(ctx context.Context, startup func() (application, error)) error {
 	if shutdownErr != nil {
 		closeApp()
 		<-served
-		return shutdownErr
+		return apperror.Wrap(shutdownErr, "shutdown")
 	}
 	serveErr = <-served
-	if errors.Is(serveErr, http.ErrServerClosed) {
-		serveErr = nil
-	}
-	return serveErr
+	return apperror.ServerShutdown(serveErr)
 }
 
 func start(ctx context.Context, cfg *config.Config) (application, error) {
 	pool, err := pgxpool.New(ctx, cfg.ConnectionString)
 	if err != nil {
-		return application{}, err
+		return application{}, apperror.Wrap(err, "connect database")
 	}
 	listener, err := net.Listen("tcp", cfg.Addr())
 	if err != nil {
 		pool.Close()
-		return application{}, err
+		return application{}, apperror.Wrap(err, "listen")
 	}
 
 	defaultCORSConfig := middleware.CORSConfig{
@@ -112,7 +109,7 @@ func start(ctx context.Context, cfg *config.Config) (application, error) {
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogURI:    true,
 		LogStatus: true,
-		LogValuesFunc: func(c *echo.Context, v middleware.RequestLoggerValues) error {
+		LogValuesFunc: func(_ *echo.Context, v middleware.RequestLoggerValues) error {
 			logger.Info().
 				Str("URI", v.URI).
 				Int("status", v.Status).
@@ -126,7 +123,7 @@ func start(ctx context.Context, cfg *config.Config) (application, error) {
 	if err != nil {
 		_ = listener.Close()
 		pool.Close()
-		return application{}, err
+		return application{}, apperror.Wrap(err, "configure CORS")
 	}
 	e.Use(cors)
 
@@ -180,26 +177,13 @@ type errorResponse struct {
 }
 
 func jsonErrorHandler(c *echo.Context, err error) {
-	code := http.StatusInternalServerError
-	message := http.StatusText(code)
-
-	if status := echo.StatusCode(err); status != 0 {
-		code = status
-		message = http.StatusText(code)
-	}
-
-	if he, ok := err.(*echo.HTTPError); ok {
-		code = he.Code
-		if he.Message != "" {
-			message = he.Message
-		}
-	}
+	code, message := apperror.Interpret(err)
 
 	if code >= http.StatusInternalServerError {
 		log.Error().Err(err).Msg("request failed")
 	}
 
 	if writeErr := c.JSON(code, errorResponse{Message: message}); writeErr != nil {
-		log.Error().Err(writeErr).Msg("failed to write error response")
+		log.Error().Err(apperror.Wrap(writeErr, "write error response")).Msg("failed to write error response")
 	}
 }

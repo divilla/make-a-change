@@ -3,6 +3,7 @@ package change
 import (
 	"encoding/json"
 	"errors"
+	apperror "mch_api/internal/error"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -56,7 +57,7 @@ func TestChangeAPIContracts(t *testing.T) {
 			}{
 				{"success", tc.body, nil, tc.status},
 				{"invalid JSON", `{`, nil, http.StatusBadRequest},
-				{"repository error", tc.body, ErrNotFound, http.StatusNotFound},
+				{"repository error", tc.body, apperror.ErrChangeNotFound, http.StatusNotFound},
 			} {
 				t.Run(input.name, func(t *testing.T) {
 					repo := &fakeChangeRepository{err: input.err, availableTypes: []string{"fix"}}
@@ -92,12 +93,45 @@ func TestChangeError(t *testing.T) {
 		err    error
 		status int
 	}{
-		{ErrInvalidInput, http.StatusBadRequest},
-		{ErrInvalidReference, http.StatusBadRequest},
-		{ErrNotFound, http.StatusNotFound},
+		{apperror.ErrChangeInvalidInput, http.StatusBadRequest},
+		{apperror.ErrChangeInvalidReference, http.StatusBadRequest},
+		{apperror.ErrChangeNotFound, http.StatusNotFound},
 	} {
-		assert.Equal(t, tc.status, echo.StatusCode(changeError(tc.err)))
+		assert.Equal(t, tc.status, echo.StatusCode(apperror.HTTP(tc.err)))
 	}
 	err := errors.New("database unavailable")
-	assert.ErrorIs(t, changeError(err), err)
+	assert.ErrorIs(t, apperror.HTTP(err), err)
+}
+
+func TestChangeHandlerReturnCauses(t *testing.T) {
+	cause := errors.New("private database details")
+	for _, tc := range []struct {
+		err     error
+		code    int
+		message string
+	}{
+		{cause, 500, "Internal Server Error"},
+		{apperror.Wrap(apperror.ErrChangeNotFound, "nested"), 404, "change not found"},
+		{apperror.ErrChangeInvalidReference, 400, "invalid change reference"},
+	} {
+		e := echo.New()
+		a := NewAPI(e, NewService(&fakeChangeRepository{err: tc.err}, Renderer{}))
+		req := httptest.NewRequest("POST", "/", strings.NewReader(`{"id":7}`))
+		req.Header.Set("Content-Type", "application/json")
+		err := a.getChange(e.NewContext(req, httptest.NewRecorder()))
+		require.ErrorIs(t, err, tc.err)
+		var he *echo.HTTPError
+		require.ErrorAs(t, err, &he)
+		require.Equal(t, tc.code, he.Code)
+		require.Equal(t, tc.message, he.Message)
+	}
+	e := echo.New()
+	a := NewAPI(e, nil)
+	req := httptest.NewRequest("POST", "/", strings.NewReader("{"))
+	req.Header.Set("Content-Type", "application/json")
+	err := a.getChange(e.NewContext(req, httptest.NewRecorder()))
+	var he *echo.HTTPError
+	require.ErrorAs(t, err, &he)
+	require.NotNil(t, errors.Unwrap(he))
+	require.Equal(t, "invalid change get payload", he.Message)
 }

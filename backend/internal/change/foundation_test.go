@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"mch_api/internal/domain"
+	apperror "mch_api/internal/error"
 	"strings"
 	"testing"
 	"time"
@@ -44,7 +45,7 @@ func TestDetailsCurrentViewAndMissingRecords(t *testing.T) {
 		row pgx.Row
 		err error
 	}{
-		{row, nil}, {errorRow{pgx.ErrNoRows}, ErrNotFound}, {errorRow{failure}, failure},
+		{row, nil}, {errorRow{pgx.ErrNoRows}, apperror.ErrChangeNotFound}, {errorRow{failure}, failure},
 	} {
 		repo := &Repo{pool: foundationPool{t: t, row: tc.row}}
 		got, err := repo.Details(context.Background(), 7)
@@ -64,13 +65,13 @@ func TestTypeMutationErrorOnly(t *testing.T) {
 		tag         string
 		dbErr, want error
 	}{
-		{"UPDATE 1", nil, nil}, {"UPDATE 0", nil, ErrNotFound}, {"", failure, failure},
+		{"UPDATE 1", nil, nil}, {"UPDATE 0", nil, apperror.ErrChangeNotFound}, {"", failure, failure},
 	} {
 		repo := &Repo{pool: foundationPool{t: t, tag: pgconn.NewCommandTag(tc.tag), err: tc.dbErr}}
 		require.ErrorIs(t, repo.UpdateChangeTypes(context.Background(), domain.ChangeUpdateChangeTypesRequest{ID: 7, ChangeTypes: []string{"fix"}}), tc.want)
 	}
 	service := NewService(&fakeChangeRepository{}, Renderer{})
-	require.ErrorIs(t, service.UpdateChangeTypes(context.Background(), domain.ChangeUpdateChangeTypesRequest{}), ErrInvalidInput)
+	require.ErrorIs(t, service.UpdateChangeTypes(context.Background(), domain.ChangeUpdateChangeTypesRequest{}), apperror.ErrChangeInvalidInput)
 }
 
 type listFoundationPool struct {
@@ -100,4 +101,24 @@ func TestListScansTotalPointer(t *testing.T) {
 	got, err := repo.List(context.Background(), 1)
 	require.NoError(t, err)
 	require.Equal(t, int16(2), got[0].TotalTC)
+}
+
+func TestChangeMissingRowKeepsCause(t *testing.T) {
+	cause := apperror.Wrap(pgx.ErrNoRows, "read")
+	repo := &Repo{pool: foundationPool{t: t, row: errorRow{cause}}}
+	_, err := repo.Details(context.Background(), 7)
+	require.ErrorIs(t, err, apperror.ErrChangeNotFound)
+	require.ErrorIs(t, err, cause)
+	require.ErrorIs(t, apperror.HTTP(err), pgx.ErrNoRows)
+}
+
+func TestChangeHelperMissingCauses(t *testing.T) {
+	cause := apperror.Wrap(pgx.ErrNoRows, "nested scan")
+	tx := stateTx{row: errorRow{cause}}
+	_, err := getChange(context.Background(), tx, 7)
+	require.ErrorIs(t, err, apperror.ErrChangeNotFound)
+	require.ErrorIs(t, err, cause)
+	_, err = getState(context.Background(), tx, 7)
+	require.ErrorIs(t, err, apperror.ErrChangeNotFound)
+	require.ErrorIs(t, err, cause)
 }

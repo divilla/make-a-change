@@ -1,161 +1,158 @@
-# Verification foundation checkpoint — P0 reviewed; sequence resumed
+# Backend error contracts checkpoint — P1 reviewed
 
-2026-09-28; branch `change/005-backend-verification-foundation`; base `7dc3aa0`.
-Infrastructure and the bounded compilation repairs are implemented. **Backend
-readiness is not achieved: neither coverage target is met, and check fails.**
-The factory committed and published the specification (`b76be3d`) and bounded
-implementation (`a238ecf`), supervisor fixes (`e5659f6`), and review fix (`313702a`). No merge, P1 migration, dependency or schema change
-was performed; dev remains at `7dc3aa0`. Implementation writes stayed in backend;
-the specification is the authorized documentation exception. The next action is
-merge P0 to dev and execute P1, per the user's clarified final-result coverage policy; later contract passes remain queued. Native review completed successfully with no remaining
-actionable findings on `313702a`. The user authorizes intermediate merges with
-recorded coverage shortfalls; the measured gates remain visibly failed.
+2026-09-28; branch `change/006-backend-error-contracts`; base `origin/dev`
+`d3c2235`. Bounded P1 implementation passed native review at `8832dc5`. **Overall
+backend verification remains incomplete:** baseline check failures and both
+coverage shortfalls remain visible. The user's intermediate-pass policy permits
+continuing the sequence with these measurements; final coverage has not passed.
+The factory published implementation `6a75bde` and review fix `8832dc5`.
+Review pass 2 found no actionable regressions; required checks were rerun after
+the test-only review fix. The supervisor is publishing this checkpoint before
+the authorized squash merge to dev. No dependency/SQL change, P2 implementation
+or promotion occurred. Implementation writes stayed in backend; the specification
+is the authorized exception. Factory transcripts: `/tmp/mch-p1-code-spec.log`
+and `/tmp/mch-p1-review-loop.log`. No transient retry was needed.
 
-## Implementation and contract scope
+## Implemented contract
 
-- `change.Repo` now satisfies its interface. Details scans current-view fields
-  into flat `domain.ChangeDetails`; it no longer promises obsolete entity/version/
-  document/testcase placeholders. Completion is derived from real view counts.
-  List's total counter scan now uses a pointer. The exact limited contract
-  correction and future replacements are in [backend-contracts.md](backend-contracts.md).
-- Type updates are error-only in repository/service, with missing-row detection
-  and empty HTTP 204. Normalization/filtering remains; the obsolete lookup read
-  still blocks the real operation and belongs to P3, not a fabricated success.
-- Main handles SIGINT/SIGTERM, shuts down HTTP, waits for Serve, closes owned
-  resources and returns normally. Startup/serve/shutdown errors remain failures.
-  Config/environment/flag precedence, route registration and middleware remain.
-  No shutdown endpoint or coverage-specific server branch was added.
-- `coverage` uses fresh short uncached race tests and structural Go block metadata
-  across cmd/internal/pkg, exact integer gating (>95%), package/file/block audits
-  and stale artifact removal. `coverage-html` retains valid below-gate HTML.
-- `api-test` builds with atomic coverage, owns a private Unix-socket PostgreSQL
-  cluster and server, loads authoritative SQL, runs all APIHydra suites, stops and
-  waits before conversion, audits linked metadata, counts unlinked source as
-  zero, and enforces >=90%. Readiness/commands/cleanup have deadlines. Failures,
-  signals, startup errors, occupancy and failed conversion cannot establish a
-  passing result. Locked artifact directories prevent concurrent-run deletion.
-- Legacy Go suites remain, with a separate private runner and artifact directory.
-  The old runner that could reset an externally supplied test database was
-  replaced. Legacy output never supplies APIHydra coverage.
+- `internal/error` owns distinct module sentinels, cause-preserving diagnostic
+  wrapping, explicit no-row/foreign-key mappings, invalid payload creation,
+  HTTP interpretation/translation and normal shutdown classification. Unknown
+  database errors pass through without losing their identity. Nil/no-context
+  wrapping and repeated database/HTTP interpretation do not add wrappers.
+- Repositories retain their SQL, parameters, affected-row and conflict behavior.
+  Missing rows and testcase foreign-key errors retain both business semantics
+  and original pgx causes. Private project/epic pool interfaces enable boundary
+  tests; public constructors remain unchanged. Existing transactions remain for
+  P2–P4; none was added.
+- APIs retain operation-specific bind messages and the JSON `message` envelope;
+  central HTTP translation keeps wrapped causes and masks unexpected internals.
+  The installed server handler also interprets wrapped and router errors.
+  Response writing stays at the HTTP boundary. Health retains its separate
+  healthy/degraded JSON and 200/503 behavior.
+- Startup, config/db panic paths, health and Markdown use the central package.
+  Startup/shutdown cleanup and config precedence remain. Markdown still returns
+  an empty string on conversion failure and now logs the contextual cause.
+  Services retain independent validation and do not import Echo, pgx or validate.
+- The real APIHydra campaign asserts 400/404/409/500 plus both health aliases.
+  Current project/epic inserts precede their broken reloads: explicit 500 checks
+  establish disposable fixtures for the real project-delete 409. These requests
+  count as error-path reach, never successful create operations.
 
-## Final validation evidence
+## Final verification
 
-Commands were executed from repository root. Make uses exit 2 to report a failed
-recipe; inner coverage gates return 1.
+Commands were run from the repository root on the final production code.
+Make failure exits are 2; coverage gate recipes return 1.
 
 | Command actually run | Exit | Evidence |
 | --- | ---: | --- |
-| `make -C backend test` | 0 | Fresh short tests, including the new repair/lifecycle/health contracts |
-| `make -C backend tooling-test` | 0 | 44 Python tooling regressions plus 3 Go YAML-validator tests |
-| `make -C backend check` | 2 | Stops at pre-existing formatting differences |
-| `make -k -C backend check` | 2 | Exposes lint too; vet, race and tooling passed |
-| `make -C backend coverage` | 2 | Valid **576/1209 = 47.6427%**, strict >95% gate fails |
+| `make -C backend test` | 0 | All uncached short production-package unit tests pass |
+| `make -C backend check` | 2 | Stops on baseline formatting in three untouched files |
+| `GOLANGCI_LINT_CACHE=/tmp/mch-p1-lint-cache make -k -C backend check` | 2 | 17 baseline lint issues; vet, race, 44 Python tooling tests and Go validator tests pass |
+| `make -C backend coverage` | 2 | Valid **786/1209 = 65.0124%**, strict >95% gate fails |
 | `make -C backend deps-audit` | 0 | No vulnerabilities found |
-| `make -C backend api-test` | 2 | Real APIHydra and server exit 0; **168/1209 = 13.8958%**, >=90% gate fails |
+| `make -C backend api-test` | 2 | APIHydra and owned server exit 0; valid **298/1209 = 24.6485%**, >=90% gate fails |
 | `git diff --check` | 0 | No whitespace errors |
 
-Only modified Go files were formatted with pinned golangci-lint's gofumpt and
-goimports formatters. Broad pre-existing formatting changes were deliberately
-left outside this pass. The final expanded check reports 20 existing lint issues:
-6 errcheck, 11 revive, 3 unused. They include unchecked legacy HTTP body closes
-and transaction rollbacks; missing comments/error naming; the existing request
-logger's unused context argument; unused change helpers. New test lint findings
-were fixed before final checks. Existing schema-mock tests pass but do not prove
-old SQL matches the database (see the ledger).
+Modified Go files were formatted with pinned gofumpt/goimports. Baseline format
+failures remain in `internal/options/service.go`, `internal/testcase/schema_test.go`
+and `api-tests/change/change_test.go`. Baseline lint reports 6 errcheck issues
+(legacy HTTP body closes and existing transaction rollbacks), 8 revive issues
+(legacy client comments and package comments), and 3 unused change helpers.
+No new lint findings remain. An earlier expanded check also reported sandbox
+cache-write warnings; the final command uses a writable temporary lint cache.
 
-Latest command logs are `backend/.coverage/verification/review-01-*.log`; unit reports under
-`.coverage/unit/`; API reports/counters under `.coverage/api/`. These ignored
-artifacts are fresh working-tree measurements, not claimed as clean-base results.
-The checked-in summary preserves the counts when local artifacts are absent.
-A repeat initially rejected port 19080 during address reuse; no foreign process
-was stopped. The occupancy probe now permits TIME_WAIT reuse like Go's listener,
-with a regression proving recently closed owned sockets can be reused while an
-occupied non-HTTP listener survives. The final full API run completed successfully
-before its expected coverage failure.
+The first API attempt failed with APIHydra exit 101: curl retries concatenated
+500 response bodies and replayed inserts. It established no valid coverage.
+The complete suite now uses `retries: -1` for its error file, verified against
+the installed APIHydra revision: negative values override inherited defaults
+and omit curl's retry argument. Exact expected status/body assertions remain.
+The final campaign passes all 13 requests and owns/cleans its disposable cluster
+and server. No unit or legacy counters enter the API result.
+
+Current ignored logs: `.coverage/verification/p1-*.log`; fresh profiles, block
+inventories, source hashes and package reports: `.coverage/unit/` and
+`.coverage/api/`. Documentation/log updates after measurement do not change
+production statements. No Docker check, benchmark, legacy HTTP campaign or
+full business workflow validation is claimed.
+
+## Review fix 01 — Echo ownership audit
+
+The P2 review finding was valid: the AST audit resolved the unaliased Echo v5
+import as `v5`, allowing `echo.NewHTTPError` and `echo.StatusCode` through.
+The audit now maps the supported import to its declared name, `echo`, while
+honoring explicit aliases. Source fixtures run through the same audit helper:
+`TestErrorOwnershipEchoCalls` rejects both calls with default and aliased imports;
+`TestErrorOwnershipAllowsEchoSetupAndCentralErrors` permits ordinary Echo setup
+and central error handling. Both default-import negative fixtures failed before
+the fix and pass afterward. No production behavior or public contract changed.
+
+Final review-fix commands and exits:
+
+- From `backend/`, `golangci-lint fmt --no-config --enable gofumpt --enable goimports --diff internal/error/ownership_test.go` and `go test -short -count=1 ./internal/error`: 0.
+- `make -C backend check`: 2, the same three baseline formatting failures.
+- `GOLANGCI_LINT_CACHE=/tmp/mch-p1-review-01-lint-cache make -k -C backend check`: 2, the same 17 baseline lint issues; vet, race, 44 Python tooling tests and Go validator tests pass.
+- `make -C backend coverage`: 2; fresh valid 786/1209 (65.0124%), below >95%.
+- `make -C backend deps-audit`: 0, no vulnerabilities found.
+- `make -C backend api-test`: 2; APIHydra and owned server pass, fresh valid 298/1209 (24.6485%), below >=90%.
+- `git diff --check`: 0.
+
+Logs are under `.coverage/verification/p1-review-01-*.log`. Fresh profiles are
+under `.coverage/unit/` and `.coverage/api/`; the package counts below and
+deferred scenarios remain unchanged. Overall verification remains incomplete
+because of the recorded baseline debt and coverage shortfalls. The finding is
+fixed; the caller retains ownership of commits and pushes.
 
 ## Package statement gaps
 
 | Production package | Unit covered/total | APIHydra covered/total |
 | --- | ---: | ---: |
-| cmd/server | 71/101 | 75/101 |
-| internal/change | 336/562 | 19/562 |
+| cmd/server | 73/91 | 77/91 |
+| internal/change | 332/555 | 33/555 |
 | internal/domain | 0/0 (no executable statements) | 0/0 |
-| internal/epic | 26/142 | 9/142 |
-| internal/error | 0/1 | 0/1 (unlinked structural zero) |
-| internal/health | 20/21 | 16/21 |
+| internal/epic | 75/137 | 33/137 |
+| internal/error | 36/36 | 28/36 |
+| internal/health | 21/21 | 16/21 |
 | internal/options | 6/38 | 6/38 |
-| internal/project | 24/104 | 9/104 |
-| internal/testcase | 77/197 | 9/197 |
-| pkg/config | 8/30 | 21/30 |
-| pkg/db | 0/4 | 0/4 (unlinked structural zero) |
-| pkg/markdown | 8/9 | 4/9 |
-| **Aggregate** | **576/1209** | **168/1209** |
+| internal/project | 81/99 | 58/99 |
+| internal/testcase | 118/188 | 22/188 |
+| pkg/config | 30/30 | 21/30 |
+| pkg/db | 4/4 | 0/4 (unlinked structural zero) |
+| pkg/markdown | 10/10 | 4/10 |
+| **Aggregate** | **786/1209** | **298/1209** |
 
-Every package with executable statements still has unit and integration gaps.
-API operation coverage is separately 2/33, not a substitute for these statement
-counts. No profiles from unit tests or the legacy HTTP harness were merged.
+Unit gaps remain in startup/main/write-error paths, repository success and
+transaction branches, options and deferred change/testcase behavior. Every
+executable package has integration gaps; failure-only config/connector/Markdown
+branches and broken legacy SQL cannot be credited as covered. Successful
+operation coverage remains **2/33** (health); **9/33** registered pairs were
+reached, seven only for error contracts. An unknown router path is additional
+HTTP-error evidence, excluded from the registered-route denominator.
 
 ## Acceptance-to-test mapping
 
-| Criterion | Named tests and evidence |
+| Criterion | Named unit tests and integration evidence |
 | --- | --- |
-| P0-01 current compilation, bound/scanned values, errors, missing records, HTTP contracts | `TestDetailsCurrentViewAndMissingRecords`, `TestTypeMutationErrorOnly`, `TestListScansTotalPointer`, `TestServiceReturnsCurrentChangeDetails`, existing service normalization/error cases, `TestChangeAPIContracts`, compile-time Repository assertion |
-| P0-02 cancellation, startup/serve/shutdown failure, cleanup/order | `TestLifecycle` (cancel/startup/serve/shutdown), `TestStartFailures`, `TestStartCancelRealServer`, `TestHTTPServerPreservesReadTimeout`; actual API server counters after SIGTERM and exit 0 |
-| P0-03 strict boundaries, denominator, malformed/missing/stale/failed unit profiles, HTML | `CoverageTest.test_exact_boundaries_not_rounded`, `test_denominator_missing_unlinked_and_partial_packages`, `test_malformed_and_mismatched_profiles`, `test_source_change_rejected`, `test_changed_production_file_set_rejected`, `test_fresh_run_removes_stale_data_and_locks_concurrent_runs`, `test_failed_tests_delete_partial_profile_and_no_report`, `test_html_generated_for_valid_below_threshold`, `test_inventory_uses_all_go_packages_and_structural_metadata` |
-| P0-04 isolated lifecycle, prerequisite/environment/SQL/command errors, ownership, signals, bounded waits | `APICoverageTest.test_missing_prerequisite_prevents_setup`, `test_suite_exit_codes_preserved_and_owned_resources_stop` (101/102/103/7), `test_execute_preserves_actual_external_exit_codes`, `test_success_stops_before_conversion_and_uses_private_cluster`, `test_sql_startup_and_conversion_failures_remain_visible`, `test_occupied_non_http_service_survives`, `test_recently_closed_owned_listener_can_be_reused`, `test_readiness_timeout_cleans_up_without_running_suite`, `test_timeout_kills_owned_child_and_shutdown_is_bounded`, `test_interrupt_cleans_owned_command_group`, `test_environment_ignores_external_pg_settings_and_uses_private_cache`; real PostgreSQL/APIHydra smoke |
-| P0-05 >=90 boundary, conversion, metadata/counters, linked/unlinked audit, failure preservation, separation | `test_exact_boundaries_not_rounded`, `test_linked_package_metadata_cannot_be_silently_zeroed`, `test_denominator_missing_unlinked_and_partial_packages`, `test_server_crash_and_missing_counters_rejected`, `test_unsuccessful_server_exit_cannot_supply_coverage`, `test_valid_below_threshold_result_is_failure`, `test_failed_campaign_removes_partial_or_stale_success_reports`, `test_legacy_output_never_enters_api_profile`, SQL/conversion and stale-directory tests above; real covdata output |
-| P0-06 registered aliases, stable/exact response, full route denominator | `TestHealthAliasExactContracts`; both health YAML steps; `ContractsTest.test_all_registered_routes_remain_in_ledger_denominator`, `test_health_suite_has_explicit_contracts_for_both_aliases`; ledger and coverage report |
-| P0-07 help/versions/check wiring/failure visibility/checkpoint | `MakefileTest.test_help_is_phony_and_does_not_resolve_packages_or_run_tools`, `test_install_pins_both_tools_without_editing_module`, `test_every_check_propagates_tool_failure`, `test_coverage_targets_delegate_to_strict_runner`, `test_api_target_runs_instrumented_apih_driver`, `test_legacy_runner_uses_private_lifecycle_and_separate_output`; command table above |
+| P1-01 definitions, nil, idempotence, direct/wrapped/unknown and nested causes | `TestWrapAndShutdownCauses`, `TestDatabaseMappingsAndCauses`, `TestHTTPContractsAndCauses`, `TestInvalidPayload`; all exported error functions covered, 36/36 statements |
+| P1-02 database no-row/FK/query/scan/iteration/affected-row/conflict contracts | `TestProjectRepositoryMissingAndConflictContracts`, `TestEpicRepositoryMissingCauses`, `TestChangeMissingRowKeepsCause`, `TestChangeHelperMissingCauses`, `TestRepositoryTranslationKeepsExternalCauses`, `TestMutationChangeMissingCause`, `TestCreateTestCaseErrors`, `TestDeleteTestCasesForChange`, `TestTypeMutationErrorOnly`, retained schema/parameter tests |
+| P1-03 exact HTTP status/body/envelope and original cause, handler-return and installed handler | `TestProjectHandlerErrorContracts`, `TestEpicHandlerErrorContracts`, `TestTestCaseHandlerErrorContracts`, `TestChangeHandlerReturnCauses`, `TestChangeAPIContracts`, `TestInstalledJSONErrorContracts`, `TestHTTPContractsAndCauses` |
+| P1-04 startup/connector/config/Markdown/health ownership and service validation | `TestLifecycle`, `TestStartFailures`, `TestStartCancelRealServer`, `TestHTTPServerPreservesReadTimeout`, `TestConfigurationPanicCausesAndPrecedence`, `TestPoolCreationAndPanicCause`, `TestPingPreservesCancellation`, `TestMarkdownFailureKeepsEmptyOutputAndLogsCause`, `TestHealthAliasExactContracts`, module `TestServiceRejectsInvalid*Input` tests, `TestBackendErrorOwnership` AST audit |
+| P1-05 genuine error integrations and full route denominator | `error-steps.yaml` and `health-steps.yaml`; exact unit proofs above supplement APIHydra's partial-object matcher; `ContractsTest.test_all_registered_routes_remain_in_ledger_denominator`, `test_health_suite_has_explicit_contracts_for_both_aliases` |
+| P1-06 verification and handoff | Command exits/counts above; retained coverage/tooling regression suite; updated ledger, integration report and backend implementation log |
 
-## Deferred work and limitations
+## Deferred scenarios and next action
 
-P1 owns error centralization, including existing module/startup/connector error
-handling. P2 owns project/epic current-schema responses and replacement of
-options by project-selected config. P3 owns remaining change state/mutation/doc
-contracts and old counter widths. P4 owns testcase table/procedure/history and
-composite mutation contracts. Existing Go-managed transactions remain only in
-those deferred paths; none was introduced here. These are real runtime blockers,
-not skipped tests being counted as success.
+Epic-delete 409 cannot reach its child guard because `getEpic` projects obsolete
+`version`/`completed` first. Project-get 404 is blocked by absent `vw_project.last_ref`.
+Testcase insertion's FK-to-404 mapping requires the removed `fn_test_case_insert`;
+change phase-reference checks require the removed `change_phase` table. These
+mappings have unit proof, not passing real integration claims. Health degraded
+503 has exact unit proof; no artificial outage endpoint was introduced.
 
-The APIHydra exact-object/empty-body limitations and binary/manual provenance
-are documented in [coverage.md](../apih-tests/coverage.md). No real legacy HTTP
-campaign, Docker toolchain check, benchmark or broad business workflow campaign
-was run; those are not claimed. Do not expand into P1–P4 simply to raise coverage.
-
-The coordinator updated root AGENTS.md with the user's clarified coverage
-policy and current runner status under the previously authorized rules update. Root PRD, skeleton and
-agent/architecture.md are absent and were not used to override backend contracts.
-The spec directs the implementation log to `backend/implementation-log.md`.
-
-## Supervision and review outcome
-
-The implementation factory completed once; no transient retry was needed.
-Supervisor review repaired provenance (backend-relative staged/unstaged diffs and
-untracked input hashes), private PostgreSQL path quoting/URL encoding, interrupted
-server shutdown ownership, and YAML breakpoint detection. A real API run with
-spaces, ampersands and hash signs in TMPDIR passed both health assertions and
-cleaned up its server/database. Structural coverage still includes every
-production package; the YAML validator is test tooling using an existing module.
-
-Additional regressions: `test_private_socket_handles_spaces_and_query_characters`,
-`test_interrupted_wait_preserves_server_for_final_cleanup`,
-`test_provenance_records_staged_unstaged_and_untracked_backend_inputs`,
-`TestRejectDebugYAMLForms`, `TestAcceptBodiesAndRejectMalformedYAML`, and
-`TestDirectoryValidation`.
-
-`scripts/codex-review-loop.pl agent/specs/005-backend-verification-foundation.md
---base origin/dev` exited 0 after two review passes and one committed/pushed fix.
-The base was pinned to `7dc3aa0`. The fix restores Echo's 30-second HTTP read
-and inherited idle timeout while retaining the header timeout; its regression
-failed before the fix and passed afterward. Required checks and both coverage
-measurements were rerun on that production code. Review pass 2 found no further
-actionable regressions. Transcript: `/tmp/mch-p0-review-loop.log`.
-
-Current reviewed implementation: `313702a`. Subsequent checkpoint/report edits
-are documentation only. No merge-to-dev or promotion ran; dev remains `7dc3aa0`.
-The user clarified that >95% unit / >=90% integration apply to the final refactor
-result, not intermediate merges. Continue all bounded specifications, reviews
-and dev merges while improving meaningful coverage. Keep actual failed gates
-visible; do not stop solely for coverage, even if the final result needs a
-shortfall discussion. No test exclusions or combined unit/API profiles were used.
-The next action is merge-to-dev, then specification 006 backend error contracts.
+Next: finish the authorized P1 merge, then P2 aligns project/epic SQL and mutation
+responses and replaces options with project-selected configuration. P2 must
+replace the temporary schema-failure 500 expectations in `error-steps.yaml`
+with successful current-schema operations; preserve unknown-error masking unit
+proof and retain real error scenarios supported by the repaired backend.
+P3/P4 own remaining change/testcase migrations.
+Retain final >95% unit / >=90% API goals and honest failing gates throughout.

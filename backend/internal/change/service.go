@@ -2,21 +2,12 @@ package change
 
 import (
 	"context"
-	"errors"
 	"mch_api/internal/domain"
+	apperror "mch_api/internal/error"
 	"net/url"
 	"strings"
 
 	"github.com/gofrs/uuid/v5"
-)
-
-var (
-	// ErrInvalidInput is a package-level value.
-	ErrInvalidInput = errors.New("invalid change input")
-	// ErrInvalidReference is returned when a change reference is invalid.
-	ErrInvalidReference = errors.New("invalid change reference")
-	// ErrNotFound is returned when a change cannot be found.
-	ErrNotFound = errors.New("change not found")
 )
 
 // Service defines Service values.
@@ -33,7 +24,7 @@ func NewService(changeRepository Repository, renderer Renderer) *Service {
 // ListChanges executes ListChanges behavior.
 func (s *Service) ListChanges(ctx context.Context, req domain.ChangeListRequest) ([]domain.ChangeListItem, error) {
 	if req.ProjectID <= 0 {
-		return nil, ErrInvalidInput
+		return nil, apperror.ErrChangeInvalidInput
 	}
 	return s.repo.List(ctx, req.ProjectID)
 }
@@ -41,7 +32,7 @@ func (s *Service) ListChanges(ctx context.Context, req domain.ChangeListRequest)
 // GetChange executes GetChange behavior.
 func (s *Service) GetChange(ctx context.Context, req domain.ChangeIDRequest) (domain.ChangeDetails, error) {
 	if req.ID <= 0 {
-		return domain.ChangeDetails{}, ErrInvalidInput
+		return domain.ChangeDetails{}, apperror.ErrChangeInvalidInput
 	}
 	detail, err := s.repo.Details(ctx, req.ID)
 	if err != nil {
@@ -80,7 +71,7 @@ func (s *Service) CreateChange(ctx context.Context, req domain.ChangeCreateReque
 	req.Title = strings.TrimSpace(req.Title)
 	req.Brief = strings.TrimSpace(req.Brief)
 	if req.ProjectID <= 0 || req.Title == "" || req.Brief == "" {
-		return domain.Change{}, ErrInvalidInput
+		return domain.Change{}, apperror.ErrChangeInvalidInput
 	}
 	if req.RefUUID == nil {
 		u, err := uuid.NewV7()
@@ -100,7 +91,7 @@ func (s *Service) CreateChange(ctx context.Context, req domain.ChangeCreateReque
 func (s *Service) UpdateChangeTypes(ctx context.Context, req domain.ChangeUpdateChangeTypesRequest) error {
 	req.ChangeTypes = normalizeTypes(req.ChangeTypes)
 	if req.ID <= 0 {
-		return ErrInvalidInput
+		return apperror.ErrChangeInvalidInput
 	}
 	available, err := s.repo.AvailableChangeTypes(ctx)
 	if err != nil {
@@ -114,7 +105,7 @@ func (s *Service) UpdateChangeTypes(ctx context.Context, req domain.ChangeUpdate
 func (s *Service) UpdateTitle(ctx context.Context, req domain.ChangeUpdateTitleRequest) (domain.Change, error) {
 	req.Title = strings.TrimSpace(req.Title)
 	if req.ID <= 0 || req.Title == "" {
-		return domain.Change{}, ErrInvalidInput
+		return domain.Change{}, apperror.ErrChangeInvalidInput
 	}
 	change, err := s.repo.UpdateTitle(ctx, req)
 	if err != nil {
@@ -127,7 +118,7 @@ func (s *Service) UpdateTitle(ctx context.Context, req domain.ChangeUpdateTitleR
 func (s *Service) UpdateBrief(ctx context.Context, req domain.ChangeUpdateBriefRequest) (domain.Change, error) {
 	req.Brief = strings.TrimSpace(req.Brief)
 	if req.ID <= 0 || req.Brief == "" || req.AgentEdit == nil {
-		return domain.Change{}, ErrInvalidInput
+		return domain.Change{}, apperror.ErrChangeInvalidInput
 	}
 	change, err := s.repo.UpdateBrief(ctx, req)
 	if err != nil {
@@ -140,7 +131,7 @@ func (s *Service) UpdateBrief(ctx context.Context, req domain.ChangeUpdateBriefR
 func (s *Service) UpdateSpec(ctx context.Context, req domain.ChangeUpdateSpecRequest) (domain.Change, error) {
 	req.Spec = strings.TrimSpace(req.Spec)
 	if req.ID <= 0 || req.Spec == "" || req.AgentEdit == nil {
-		return domain.Change{}, ErrInvalidInput
+		return domain.Change{}, apperror.ErrChangeInvalidInput
 	}
 	change, err := s.repo.UpdateSpec(ctx, req)
 	if err != nil {
@@ -153,7 +144,7 @@ func (s *Service) UpdateSpec(ctx context.Context, req domain.ChangeUpdateSpecReq
 func (s *Service) UpdatePR(ctx context.Context, req domain.ChangeUpdatePRRequest) (domain.Change, error) {
 	req.PR = strings.TrimSpace(req.PR)
 	if req.ID <= 0 || req.PR == "" || req.AgentEdit == nil {
-		return domain.Change{}, ErrInvalidInput
+		return domain.Change{}, apperror.ErrChangeInvalidInput
 	}
 	change, err := s.repo.UpdatePR(ctx, req)
 	if err != nil {
@@ -166,7 +157,7 @@ func (s *Service) UpdatePR(ctx context.Context, req domain.ChangeUpdatePRRequest
 func (s *Service) UpdatePRUrl(ctx context.Context, req domain.ChangeUpdatePRUrlRequest) (domain.Change, error) {
 	req.PRUrl = strings.TrimSpace(req.PRUrl)
 	if req.ID <= 0 || req.PRUrl == "" || invalidPRURL(req.PRUrl) {
-		return domain.Change{}, ErrInvalidInput
+		return domain.Change{}, apperror.ErrChangeInvalidInput
 	}
 	change, err := s.repo.UpdatePRUrl(ctx, req)
 	if err != nil {
@@ -178,7 +169,7 @@ func (s *Service) UpdatePRUrl(ctx context.Context, req domain.ChangeUpdatePRUrlR
 // UpdateEpic executes UpdateEpic behavior.
 func (s *Service) UpdateEpic(ctx context.Context, req domain.ChangeUpdateEpicRequest) (domain.Change, error) {
 	if req.ID <= 0 || invalidOptionalID(req.EpicID) {
-		return domain.Change{}, ErrInvalidInput
+		return domain.Change{}, apperror.ErrChangeInvalidInput
 	}
 	change, err := s.repo.UpdateEpic(ctx, req)
 	if err != nil {
@@ -191,7 +182,7 @@ func (s *Service) UpdateEpic(ctx context.Context, req domain.ChangeUpdateEpicReq
 func (s *Service) UpdatePhase(ctx context.Context, req domain.ChangeUpdatePhaseRequest) (domain.Change, error) {
 	req.ChangePhase = strings.TrimSpace(req.ChangePhase)
 	if req.ID <= 0 || req.ChangePhase == "" {
-		return domain.Change{}, ErrInvalidInput
+		return domain.Change{}, apperror.ErrChangeInvalidInput
 	}
 	change, err := s.repo.UpdatePhase(ctx, req)
 	if err != nil {
@@ -203,7 +194,7 @@ func (s *Service) UpdatePhase(ctx context.Context, req domain.ChangeUpdatePhaseR
 // UpdateOpen executes UpdateOpen behavior.
 func (s *Service) UpdateOpen(ctx context.Context, req domain.ChangeUpdateOpenRequest) (domain.Change, error) {
 	if req.ID <= 0 || req.Open == nil {
-		return domain.Change{}, ErrInvalidInput
+		return domain.Change{}, apperror.ErrChangeInvalidInput
 	}
 	change, err := s.repo.UpdateOpen(ctx, req)
 	if err != nil {
@@ -215,7 +206,7 @@ func (s *Service) UpdateOpen(ctx context.Context, req domain.ChangeUpdateOpenReq
 // DeleteChange executes DeleteChange behavior.
 func (s *Service) DeleteChange(ctx context.Context, req domain.ChangeIDRequest) error {
 	if req.ID <= 0 {
-		return ErrInvalidInput
+		return apperror.ErrChangeInvalidInput
 	}
 	return s.repo.Delete(ctx, req)
 }
@@ -225,7 +216,7 @@ func normalizeIDs(ids []int) ([]int, error) {
 	seen := make(map[int]struct{}, len(ids))
 	for _, id := range ids {
 		if id <= 0 {
-			return nil, ErrInvalidInput
+			return nil, apperror.ErrChangeInvalidInput
 		}
 		if _, ok := seen[id]; ok {
 			continue

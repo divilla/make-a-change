@@ -3,6 +3,7 @@ package change
 import (
 	"context"
 	"mch_api/internal/domain"
+	apperror "mch_api/internal/error"
 	"strconv"
 	"testing"
 
@@ -32,39 +33,39 @@ func TestServiceResolvesChangeCreateIdentity(t *testing.T) {
 func TestServiceRejectsInvalidChangeInput(t *testing.T) {
 	service := &Service{}
 	_, err := service.ListChanges(context.Background(), domain.ChangeListRequest{})
-	require.ErrorIs(t, err, ErrInvalidInput)
+	require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
 	_, err = service.GetChange(context.Background(), domain.ChangeIDRequest{})
-	require.ErrorIs(t, err, ErrInvalidInput)
+	require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
 	_, err = service.CreateChange(context.Background(), domain.ChangeCreateRequest{
 		ProjectID: 1, Title: "   ",
 	})
-	require.ErrorIs(t, err, ErrInvalidInput)
+	require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
 	_, err = service.UpdateTitle(context.Background(), domain.ChangeUpdateTitleRequest{ID: 2, Title: "   "})
-	require.ErrorIs(t, err, ErrInvalidInput)
+	require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
 	_, err = service.UpdatePhase(context.Background(), domain.ChangeUpdatePhaseRequest{ID: 2, ChangePhase: "   "})
-	require.ErrorIs(t, err, ErrInvalidInput)
+	require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
 	_, err = service.UpdateBrief(context.Background(), domain.ChangeUpdateBriefRequest{ID: 2, Brief: "brief"})
-	require.ErrorIs(t, err, ErrInvalidInput)
+	require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
 	_, err = service.UpdateSpec(context.Background(), domain.ChangeUpdateSpecRequest{ID: 2, Spec: "   "})
-	require.ErrorIs(t, err, ErrInvalidInput)
+	require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
 	_, err = service.UpdateSpec(context.Background(), domain.ChangeUpdateSpecRequest{ID: 2, Spec: "spec"})
-	require.ErrorIs(t, err, ErrInvalidInput)
+	require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
 	_, err = service.UpdatePR(context.Background(), domain.ChangeUpdatePRRequest{ID: 2, PR: "   "})
-	require.ErrorIs(t, err, ErrInvalidInput)
+	require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
 	_, err = service.UpdatePR(context.Background(), domain.ChangeUpdatePRRequest{ID: 2, PR: "pr"})
-	require.ErrorIs(t, err, ErrInvalidInput)
+	require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
 	_, err = service.UpdatePRUrl(context.Background(), domain.ChangeUpdatePRUrlRequest{ID: 2, PRUrl: "   "})
-	require.ErrorIs(t, err, ErrInvalidInput)
+	require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
 	_, err = service.UpdateOpen(context.Background(), domain.ChangeUpdateOpenRequest{ID: 2})
-	require.ErrorIs(t, err, ErrInvalidInput)
+	require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
 	badURL := "javascript:alert(1)"
 	_, err = service.UpdatePRUrl(context.Background(), domain.ChangeUpdatePRUrlRequest{ID: 2, PRUrl: badURL})
-	require.ErrorIs(t, err, ErrInvalidInput)
+	require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
 	missingHostURL := "https:///missing-host"
 	_, err = service.UpdatePRUrl(context.Background(), domain.ChangeUpdatePRUrlRequest{ID: 2, PRUrl: missingHostURL})
-	require.ErrorIs(t, err, ErrInvalidInput)
+	require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
 	err = service.DeleteChange(context.Background(), domain.ChangeIDRequest{})
-	require.ErrorIs(t, err, ErrInvalidInput)
+	require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
 }
 
 func TestServiceNormalizesChangeRequests(t *testing.T) {
@@ -153,7 +154,7 @@ func TestServiceRendersBatchChangeSpecs(t *testing.T) {
 func TestServiceRejectsInvalidRenderedSpecIDs(t *testing.T) {
 	service := &Service{}
 	_, err := service.RenderedArtifacts(context.Background(), domain.ChangeRenderedArtifactsRequest{IDs: []int{1, 0}})
-	require.ErrorIs(t, err, ErrInvalidInput)
+	require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
 }
 
 type fakeMarkdownParser struct{}

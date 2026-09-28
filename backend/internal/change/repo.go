@@ -2,8 +2,8 @@ package change
 
 import (
 	"context"
-	"errors"
 	"mch_api/internal/domain"
+	apperror "mch_api/internal/error"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -101,7 +101,7 @@ func (r *Repo) List(ctx context.Context, projectID int) ([]domain.ChangeListItem
 		order by modified desc, id
 	`, projectID)
 	if err != nil {
-		return nil, err
+		return nil, apperror.Database(err, nil, nil)
 	}
 	defer rows.Close()
 
@@ -126,12 +126,12 @@ func (r *Repo) List(ctx context.Context, projectID int) ([]domain.ChangeListItem
 			&change.Modified,
 		)
 		if err != nil {
-			return nil, err
+			return nil, apperror.Database(err, nil, nil)
 		}
 		changes = append(changes, change)
 	}
 
-	return changes, rows.Err()
+	return changes, apperror.Database(rows.Err(), nil, nil)
 }
 
 // Details reads only fields backed by the current change details view.
@@ -143,10 +143,10 @@ func (r *Repo) Details(ctx context.Context, id int) (domain.ChangeDetails, error
 		&detail.ChangePhase, &detail.ChangeTypes, &detail.EpicID, &detail.EpicName,
 		&detail.Title, &detail.Open, &detail.DoneTC, &detail.TotalTC, &detail.Completed,
 		&detail.Modified, &detail.PRUrl, &detail.Created)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.ChangeDetails{}, ErrNotFound
+	if err != nil {
+		return domain.ChangeDetails{}, apperror.Database(err, apperror.ErrChangeNotFound, nil)
 	}
-	return detail, err
+	return detail, nil
 }
 
 // Artifacts executes Artifacts behavior.
@@ -158,7 +158,7 @@ func (r *Repo) Artifacts(ctx context.Context, ids []int) ([]domain.Change, error
 		order by requested.ord
 	`, ids)
 	if err != nil {
-		return nil, err
+		return nil, apperror.Database(err, nil, nil)
 	}
 	defer rows.Close()
 
@@ -166,11 +166,11 @@ func (r *Repo) Artifacts(ctx context.Context, ids []int) ([]domain.Change, error
 	for rows.Next() {
 		var change domain.Change
 		if err := rows.Scan(&change.ID, &change.Brief, &change.Spec, &change.PR); err != nil {
-			return nil, err
+			return nil, apperror.Database(err, nil, nil)
 		}
 		changes = append(changes, change)
 	}
-	return changes, rows.Err()
+	return changes, apperror.Database(rows.Err(), nil, nil)
 }
 
 // Create executes Create behavior.
@@ -203,7 +203,7 @@ func (r *Repo) Create(ctx context.Context, req domain.ChangeCreateRequest) (doma
 			&change.Modified,
 		)
 
-	return change, err
+	return change, apperror.Database(err, nil, nil)
 }
 
 // AvailableChangeTypes returns the type slugs currently accepted by the backend.
@@ -211,7 +211,7 @@ func (r *Repo) AvailableChangeTypes(ctx context.Context) ([]string, error) {
 	rows, err := r.pool.Query(ctx,
 		"select slug from public.change_type order by priority, slug")
 	if err != nil {
-		return nil, err
+		return nil, apperror.Database(err, nil, nil)
 	}
 	defer rows.Close()
 
@@ -219,21 +219,21 @@ func (r *Repo) AvailableChangeTypes(ctx context.Context) ([]string, error) {
 	for rows.Next() {
 		var value string
 		if err := rows.Scan(&value); err != nil {
-			return nil, err
+			return nil, apperror.Database(err, nil, nil)
 		}
 		values = append(values, value)
 	}
-	return values, rows.Err()
+	return values, apperror.Database(rows.Err(), nil, nil)
 }
 
 // UpdateChangeTypes executes UpdateChangeTypes behavior.
 func (r *Repo) UpdateChangeTypes(ctx context.Context, req domain.ChangeUpdateChangeTypesRequest) error {
 	tag, err := r.pool.Exec(ctx, `update public.change set change_types = $1, modified = now() where id = $2`, req.ChangeTypes, req.ID)
 	if err != nil {
-		return err
+		return apperror.Database(err, nil, nil)
 	}
 	if tag.RowsAffected() == 0 {
-		return ErrNotFound
+		return apperror.ErrChangeNotFound
 	}
 	return nil
 }
@@ -242,7 +242,7 @@ func (r *Repo) UpdateChangeTypes(ctx context.Context, req domain.ChangeUpdateCha
 func (r *Repo) UpdateTitle(ctx context.Context, req domain.ChangeUpdateTitleRequest) (domain.Change, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return domain.Change{}, err
+		return domain.Change{}, apperror.Database(err, nil, nil)
 	}
 	defer tx.Rollback(ctx)
 
@@ -254,7 +254,7 @@ func (r *Repo) UpdateTitle(ctx context.Context, req domain.ChangeUpdateTitleRequ
 		return finishMutation(ctx, tx, req.ID)
 	}
 	if _, err := tx.Exec(ctx, "call public.sp_change_title_update($1, $2)", req.ID, req.Title); err != nil {
-		return domain.Change{}, err
+		return domain.Change{}, apperror.Database(err, nil, nil)
 	}
 	tag, err := tx.Exec(ctx, `
 		update public.change
@@ -262,10 +262,10 @@ func (r *Repo) UpdateTitle(ctx context.Context, req domain.ChangeUpdateTitleRequ
 		where id = $1
 	`, req.ID)
 	if err != nil {
-		return domain.Change{}, err
+		return domain.Change{}, apperror.Database(err, nil, nil)
 	}
 	if tag.RowsAffected() == 0 {
-		return domain.Change{}, ErrNotFound
+		return domain.Change{}, apperror.ErrChangeNotFound
 	}
 	return finishMutation(ctx, tx, req.ID)
 }
@@ -301,7 +301,7 @@ func (r *Repo) UpdatePRUrl(ctx context.Context, req domain.ChangeUpdatePRUrlRequ
 func (r *Repo) UpdateEpic(ctx context.Context, req domain.ChangeUpdateEpicRequest) (domain.Change, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return domain.Change{}, err
+		return domain.Change{}, apperror.Database(err, nil, nil)
 	}
 	defer tx.Rollback(ctx)
 
@@ -324,10 +324,10 @@ func (r *Repo) UpdateEpic(ctx context.Context, req domain.ChangeUpdateEpicReques
 		where id = $1
 	`, req.ID, req.EpicID)
 	if err != nil {
-		return domain.Change{}, err
+		return domain.Change{}, apperror.Database(err, nil, nil)
 	}
 	if tag.RowsAffected() == 0 {
-		return domain.Change{}, ErrNotFound
+		return domain.Change{}, apperror.ErrChangeNotFound
 	}
 	if err := recalculateEpics(ctx, tx, current.EpicID, req.EpicID); err != nil {
 		return domain.Change{}, err
@@ -342,7 +342,7 @@ func (r *Repo) UpdatePhase(ctx context.Context, req domain.ChangeUpdatePhaseRequ
 	}
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return domain.Change{}, err
+		return domain.Change{}, apperror.Database(err, nil, nil)
 	}
 	defer tx.Rollback(ctx)
 
@@ -360,10 +360,10 @@ func (r *Repo) UpdatePhase(ctx context.Context, req domain.ChangeUpdatePhaseRequ
 		where id = $1
 	`, req.ID, req.ChangePhase)
 	if err != nil {
-		return domain.Change{}, err
+		return domain.Change{}, apperror.Database(err, nil, nil)
 	}
 	if tag.RowsAffected() == 0 {
-		return domain.Change{}, ErrNotFound
+		return domain.Change{}, apperror.ErrChangeNotFound
 	}
 	return finishMutation(ctx, tx, req.ID)
 }
@@ -373,7 +373,7 @@ func (r *Repo) UpdateOpen(ctx context.Context, req domain.ChangeUpdateOpenReques
 	open := *req.Open
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return domain.Change{}, err
+		return domain.Change{}, apperror.Database(err, nil, nil)
 	}
 	defer tx.Rollback(ctx)
 
@@ -391,10 +391,10 @@ func (r *Repo) UpdateOpen(ctx context.Context, req domain.ChangeUpdateOpenReques
 		where id = $1
 	`, req.ID, open)
 	if err != nil {
-		return domain.Change{}, err
+		return domain.Change{}, apperror.Database(err, nil, nil)
 	}
 	if tag.RowsAffected() == 0 {
-		return domain.Change{}, ErrNotFound
+		return domain.Change{}, apperror.ErrChangeNotFound
 	}
 	return finishMutation(ctx, tx, req.ID)
 }
@@ -403,7 +403,7 @@ func (r *Repo) UpdateOpen(ctx context.Context, req domain.ChangeUpdateOpenReques
 func (r *Repo) Delete(ctx context.Context, req domain.ChangeIDRequest) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return err
+		return apperror.Database(err, nil, nil)
 	}
 	defer tx.Rollback(ctx)
 
@@ -416,24 +416,24 @@ func (r *Repo) Delete(ctx context.Context, req domain.ChangeIDRequest) error {
 	}
 	tag, err := tx.Exec(ctx, "delete from public.change where id = $1", req.ID)
 	if err != nil {
-		return err
+		return apperror.Database(err, nil, nil)
 	}
 	if tag.RowsAffected() == 0 {
-		return ErrNotFound
+		return apperror.ErrChangeNotFound
 	}
 	if _, err := tx.Exec(ctx, "call public.sp_epic_test_case_recalculate($1)", current.EpicID); err != nil {
-		return err
+		return apperror.Database(err, nil, nil)
 	}
-	return tx.Commit(ctx)
+	return apperror.Database(tx.Commit(ctx), nil, nil)
 }
 
 func (r *Repo) ensureReference(ctx context.Context, slug string) error {
 	var exists bool
 	if err := r.pool.QueryRow(ctx, "select exists(select 1 from public.change_phase where slug = $1)", slug).Scan(&exists); err != nil {
-		return err
+		return apperror.Database(err, nil, nil)
 	}
 	if !exists {
-		return ErrInvalidReference
+		return apperror.ErrChangeInvalidReference
 	}
 	return nil
 }
@@ -441,10 +441,10 @@ func (r *Repo) ensureReference(ctx context.Context, slug string) error {
 func (r *Repo) ensureProject(ctx context.Context, id int) error {
 	var exists bool
 	if err := r.pool.QueryRow(ctx, "select exists(select 1 from public.project where id = $1)", id).Scan(&exists); err != nil {
-		return err
+		return apperror.Database(err, nil, nil)
 	}
 	if !exists {
-		return ErrInvalidReference
+		return apperror.ErrChangeInvalidReference
 	}
 	return nil
 }
@@ -454,20 +454,20 @@ func ensureEpic(ctx context.Context, q queryer, projectID, id int) error {
 	if err := q.QueryRow(ctx, `
 		select exists(select 1 from public.epic where id = $1 and project_id = $2)
 	`, id, projectID).Scan(&exists); err != nil {
-		return err
+		return apperror.Database(err, nil, nil)
 	}
 	if !exists {
-		return ErrInvalidReference
+		return apperror.ErrChangeInvalidReference
 	}
 	return nil
 }
 
 func getChange(ctx context.Context, q queryer, id int) (domain.Change, error) {
 	change, err := scanChange(q.QueryRow(ctx, "select "+changeDetailColumns+" from public.vw_change_details where id = $1", id))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.Change{}, ErrNotFound
+	if err != nil {
+		return domain.Change{}, apperror.Database(err, apperror.ErrChangeNotFound, nil)
 	}
-	return change, err
+	return change, nil
 }
 
 func listTestCases(ctx context.Context, q queryer, changeID int) ([]domain.TestCase, error) {
@@ -478,18 +478,18 @@ func listTestCases(ctx context.Context, q queryer, changeID int) ([]domain.TestC
 		order by id
 	`, changeID)
 	if err != nil {
-		return nil, err
+		return nil, apperror.Database(err, nil, nil)
 	}
 	defer rows.Close()
 	testCases := make([]domain.TestCase, 0)
 	for rows.Next() {
 		var item domain.TestCase
 		if err := rows.Scan(&item.ID, &item.Version, &item.Scenario, &item.Done, &item.ChangeID, &item.Created, &item.Modified); err != nil {
-			return nil, err
+			return nil, apperror.Database(err, nil, nil)
 		}
 		testCases = append(testCases, item)
 	}
-	return testCases, rows.Err()
+	return testCases, apperror.Database(rows.Err(), nil, nil)
 }
 
 func scanChange(row pgx.Row) (domain.Change, error) {
@@ -523,7 +523,7 @@ func scanChange(row pgx.Row) (domain.Change, error) {
 		&change.Modified,
 	)
 	if err != nil {
-		return domain.Change{}, err
+		return domain.Change{}, apperror.Database(err, nil, nil)
 	}
 	if refUUID.Valid {
 		change.RefUUID = refUUID.String()
@@ -572,7 +572,7 @@ func scanChangeList(row pgx.Row) (domain.ChangeListItem, error) {
 		&change.Modified,
 	)
 	if err != nil {
-		return domain.ChangeListItem{}, err
+		return domain.ChangeListItem{}, apperror.Database(err, nil, nil)
 	}
 	if refUUID.Valid {
 		change.RefUUID = refUUID.String()
@@ -617,11 +617,8 @@ func getState(ctx context.Context, tx pgx.Tx, id int) (state, error) {
 		from public.change
 		where id = $1
 	`, id).Scan(&item.ProjectID, &epicID, &item.ChangePhase, &item.ChangeTypes, &item.Title, &item.Brief, &item.Spec, &item.PR, &item.PRUrl, &item.Open)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return state{}, ErrNotFound
-	}
 	if err != nil {
-		return state{}, err
+		return state{}, apperror.Database(err, apperror.ErrChangeNotFound, nil)
 	}
 	if epicID.Valid {
 		value := int(epicID.Int64)
@@ -636,7 +633,7 @@ func finishMutation(ctx context.Context, tx pgx.Tx, id int) (domain.Change, erro
 		return domain.Change{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return domain.Change{}, err
+		return domain.Change{}, apperror.Database(err, nil, nil)
 	}
 	return change, nil
 }
@@ -644,7 +641,7 @@ func finishMutation(ctx context.Context, tx pgx.Tx, id int) (domain.Change, erro
 func (r *Repo) updateField(ctx context.Context, id int, unchanged func(state) bool, query string, args ...any) (domain.Change, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return domain.Change{}, err
+		return domain.Change{}, apperror.Database(err, nil, nil)
 	}
 	defer tx.Rollback(ctx)
 
@@ -658,10 +655,10 @@ func (r *Repo) updateField(ctx context.Context, id int, unchanged func(state) bo
 	queryArgs := append([]any{id}, args...)
 	tag, err := tx.Exec(ctx, query, queryArgs...)
 	if err != nil {
-		return domain.Change{}, err
+		return domain.Change{}, apperror.Database(err, nil, nil)
 	}
 	if tag.RowsAffected() == 0 {
-		return domain.Change{}, ErrNotFound
+		return domain.Change{}, apperror.ErrChangeNotFound
 	}
 	return finishMutation(ctx, tx, id)
 }
@@ -669,7 +666,7 @@ func (r *Repo) updateField(ctx context.Context, id int, unchanged func(state) bo
 func (r *Repo) updateArtifact(ctx context.Context, id int, procedure string, body string, agentEdit bool) (domain.Change, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return domain.Change{}, err
+		return domain.Change{}, apperror.Database(err, nil, nil)
 	}
 	defer tx.Rollback(ctx)
 
@@ -677,7 +674,7 @@ func (r *Repo) updateArtifact(ctx context.Context, id int, procedure string, bod
 		return domain.Change{}, err
 	}
 	if _, err := tx.Exec(ctx, procedure, id, body, agentEdit); err != nil {
-		return domain.Change{}, err
+		return domain.Change{}, apperror.Database(err, nil, nil)
 	}
 	return finishMutation(ctx, tx, id)
 }
@@ -693,7 +690,7 @@ func deleteTestCasesForChange(ctx context.Context, tx pgx.Tx, changeID int) erro
 	}
 	for _, testCase := range testCases {
 		if _, err := tx.Exec(ctx, "call public.sp_test_case_delete($1)", testCase.ID); err != nil {
-			return err
+			return apperror.Database(err, nil, nil)
 		}
 	}
 	return nil
@@ -702,18 +699,18 @@ func deleteTestCasesForChange(ctx context.Context, tx pgx.Tx, changeID int) erro
 func testCasesForChange(ctx context.Context, tx pgx.Tx, changeID int) ([]testCaseRef, error) {
 	rows, err := tx.Query(ctx, "select id from public.test_case where change_id = $1", changeID)
 	if err != nil {
-		return nil, err
+		return nil, apperror.Database(err, nil, nil)
 	}
 	defer rows.Close()
 	items := make([]testCaseRef, 0)
 	for rows.Next() {
 		var item testCaseRef
 		if err := rows.Scan(&item.ID); err != nil {
-			return nil, err
+			return nil, apperror.Database(err, nil, nil)
 		}
 		items = append(items, item)
 	}
-	return items, rows.Err()
+	return items, apperror.Database(rows.Err(), nil, nil)
 }
 
 func recalculateEpics(ctx context.Context, tx pgx.Tx, values ...*int) error {
@@ -727,7 +724,7 @@ func recalculateEpics(ctx context.Context, tx pgx.Tx, values ...*int) error {
 		}
 		seen[*value] = struct{}{}
 		if _, err := tx.Exec(ctx, "call public.sp_epic_test_case_recalculate($1)", *value); err != nil {
-			return err
+			return apperror.Database(err, nil, nil)
 		}
 	}
 	return nil

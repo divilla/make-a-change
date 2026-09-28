@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	apperror "mch_api/internal/error"
 	"reflect"
 	"testing"
 	"time"
@@ -37,9 +38,14 @@ func TestScanChangeCurrentSchema(t *testing.T) {
 	for _, nullable := range []bool{true, false} {
 		t.Run(fmt.Sprintf("nullable=%t", nullable), func(t *testing.T) {
 			row := schemaRow{
-				7, identity, pgtype.Int4{Int32: 12, Valid: !nullable}, int16(2),
-				pgtype.Text{String: "slug", Valid: !nullable}, 1, "backlog", []string{"fix"},
-				pgtype.Int8{Int64: 4, Valid: !nullable}, pgtype.Text{String: "Epic", Valid: !nullable},
+				7, identity,
+				pgtype.Int4{Int32: 12, Valid: !nullable},
+				int16(2),
+				pgtype.Text{String: "slug", Valid: !nullable},
+				1, "backlog",
+				[]string{"fix"},
+				pgtype.Int8{Int64: 4, Valid: !nullable},
+				pgtype.Text{String: "Epic", Valid: !nullable},
 				"Title", "Brief", "Spec", "PR", "https://example.test/pr", true,
 				int16(1), int16(2), int16(50), now, now,
 			}
@@ -85,7 +91,10 @@ func (tx stateTx) QueryRow(context.Context, string, ...any) pgx.Row { return tx.
 func TestGetStateCurrentSchema(t *testing.T) {
 	for _, nullable := range []bool{true, false} {
 		got, err := getState(context.Background(), stateTx{row: schemaRow{
-			1, pgtype.Int8{Int64: 4, Valid: !nullable}, "review", []string{"fix"},
+			1,
+			pgtype.Int8{Int64: 4, Valid: !nullable},
+			"review",
+			[]string{"fix"},
 			"Title", "Brief", "Spec", "PR", "https://example.test/pr", true,
 		}}, 7)
 		require.NoError(t, err)
@@ -101,7 +110,7 @@ func TestGetStateCurrentSchema(t *testing.T) {
 		}
 	}
 	_, err := getState(context.Background(), stateTx{row: errorRow{pgx.ErrNoRows}}, 7)
-	assert.ErrorIs(t, err, ErrNotFound)
+	assert.ErrorIs(t, err, apperror.ErrChangeNotFound)
 	failure := errors.New("database unavailable")
 	_, err = getState(context.Background(), stateTx{row: errorRow{failure}}, 7)
 	assert.ErrorIs(t, err, failure)

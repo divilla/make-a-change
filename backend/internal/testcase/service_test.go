@@ -3,9 +3,9 @@ package testcase
 import (
 	"context"
 	"mch_api/internal/change"
-	"testing"
-
 	"mch_api/internal/domain"
+	apperror "mch_api/internal/error"
+	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,13 +14,13 @@ import (
 func TestServiceRejectsInvalidTestCaseInput(t *testing.T) {
 	service := &Service{}
 	_, err := service.ListTestCases(context.Background(), domain.TestCaseListRequest{})
-	require.ErrorIs(t, err, ErrInvalidInput)
+	require.ErrorIs(t, err, apperror.ErrTestCaseInvalidInput)
 	_, err = service.CreateTestCase(context.Background(), domain.TestCaseCreateRequest{ChangeID: 2, Scenario: "   "})
-	require.ErrorIs(t, err, ErrInvalidInput)
+	require.ErrorIs(t, err, apperror.ErrTestCaseInvalidInput)
 	_, err = service.UpdateTestCase(context.Background(), domain.TestCaseUpdateRequest{ID: 3, Scenario: "   "})
-	require.ErrorIs(t, err, ErrInvalidInput)
+	require.ErrorIs(t, err, apperror.ErrTestCaseInvalidInput)
 	_, err = service.DeleteTestCase(context.Background(), domain.TestCaseIDRequest{})
-	require.ErrorIs(t, err, ErrInvalidInput)
+	require.ErrorIs(t, err, apperror.ErrTestCaseInvalidInput)
 }
 
 func TestServiceNormalizesTestCaseRequests(t *testing.T) {
@@ -68,6 +68,7 @@ func (fakeMarkdownSanitizer) Parse(source string) string {
 }
 
 type fakeTestCaseRepository struct {
+	err       error
 	id        int
 	changeID  int
 	createReq domain.TestCaseCreateRequest
@@ -76,7 +77,7 @@ type fakeTestCaseRepository struct {
 
 func (r *fakeTestCaseRepository) List(_ context.Context, changeID int) ([]domain.TestCase, error) {
 	r.changeID = changeID
-	return []domain.TestCase{}, nil
+	return []domain.TestCase{}, r.err
 }
 
 func (r *fakeTestCaseRepository) Create(_ context.Context, req domain.TestCaseCreateRequest) (domain.TestCaseMutationResponse, error) {
@@ -85,20 +86,20 @@ func (r *fakeTestCaseRepository) Create(_ context.Context, req domain.TestCaseCr
 	return domain.TestCaseMutationResponse{
 		TestCase: &testCase,
 		Change:   domain.Change{ID: req.ChangeID, Spec: "**Change**"},
-	}, nil
+	}, r.err
 }
 
 func (r *fakeTestCaseRepository) Update(_ context.Context, req domain.TestCaseUpdateRequest) (domain.TestCaseMutationResponse, error) {
 	r.updateReq = req
-	return domain.TestCaseMutationResponse{}, nil
+	return domain.TestCaseMutationResponse{}, r.err
 }
 
 func (r *fakeTestCaseRepository) UpdateDone(_ context.Context, req domain.TestCaseUpdateDoneRequest) (domain.TestCaseMutationResponse, error) {
 	r.id = req.ID
-	return domain.TestCaseMutationResponse{}, nil
+	return domain.TestCaseMutationResponse{}, r.err
 }
 
 func (r *fakeTestCaseRepository) Delete(_ context.Context, req domain.TestCaseIDRequest) (domain.TestCaseMutationResponse, error) {
 	r.id = req.ID
-	return domain.TestCaseMutationResponse{}, nil
+	return domain.TestCaseMutationResponse{}, r.err
 }

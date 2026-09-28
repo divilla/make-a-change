@@ -2,9 +2,9 @@ package health
 
 import (
 	"context"
-	"time"
-
 	"mch_api/internal/domain"
+	apperror "mch_api/internal/error"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -35,7 +35,7 @@ func (s *Service) Check(ctx context.Context) domain.Health {
 	}
 
 	if err := s.repo.Ping(ctx); err != nil {
-		log.Warn().Err(err).Msg("database health check failed")
+		log.Warn().Err(apperror.Wrap(err, "database health check")).Msg("database health check failed")
 		res.Status = "degraded"
 		res.Database = "error"
 		res.Error = "database unavailable"

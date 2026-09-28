@@ -1,10 +1,9 @@
 package project
 
 import (
-	"errors"
-	"net/http"
-
 	"mch_api/internal/domain"
+	apperror "mch_api/internal/error"
+	"net/http"
 
 	"github.com/labstack/echo/v5"
 )
@@ -37,7 +36,7 @@ func (a *API) listProjects(c *echo.Context) error {
 	ctx := c.Request().Context()
 	res, err := a.s.ListProjects(ctx)
 	if err != nil {
-		return err
+		return apperror.HTTP(err)
 	}
 
 	return c.JSON(http.StatusOK, &res)
@@ -47,12 +46,12 @@ func (a *API) getProject(c *echo.Context) error {
 	ctx := c.Request().Context()
 	var req domain.ProjectIDRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid project get payload")
+		return apperror.InvalidPayload(err, "invalid project get payload")
 	}
 
 	res, err := a.s.GetProject(ctx, req)
 	if err != nil {
-		return projectError(err)
+		return apperror.HTTP(err)
 	}
 
 	return c.JSON(http.StatusOK, &res)
@@ -62,12 +61,12 @@ func (a *API) createProject(c *echo.Context) error {
 	ctx := c.Request().Context()
 	var req domain.ProjectCreateRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid project create payload")
+		return apperror.InvalidPayload(err, "invalid project create payload")
 	}
 
 	res, err := a.s.CreateProject(ctx, req)
 	if err != nil {
-		return projectError(err)
+		return apperror.HTTP(err)
 	}
 
 	return c.JSON(http.StatusCreated, &res)
@@ -77,12 +76,12 @@ func (a *API) updateProject(c *echo.Context) error {
 	ctx := c.Request().Context()
 	var req domain.ProjectUpdateRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid project update payload")
+		return apperror.InvalidPayload(err, "invalid project update payload")
 	}
 
 	res, err := a.s.UpdateProject(ctx, req)
 	if err != nil {
-		return projectError(err)
+		return apperror.HTTP(err)
 	}
 
 	return c.JSON(http.StatusOK, &res)
@@ -92,25 +91,12 @@ func (a *API) deleteProject(c *echo.Context) error {
 	ctx := c.Request().Context()
 	var req domain.ProjectIDRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid project delete payload")
+		return apperror.InvalidPayload(err, "invalid project delete payload")
 	}
 
 	if err := a.s.DeleteProject(ctx, req); err != nil {
-		return projectError(err)
+		return apperror.HTTP(err)
 	}
 
 	return c.NoContent(http.StatusNoContent)
-}
-
-func projectError(err error) error {
-	switch {
-	case errors.Is(err, ErrInvalidInput):
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid project payload")
-	case errors.Is(err, ErrNotFound):
-		return echo.NewHTTPError(http.StatusNotFound, "project not found")
-	case errors.Is(err, ErrProjectHasChanges):
-		return echo.NewHTTPError(http.StatusConflict, "project has changes and cannot be deleted")
-	default:
-		return err
-	}
 }
