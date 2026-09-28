@@ -1,24 +1,15 @@
 package main
 
 import (
-	"mch_api/internal/change"
-	"mch_api/internal/epic"
-	"mch_api/internal/health"
-	"mch_api/internal/project"
-	"mch_api/internal/testcase"
 	"testing"
 
-	"github.com/labstack/echo/v5"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAPIConstructorRouteInventory(t *testing.T) {
-	e := echo.New()
-	health.NewAPI(e, nil)
-	project.NewAPI(e, nil)
-	epic.NewAPI(e, nil)
-	change.NewAPI(e, nil)
-	testcase.NewAPI(e, nil)
+	e, err := newRouter(nil, []string{"https://allowed.example"}, zerolog.Nop())
+	require.NoError(t, err)
 
 	var registered []string
 	for _, route := range e.Router().Routes() {

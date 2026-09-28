@@ -1,78 +1,93 @@
-# Backend validation-cause checkpoint — 011 reviewed
+# Backend refactor checkpoint — 012 startup boundaries (R3)
 
-2026-09-28; `change/011-backend-validation-causes`, specification HEAD
-`83ae94e5fe9d968a883f900907a22f0f0162ce6e` over fetched origin/dev
-`16bbf0b305cc263da1bf4f9b0fd0bda04d3fca4d` (merged R1). Initial tree was clean.
-This is the bounded error-contract repair, not R2 duplicate cleanup. R2 remains
-no actionable findings. Factory implementation `db415e2` is published; native
-review against pinned `16bbf0b` passed with no actionable findings or fixes.
-Overall verification remains incomplete only for the known R5 lint debt. Both
-coverage gates pass. The supervisor is publishing this checkpoint before the
-authorized squash merge to dev; next is R3 startup boundaries. No transient
-retry, next-pass implementation or promotion occurred. Transcripts:
-`/tmp/mch-vc-code-spec.log` and `/tmp/mch-vc-review-loop.log`.
+2026-09-28; `change/012-backend-startup-boundaries`, merged base `4c25d70`.
+Factory implementation `8bc82d4` is published. Native review against the pinned
+dev base completed with no actionable findings or fixes; unit and repeated
+race-enabled server tests passed. The supervisor is publishing this checkpoint
+before the authorized squash merge to dev. No transient retry was needed and
+no stage/production promotion occurred. Required verification remains incomplete
+only for the known 11 R5 lint findings; both strict coverage gates pass.
 
-## Contract and acceptance evidence
+Next after merge: R4 `change/013-backend-config-isolation`, preserving fixed
+config/dev.yaml, precedence, wrapped panic behavior and startup ordering.
+Factory/review transcripts: `/tmp/mch-r3-code-spec.log` and
+`/tmp/mch-r3-review-loop.log`.
 
-The [ledger](backend-contracts.md#011-validation-cause-repair) records the one
-spec-authorized shared helper and preserved contracts. Central Validation uses
-existing semantic/cause wrapping, API handlers preserve real validate.Errors,
-and change URL validation preserves real parser errors. No public HTTP envelope,
-accepted input, validation order, collaborator call count, route, DTO, SQL,
-transaction, dependency or protected reference changed. All30 tag-validation
-handlers were migrated (project5, epic5, testcase5, change15). Business-only
-validation returns the original sentinel; bind wrapping/messages stay intact.
-All writes remain under backend except the authorized plan top status.
+## Scope and ownership
 
-| Criterion | Named test evidence |
+- `cmd/server/main.go` retains unchanged config/flag/signal/process-exit logic.
+- `cmd/server/lifecycle.go` owns `application`, `run`, `start`, and
+  `newHTTPServer`: pool/listener acquisition, failed-start cleanup, HTTP serving,
+  10s shutdown deadline, exactly-once cleanup, 10s header/30s request read limits.
+- `cmd/server/router.go` owns private `newRouter(pool, allowedOrigins, logger)`,
+  unchanged middleware/module wiring, and unchanged `jsonErrorHandler`.
+  Composition neither connects/pings nor closes the caller's pool. Startup
+  still acquires pool then listener before router setup, sets the normal stdout
+  timestamped global logger, and closes both resources on CORS failure.
+- No public API, dependency, SQL, transaction, config precedence, route, module
+  constructor, APIHydra fixture/suite, or process contract changed. Existing
+  validation causes and URL parser repairs are untouched. No production test
+  endpoint, lifecycle interface, mutable hook, flag wrapper or DB-outage campaign.
+
+## Acceptance and behavior evidence
+
+| Criterion | Meaningful verification |
 | --- | --- |
-| VC-01 central helper, direct/wrapped causes, nil behavior, ordinary error and cause identity | internal/error TestValidationCauses: actual malformed escape and syntax parser errors, direct/wrapped semantic and cause, each nil permutation, exact cause pointer, no Echo HTTP error |
-| VC-02 all API validator paths, module sentinel, field/rule and safe envelope | TestAPIValidationCauses in project, epic, testcase and change: actual registered handler requests for every migrated path, errors captured before HTTP writing, errors.Is sentinel/errors.As validate.Errors, JSON field/min or required rule; no repository/config calls |
-| VC-03 parser cause, business validation, ordering, accepted forms and calls | change TestUpdatePRURLValidationCauses: real *url.Error/EscapeError, syntax failure, ID before parser, blank/empty/missing host/relative/unsupported scheme, uppercase/trimmed/userinfo/query/fragment acceptance, exactly one valid write, original repository failure; retained TestServiceRejectsInvalidDirectInput and TestServiceCollaboratorFailuresAndContext |
-| VC-04 preserved bind/generic envelopes, existing cause evidence and unknown masking | Four TestAPIValidationCauses matrices assert exact generic400/bind-operation JSON; strengthened TestDocumentAPIShapeAndExplicitBooleans preserves real validator cause and adds sentinel/required-rule proof; retained TestChangeAPIContracts, TestChangeHandlerReturnCauses, TestProjectHandlerErrorContracts, TestEpicHandlerErrorContracts, TestTestCaseHandlerErrorContracts and central TestHTTPContractsAndCauses cover unknown masking and cause retention |
-| VC-05 parity, measurements and handoff | All commands below; retained TestAPIConstructorRouteInventory proves34 operations; unchanged APIHydra suite includes malformed URL `%` and safe400; full retained legacy Go HTTP/SQL suite passes; ledger, plan status and implementation log updated |
+| R3-01 ownership/lazy DB/failure precedence | `TestRouterDoesNotAcquireOrClosePool` uses a concrete lazy pool with BeforeConnect to prove zero construction attempts and retained caller ownership on success/failure; `TestStartFailures` retains parse cause and distinguishes occupied-listen before invalid CORS; `TestStartCORSFailureReleasesListener` rebinds the released port with an unreachable DSN. Pool-close branches remain direct in start and run under unit/race coverage. |
+| R3-02 exact operations/dependencies | Existing `TestAPIConstructorRouteInventory` now invokes production `newRouter`, retaining its sole exact 34-pair list and unfiltered `Router().Routes()` comparison. All module constructors and dependency arguments are preserved; APIHydra exercises the full wiring. No framework-only entries needed filtering. |
+| R3-03 middleware/HTTP/log/context | `TestRouterMiddlewareParity` checks allowed/denied and second configured origins, exact preflight method/header lists, empty204, Vary/Allow, no redirect on trailing slash, exact400/404/405 envelopes, URI/status logs. `TestRouterRecoveryPreservesContextAndLogs` verifies request-context identity, recovered safe500, CORS and internal/request logging. Unit-only routes are separate router instances from the inventory. |
+| R3-04 central errors/write failures | Existing `TestInstalledJSONErrorContracts` now uses production composition for 400/404/409/500 and cause-wrapped envelopes. `TestJSONErrorWriteFailure` rejects an ordinary write and checks the single safe attempted body, original internal diagnostic, and exact centralized `write error response: broken response transport` log. Global logger captures restore state and tests remain serial. |
+| R3-05 lifecycle/limits | Existing `TestLifecycle`, `TestStartCancelRealServer`, `TestHTTPServerPreservesReadTimeout`; deadline assertion strengthened to10s. `TestLifecycleFailedShutdownClosesBeforeWaiting` requires close to unblock serve, preserves shutdown cause and exactly-once order. |
+| R3-06 reliable route audit | Inspected unchanged `scripts/contracts_test.py` before extraction: every registration remains in `internal/*/api.go` using its recognized a.g/e receivers. Source-to-ledger audit still passes alongside the new actual-production-constructor inventory. No count-only weakening or route filter. |
+| R3-07 scope/delivery | Final required commands, source hash comparison, tracked/untracked scope review and diff whitespace check; this checkpoint, top plan status and backend implementation log record results. Native review against pinned dev 4c25d70 passed without findings. |
 
-No extra APIHydra scenario was needed. Suites remain backend/apih-tests with
-retries:-1; installed apih/manual revision remains
-c3947513e2a4b948ce732dec60e090a5e83be744. All408 requests/34 operations are retained.
-APIHydra cannot inspect Go causes; those assertions belong to the unit tests.
+Baseline `go test -short -count=1 ./cmd/server` passed. Before production edits,
+a temporary real-startup characterization test exercised allowed/denied origins,
+preflights, trailing slash and router errors. Log:
+`/tmp/mch-r3-characterization.log`. It established denied simple requests still
+reach validation400 without permission headers; denied preflight204 has no
+permission headers; allowed preflight204 advertises the exact existing lists;
+trailing slash removes without redirect and logs the normalized URI. Temporary
+test was replaced by the permanent handler assertions above.
 
-## Commands and results
+## Commands and outcomes
 
-Logs: `/tmp/mch-vc-*.log`. Fresh profiles/reports/results/provenance are under
-backend/.coverage/unit and backend/.coverage/api; legacy evidence is separately
-under backend/.coverage/legacy. The runners owned, stopped and removed their
-private PostgreSQL clusters and servers. No external database was reset and no
-unit/legacy profile was merged into APIHydra. Final production hashes match
-both measured source inventories; no production code changed after measurements.
+Commands are from root except explicit backend working-directory commands.
+Logs are `/tmp/mch-r3-{check,check-all,coverage,deps-audit,api-test,legacy-api-test}.log`.
 
 | Command actually run | Exit/result |
 | --- | --- |
-| `git fetch origin dev` | Initial sandbox exit255 (read-only FETCH_HEAD); approved retry exit0, required base confirmed |
-| Backend: `go test -short -count=1 ./internal/error ./internal/project ./internal/epic ./internal/testcase ./internal/change` | Baseline0; intermediate test compile/JSON-field expectation failures1 corrected; final0 |
-| Same focused Go command accidentally invoked from root | 1, no root Go module; corrected backend invocation passes |
-| Backend: `golangci-lint fmt --no-config --enable gofumpt --enable goimports` with the13 changed Go files explicitly listed | 0; no unrelated formatting edits; final helper-test-only formatting rerun0 |
-| `GOLANGCI_LINT_CACHE=/tmp/mch-vc-lint-cache make -C backend check` | 2: baseline11 lint plus initial test-only SA1007 warning about deliberately malformed constant URL; warning fixed using real parser input table |
-| `GOLANGCI_LINT_CACHE=/tmp/mch-vc-lint-cache make -k -C backend check` final | 2: only baseline11 lint findings; formatting/vet/race pass, all45 Python tooling tests and Go suite-validator tests pass |
-| `make -C backend coverage` (initial and final after test fix) | 0 each; fresh917/935, strict >95% passes |
-| `make -C backend deps-audit` | 0, no vulnerabilities found |
-| `make -C backend api-test` | 0, complete408 requests/34 operations;848/935, >=90% passes |
-| `make -C backend legacy-api-test` | 0, complete retained change/epic/health/project/testcase HTTP/SQL packages; shared has no tests |
-| `python3 -B -m unittest discover -s backend/scripts -p 'contracts_test.py' -v` after documentation updates | 0, both contract checks pass |
+| Backend: `go test -short -count=1 ./cmd/server` | Baseline0; intermediate1 for an incorrect test-only Echo.Close assumption, removed; final0 |
+| Root: `go test -short -count=1 -run TestCharacterizeStartupHTTP -v ./cmd/server` | 1, no root Go module; corrected backend invocation0 |
+| Backend: `go test -short -count=1 -run TestCharacterizeStartupHTTP -v ./cmd/server` | 0; pre-extraction HTTP evidence retained in temporary log |
+| `golangci-lint fmt --no-config --enable gofumpt --enable goimports` with the six changed server Go files explicitly listed | 0; touched files only, diff inspected |
+| `make -C backend check` | 2: existing11 lint findings; default cache also emitted read-only warnings |
+| `GOLANGCI_LINT_CACHE=/tmp/mch-r3-lint-cache make -k -C backend check` | 2: only existing11 lint findings; formatting/vet/race pass, all45 Python tooling tests and Go suite-validator tests pass |
+| `make -C backend coverage` | 0;924/939, strict >95% passes |
+| `make -C backend deps-audit` | 0; no vulnerabilities |
+| `make -C backend api-test` | 0; complete unchanged five APIHydra suites (408 requests/34 operations),851/939, >=90% passes |
+| `make -C backend legacy-api-test` | 0; change/epic/health/project/testcase HTTP/SQL packages pass; shared has no tests |
+| `scripts/codex-review-loop.pl agent/specs/012-backend-startup-boundaries.md --base origin/dev` | 0; native pass 1 clean, no fixes; reviewer repeated unit/race checks |
 | `git diff --check` | 0 |
 
-Baseline lint reports three unchecked Body.Close calls and six comment findings
-in api-tests/shared/client.go, plus missing health and markdown package comments
-(3 errcheck,8 revive; report limiting can change displayed package comments).
-All are unchanged R5 debt. No new lint issue remains or was suppressed.
-No final application scenario failed, was skipped or blocked. Benchmarks,
-Docker compatibility and additional outage scenarios are outside this repair.
+Lint debt is unchanged: three unchecked Body.Close calls plus six missing
+comments in api-tests/shared/client.go and missing health/markdown package
+comments (3 errcheck,8 revive). No new lint failure or suppression. No final
+application scenario failed, was skipped or blocked. No benchmark/toolchain
+compatibility change required benchmarks or Docker checks.
 
-## Fresh statement counts and gaps
+Fresh profiles, reports, counters and provenance are under `.coverage/unit`
+and `.coverage/api`; `.coverage/legacy` stays separate. Both measured Go source
+inventories match the final production and test file hashes, including new
+untracked files. Each integration runner owned/stopped/removed its disposable
+PostgreSQL cluster and server. No shared DB reset, stale counter reuse,
+production exclusion, or mixing of unit/legacy counters into APIHydra.
+
+## Fresh statement counts and remaining gaps
 
 | Production package | Unit covered/total | APIHydra covered/total |
 | --- | --- | --- |
-| cmd/server | 70/88 | 73/88 |
+| cmd/server | 77/92 | 76/92 |
 | internal/change | 398/398 | 378/398 |
 | internal/domain | 0/0 | 0/0 |
 | internal/epic | 115/115 | 107/115 |
@@ -82,19 +97,26 @@ Docker compatibility and additional outage scenarios are outside this repair.
 | internal/testcase | 108/108 | 99/108 |
 | pkg/config | 30/30 | 21/30 |
 | pkg/markdown | 10/10 | 8/10 |
-| **Aggregate** | **917/935 (98.0749%)** | **848/935 (90.6952%)** |
+| **Aggregate** | **924/939 (98.4026%)** | **851/939 (90.6283%)** |
 
-The denominator adds seven real statements: central helper5 and URL validation2.
-Nothing is omitted or artificially executed for coverage. Unit gaps remain18
-server main/start/error-handler statements. API gaps total87: server15,
-change20, epic8, error12, health5, project7, testcase9, config9, markdown2.
-They cover startup/config/shutdown/error paths, SQL query/scan/iteration/Exec
-failures, entropy, concurrent FK/parent failures, degraded health, Markdown
-failures and central nil helper contracts (covered directly by units). Domain
-has no executable statements. Actual counts, not rounded percentages, pass.
+Extraction adds four executable composition statements; no denominator omission.
+All15 uncovered unit statements are process-only main.go lines15–34: config,
+flags, signals, lifecycle invocation and error exit. Router/lifecycle statements
+are fully unit-covered. No main wrapper was added for percentages.
+APIHydra gaps total88: server16, change20, epic8, error12, health5, project7,
+testcase9, config9, markdown2. Server gaps are startup/serve/shutdown failures,
+failed resource acquisition/CORS, error exit and error/write diagnostics.
+Other packages retain SQL query/scan/iteration/Exec errors, entropy, concurrent
+FK/parent failures, degraded health, config defaults/failures, Markdown errors
+and central nil-helper cases. Domain has no executable statements. Both gates
+use actual counts, not rounded package averages.
 
-Factory next: commit/push and native review --base origin/dev; supervisor owns
-the authorized merge-to-dev. Next category after review/merge is012 startup
-boundaries (R3), then R4 config, R5 conventions and R6 reassessment. No stage or
-production promotion. Preserve R1 removal evidence and R2 no-action rationale
-in the ledger; this checkpoint replaces the previous iteration transcript.
+## Factory handoff
+
+Implementation and native review are complete; documentation publication and
+the authorized merge-to-dev are the supervisor's final actions. No production
+source changed after the recorded measurements. R4 next replaces global
+configuration lookup with independent returned instances while preserving the
+fixed path, precedence and panic behavior. R5 then repairs conventions/lint
+debt; R6 reassesses compact code. Preserve the ledger's R1/R2/011 evidence.
+No stage or production promotion.

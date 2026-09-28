@@ -24,3 +24,6 @@
 2026-28-09 04:23 011-backend-validation-causes
 +163 -153 code - +366 -1 tests --- spec
 
+2026-28-09 04:31 012-backend-startup-boundaries
++277 -232 code - +237 -33 tests --- spec
+

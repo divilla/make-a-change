@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/labstack/echo/v5"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
 
@@ -52,8 +53,9 @@ func TestLifecycle(t *testing.T) {
 					},
 					shutdown: func(ctx context.Context) error {
 						require.NoError(t, ctx.Err())
-						_, ok := ctx.Deadline()
+						deadline, ok := ctx.Deadline()
 						require.True(t, ok)
+						require.InDelta(t, 10, time.Until(deadline).Seconds(), 1)
 						events = append(events, "shutdown")
 						close(stopped)
 						if name == "shutdown" {
@@ -82,8 +84,9 @@ func TestLifecycle(t *testing.T) {
 }
 
 func TestStartFailures(t *testing.T) {
+	captureErrorLog(t)
 	_, err := start(context.Background(), &config.Config{Port: "0"})
-	require.Error(t, err)
+	require.ErrorContains(t, err, "configure CORS:")
 	_, err = start(context.Background(), &config.Config{ConnectionString: ":invalid"})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "connect database:")
@@ -96,10 +99,13 @@ func TestStartFailures(t *testing.T) {
 	_, port, err := net.SplitHostPort(listener.Addr().String())
 	require.NoError(t, err)
 	_, err = start(context.Background(), &config.Config{Port: port})
-	require.Error(t, err)
+	require.ErrorContains(t, err, "listen:")
+	var listenErr *net.OpError
+	require.ErrorAs(t, err, &listenErr)
 }
 
 func TestStartCancelRealServer(t *testing.T) {
+	captureErrorLog(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	require.NoError(t, run(ctx, func() (application, error) {
@@ -108,6 +114,7 @@ func TestStartCancelRealServer(t *testing.T) {
 }
 
 func TestInstalledJSONErrorContracts(t *testing.T) {
+	captureErrorLog(t)
 	for _, tc := range []struct {
 		name string
 		err  error
@@ -126,8 +133,8 @@ func TestInstalledJSONErrorContracts(t *testing.T) {
 		{"method", echo.ErrMethodNotAllowed, 405, `{"message":"Method Not Allowed"}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			e := echo.New()
-			e.HTTPErrorHandler = jsonErrorHandler
+			e, err := newRouter(nil, []string{"https://allowed.example"}, zerolog.Nop())
+			require.NoError(t, err)
 			e.GET("/test", func(_ *echo.Context) error { return tc.err })
 			rec := httptest.NewRecorder()
 			e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/test", nil))
@@ -136,21 +143,47 @@ func TestInstalledJSONErrorContracts(t *testing.T) {
 			require.Equal(t, "application/json", rec.Header().Get("Content-Type"))
 		})
 	}
-	// Exercise actual router-produced errors using the installed handler.
-	e := echo.New()
-	e.HTTPErrorHandler = jsonErrorHandler
-	e.GET("/test", func(_ *echo.Context) error { return nil })
-	for _, tc := range []struct {
-		method, path string
-		code         int
-		body         string
-	}{
-		{http.MethodGet, "/missing", 404, `{"message":"Not Found"}`},
-		{http.MethodPost, "/test", 405, `{"message":"Method Not Allowed"}`},
-	} {
-		rec := httptest.NewRecorder()
-		e.ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, nil))
-		require.Equal(t, tc.code, rec.Code)
-		require.Equal(t, tc.body+"\n", rec.Body.String())
+}
+
+func TestStartCORSFailureReleasesListener(t *testing.T) {
+	captureErrorLog(t)
+	listener, err := net.Listen("tcp", ":0")
+	require.NoError(t, err)
+	addr := listener.Addr().String()
+	_, port, err := net.SplitHostPort(addr)
+	require.NoError(t, err)
+	require.NoError(t, listener.Close())
+	// A valid but unreachable database preserves lazy startup and CORS precedence.
+	_, err = start(context.Background(), &config.Config{Port: port, ConnectionString: "postgres://localhost:1/postgres?sslmode=disable"})
+	require.ErrorContains(t, err, "configure CORS:")
+	require.NotNil(t, errors.Unwrap(err))
+	listener, err = net.Listen("tcp", addr)
+	require.NoError(t, err, "failed router setup must release its listener")
+	require.NoError(t, listener.Close())
+}
+
+func TestLifecycleFailedShutdownClosesBeforeWaiting(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	failure := errors.New("shutdown failed")
+	closed := make(chan struct{})
+	result := make(chan error, 1)
+	var events []string
+	go func() {
+		result <- run(ctx, func() (application, error) {
+			return application{
+				serve:    func() error { cancel(); <-closed; return http.ErrServerClosed },
+				shutdown: func(context.Context) error { events = append(events, "shutdown"); return failure },
+				close:    func() { events = append(events, "close"); close(closed) },
+			}, nil
+		})
+	}()
+	select {
+	case err := <-result:
+		require.ErrorIs(t, err, failure)
+		require.EqualError(t, err, "shutdown: shutdown failed")
+		require.Equal(t, []string{"shutdown", "close"}, events)
+	case <-time.After(2 * time.Second):
+		t.Fatal("failed shutdown did not close resources to unblock serving")
 	}
 }

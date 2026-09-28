@@ -1,19 +1,22 @@
-# APIHydra R1 measurement
+# APIHydra R3 measurement
 
-Measured 2026-09-28 on `change/010-backend-dead-code`, implementation
-over merged P4 `b9f630f` (specification HEAD `12ae35a`).
+Measured 2026-09-28 on `change/012-backend-startup-boundaries`, published
+implementation `8bc82d4` over merged dev `4c25d70`; native review passed clean.
 **All 408 requests pass**: 96 P4 in
 [p4/steps.yaml](p4/steps.yaml), 212 P3, 91 P2, 7 errors and 2 health aliases.
 APIHydra and the owned instrumented server exit0. The isolated runner loads
 unchanged root init/seed and [fixtures.sql](fixtures.sql), then stops/removes
 its own private PostgreSQL cluster and server. No external database is reset.
 
-`make -C backend api-test` exits **0**: **843/928 = 90.8405%** production
+`make -C backend api-test` exits **0**: **851/939 = 90.6283%** production
 statement coverage, passing >=90%. Independent unit coverage is
-**910/928 = 98.0603%**, passing strict >95%. Testcase is 108/108 unit and 99/108
+**924/939 = 98.4026%**, passing strict >95%. Testcase is 108/108 unit and 99/108
 API statements. Unit and legacy profiles are never merged into integration.
-R1 removed the audited unused pkg/db wrapper (four statements); domain has no
-executable statements. No retained production package is excluded.
+R1 previously removed the audited unused pkg/db wrapper; 011 added seven real
+validation-cause statements and R3 adds four composition-boundary statements.
+The production denominator is 939; domain has no executable statements. No
+retained production package is excluded. All router/lifecycle statements are
+unit-covered; process-only main statements remain honestly uncovered.
 The [checkpoint](../agents/backend-refactor-checkpoint.md) lists every package,
 command exit, named acceptance evidence and remaining baseline lint failures.
 
@@ -84,9 +87,9 @@ was retained and adapted rather than discarded.
 `TestChangeIdentityOrderingAndSameValueTimestamps` still proves UUIDv7 and
 change timestamp ordering; `TestTestCaseCurrentStateAndSameValueTimestamps`
 adds testcase same-value modified advancement with preserved created, unrelated
-rows, parent timestamps and independently read counters. At P4, all seven existing
-project/epic/change tests, health and two migrated testcase tests passed via
-`make -C backend legacy-api-test`; this separate campaign was not rerun in R1.
+rows, parent timestamps and independently read counters. All retained
+project/epic/change/health/testcase HTTP and SQL tests pass in the complete
+R3 `make -C backend legacy-api-test` campaign, independently of APIHydra.
 Separate `.coverage/legacy/` counters receive
 **zero APIHydra coverage credit**. The ledger records why nonexistent testcase
 history/version/procedure/cascade and composite-response assertions were removed,

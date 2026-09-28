@@ -30,7 +30,7 @@ rules stay in service, wrapping stays in internal/error. No routes, DTOs, SQL,
 dependencies, transactions, database or deployment behavior changed.
 
 The new handler matrices and direct service/helper tests prove cause identity;
-APIHydra retains all408 requests/34 operations, including its existing `%`
+APIHydra retains all 408 requests/34 operations, including its existing `%`
 malformed-URL request and safe400 body. Full legacy SQL/HTTP tests also pass.
 See the [current checkpoint](backend-refactor-checkpoint.md) for fresh evidence.
 This is an error-contract repair; R2 remains no actionable duplicate cleanup.
@@ -298,5 +298,21 @@ Specialized change document operations already share SetDocument. Retain clear
 SQL/scan/affected-row repetition with distinct DTOs, ordering and causes, local
 repository test fakes, and the different owned-process/tool-command runners. No
 generic helper or empty R2 branch is warranted. All retained parity tests and
-408 APIHydra requests pass. The separate011 validation-cause repair precedes
+408 APIHydra requests pass. The separate 011 validation-cause repair precedes
 planned012 startup boundaries and does not represent a duplicate cleanup.
+
+## R3 startup ownership and composition
+
+The 012 extraction preserves the existing 34 method/path pairs and all 408 apih
+requests. Main retains configuration, flags, signals and process exit. Lifecycle
+owns lazy pool creation, listener acquisition, server assembly and cleanup in
+that order; router construction only composes middleware and module wiring,
+without opening/closing caller resources. CORS failures still occur after
+pool/listener acquisition, retain centralized causes and release both resources.
+Middleware/logging/error envelopes, 10s header/30s request timeouts and 10s shutdown
+remain unchanged. Existing TestAPIConstructorRouteInventory now constructs the
+actual router using its single retained expectation list. Handler parity tests
+prove CORS/trailing-slash/recovery/context/logging behavior and safe error-write
+failure logging; lifecycle tests prove failed shutdown unblocks via owned close.
+Global configuration is intentionally unchanged until R4. Both coverage gates
+pass 924/939 unit and 851/939 integration; 11 baseline lint findings await R5.
