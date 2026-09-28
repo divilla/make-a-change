@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"aipm/internal/dto"
+	"mch_api/internal/domain"
 )
 
 var (
@@ -28,38 +28,38 @@ func NewService(projectRepository Repository) *Service {
 }
 
 // ListProjects executes ListProjects behavior.
-func (s *Service) ListProjects(ctx context.Context) ([]dto.Project, error) {
+func (s *Service) ListProjects(ctx context.Context) ([]domain.Project, error) {
 	return s.repo.List(ctx)
 }
 
 // GetProject executes GetProject behavior.
-func (s *Service) GetProject(ctx context.Context, req dto.ProjectIDRequest) (dto.Project, error) {
+func (s *Service) GetProject(ctx context.Context, req domain.ProjectIDRequest) (domain.Project, error) {
 	if req.ID <= 0 {
-		return dto.Project{}, ErrInvalidInput
+		return domain.Project{}, ErrInvalidInput
 	}
 	return s.repo.Get(ctx, req.ID)
 }
 
 // CreateProject executes CreateProject behavior.
-func (s *Service) CreateProject(ctx context.Context, req dto.ProjectCreateRequest) (dto.Project, error) {
+func (s *Service) CreateProject(ctx context.Context, req domain.ProjectCreateRequest) (domain.Project, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		return dto.Project{}, ErrInvalidInput
+		return domain.Project{}, ErrInvalidInput
 	}
 	return s.repo.Create(ctx, name)
 }
 
 // UpdateProject executes UpdateProject behavior.
-func (s *Service) UpdateProject(ctx context.Context, req dto.ProjectUpdateRequest) (dto.Project, error) {
+func (s *Service) UpdateProject(ctx context.Context, req domain.ProjectUpdateRequest) (domain.Project, error) {
 	name := strings.TrimSpace(req.Name)
 	if req.ID <= 0 || name == "" {
-		return dto.Project{}, ErrInvalidInput
+		return domain.Project{}, ErrInvalidInput
 	}
 	return s.repo.Update(ctx, req.ID, name)
 }
 
 // DeleteProject executes DeleteProject behavior.
-func (s *Service) DeleteProject(ctx context.Context, req dto.ProjectIDRequest) error {
+func (s *Service) DeleteProject(ctx context.Context, req domain.ProjectIDRequest) error {
 	if req.ID <= 0 {
 		return ErrInvalidInput
 	}

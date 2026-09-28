@@ -1,8 +1,8 @@
 package change
 
 import (
-	"aipm/internal/dto"
-	"aipm/pkg/markdown"
+	"mch_api/internal/domain"
+	"mch_api/pkg/markdown"
 )
 
 // Renderer defines Renderer values.
@@ -17,7 +17,7 @@ func NewRenderer(parser markdown.Parser, sanitizer markdown.Sanitizer) Renderer 
 }
 
 // RenderChange executes RenderChange behavior.
-func (r Renderer) RenderChange(change dto.Change) dto.Change {
+func (r Renderer) RenderChange(change domain.Change) domain.Change {
 	if r.parser == nil || r.sanitizer == nil {
 		return change
 	}
@@ -31,7 +31,7 @@ func (r Renderer) RenderChange(change dto.Change) dto.Change {
 }
 
 // RenderMutation executes RenderMutation behavior.
-func (r Renderer) RenderMutation(mutation dto.TestCaseMutationResponse) dto.TestCaseMutationResponse {
+func (r Renderer) RenderMutation(mutation domain.TestCaseMutationResponse) domain.TestCaseMutationResponse {
 	mutation.Change = r.RenderChange(mutation.Change)
 	return mutation
 }

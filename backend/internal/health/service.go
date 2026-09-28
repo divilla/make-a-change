@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"aipm/internal/dto"
+	"mch_api/internal/domain"
 
 	"github.com/rs/zerolog/log"
 )
@@ -24,11 +24,11 @@ func NewService(healthRepository Repository) *Service {
 }
 
 // Check executes Check behavior.
-func (s *Service) Check(ctx context.Context) dto.Health {
+func (s *Service) Check(ctx context.Context) domain.Health {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	res := dto.Health{
+	res := domain.Health{
 		Status:   "ok",
 		API:      "ok",
 		Database: "ok",

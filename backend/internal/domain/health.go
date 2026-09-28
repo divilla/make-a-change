@@ -1,4 +1,4 @@
-package dto
+package domain
 
 type (
 	// Health defines Health values.

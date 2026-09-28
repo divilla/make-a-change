@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"aipm/internal/dto"
+	"mch_api/internal/domain"
 
 	"github.com/labstack/echo/v5"
 )
@@ -34,7 +34,7 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 }
 
 func (a *API) listEpics(c *echo.Context) error {
-	var req dto.EpicListRequest
+	var req domain.EpicListRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid epic list payload")
 	}
@@ -46,7 +46,7 @@ func (a *API) listEpics(c *echo.Context) error {
 }
 
 func (a *API) getEpic(c *echo.Context) error {
-	var req dto.EpicIDRequest
+	var req domain.EpicIDRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid epic get payload")
 	}
@@ -58,7 +58,7 @@ func (a *API) getEpic(c *echo.Context) error {
 }
 
 func (a *API) createEpic(c *echo.Context) error {
-	var req dto.EpicCreateRequest
+	var req domain.EpicCreateRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid epic create payload")
 	}
@@ -70,7 +70,7 @@ func (a *API) createEpic(c *echo.Context) error {
 }
 
 func (a *API) updateEpic(c *echo.Context) error {
-	var req dto.EpicUpdateRequest
+	var req domain.EpicUpdateRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid epic update payload")
 	}
@@ -82,7 +82,7 @@ func (a *API) updateEpic(c *echo.Context) error {
 }
 
 func (a *API) deleteEpic(c *echo.Context) error {
-	var req dto.EpicIDRequest
+	var req domain.EpicIDRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid epic delete payload")
 	}

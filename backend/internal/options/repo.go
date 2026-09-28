@@ -3,7 +3,7 @@ package options
 import (
 	"context"
 
-	"aipm/internal/dto"
+	"mch_api/internal/domain"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -19,7 +19,7 @@ func NewRepo(pool *pgxpool.Pool) *Repo {
 }
 
 // ChangePhases executes ChangePhases behavior.
-func (r *Repo) ChangePhases(ctx context.Context) ([]dto.ChangePhase, error) {
+func (r *Repo) ChangePhases(ctx context.Context) ([]domain.ChangePhase, error) {
 	rows, err := r.pool.Query(ctx, `
 		select slug,
 		       priority,
@@ -40,9 +40,9 @@ func (r *Repo) ChangePhases(ctx context.Context) ([]dto.ChangePhase, error) {
 	}
 	defer rows.Close()
 
-	items := make([]dto.ChangePhase, 0)
+	items := make([]domain.ChangePhase, 0)
 	for rows.Next() {
-		var item dto.ChangePhase
+		var item domain.ChangePhase
 		if err := rows.Scan(&item.Slug, &item.Priority, &item.Color); err != nil {
 			return nil, err
 		}
@@ -52,16 +52,16 @@ func (r *Repo) ChangePhases(ctx context.Context) ([]dto.ChangePhase, error) {
 }
 
 // ChangeTypes executes ChangeTypes behavior.
-func (r *Repo) ChangeTypes(ctx context.Context) ([]dto.ChangeType, error) {
+func (r *Repo) ChangeTypes(ctx context.Context) ([]domain.ChangeType, error) {
 	rows, err := r.pool.Query(ctx, "select slug, priority from public.change_type order by priority, slug")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	items := make([]dto.ChangeType, 0)
+	items := make([]domain.ChangeType, 0)
 	for rows.Next() {
-		var item dto.ChangeType
+		var item domain.ChangeType
 		if err := rows.Scan(&item.Slug, &item.Priority); err != nil {
 			return nil, err
 		}

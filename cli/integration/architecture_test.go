@@ -21,7 +21,7 @@ func TestCLIPackageBoundaries(t *testing.T) {
 		"help": true, "projects": true, "testcases": true,
 	}
 	sharedPackages := map[string]bool{
-		"dto": true, "navigation": true, "styles": true, "ui": true,
+		"domain": true, "navigation": true, "styles": true, "ui": true,
 	}
 
 	err := filepath.WalkDir(internalRoot, func(path string, entry fs.DirEntry, walkErr error) error {

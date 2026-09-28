@@ -1,4 +1,4 @@
-# aipm (frontend)
+# make-a-change (frontend)
 
 ## Install the dependencies
 

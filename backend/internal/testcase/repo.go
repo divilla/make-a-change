@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"aipm/internal/dto"
+	"mch_api/internal/domain"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -46,7 +46,7 @@ func NewRepo(pool *pgxpool.Pool) *Repo {
 }
 
 // List executes List behavior.
-func (r *Repo) List(ctx context.Context, changeID int) ([]dto.TestCase, error) {
+func (r *Repo) List(ctx context.Context, changeID int) ([]domain.TestCase, error) {
 	if err := ensureChangeExists(ctx, r.pool, changeID); err != nil {
 		return nil, err
 	}
@@ -54,128 +54,128 @@ func (r *Repo) List(ctx context.Context, changeID int) ([]dto.TestCase, error) {
 }
 
 // Create executes Create behavior.
-func (r *Repo) Create(ctx context.Context, req dto.TestCaseCreateRequest) (dto.TestCaseMutationResponse, error) {
+func (r *Repo) Create(ctx context.Context, req domain.TestCaseCreateRequest) (domain.TestCaseMutationResponse, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return dto.TestCaseMutationResponse{}, err
+		return domain.TestCaseMutationResponse{}, err
 	}
 	defer tx.Rollback(ctx)
 
 	testCase, err := createTestCase(ctx, tx, req.ChangeID, req.Scenario)
 	if err != nil {
-		return dto.TestCaseMutationResponse{}, err
+		return domain.TestCaseMutationResponse{}, err
 	}
 	return finishMutation(ctx, tx, testCase.ChangeID, &testCase)
 }
 
-func createTestCase(ctx context.Context, tx pgx.Tx, changeID int, scenario string) (dto.TestCase, error) {
+func createTestCase(ctx context.Context, tx pgx.Tx, changeID int, scenario string) (domain.TestCase, error) {
 	var id int
 	err := tx.QueryRow(ctx, "select public.fn_test_case_insert($1, $2)", changeID, scenario).Scan(&id)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
-			return dto.TestCase{}, ErrNotFound
+			return domain.TestCase{}, ErrNotFound
 		}
-		return dto.TestCase{}, err
+		return domain.TestCase{}, err
 	}
 	return getTestCase(ctx, tx, id)
 }
 
 // Update executes Update behavior.
-func (r *Repo) Update(ctx context.Context, req dto.TestCaseUpdateRequest) (dto.TestCaseMutationResponse, error) {
+func (r *Repo) Update(ctx context.Context, req domain.TestCaseUpdateRequest) (domain.TestCaseMutationResponse, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return dto.TestCaseMutationResponse{}, err
+		return domain.TestCaseMutationResponse{}, err
 	}
 	defer tx.Rollback(ctx)
 
 	current, err := getTestCase(ctx, tx, req.ID)
 	if err != nil {
-		return dto.TestCaseMutationResponse{}, err
+		return domain.TestCaseMutationResponse{}, err
 	}
 	if req.Scenario == current.Scenario {
 		return finishMutation(ctx, tx, current.ChangeID, &current)
 	}
 	testCase, err := updateTestCaseScenario(ctx, tx, req.ID, req.Scenario)
 	if err != nil {
-		return dto.TestCaseMutationResponse{}, err
+		return domain.TestCaseMutationResponse{}, err
 	}
 	return finishMutation(ctx, tx, current.ChangeID, &testCase)
 }
 
-func updateTestCaseScenario(ctx context.Context, tx pgx.Tx, id int, scenario string) (dto.TestCase, error) {
+func updateTestCaseScenario(ctx context.Context, tx pgx.Tx, id int, scenario string) (domain.TestCase, error) {
 	if _, err := tx.Exec(ctx, "call public.sp_test_case_update_scenario($1, $2)", id, scenario); err != nil {
-		return dto.TestCase{}, err
+		return domain.TestCase{}, err
 	}
 	return getTestCase(ctx, tx, id)
 }
 
 // UpdateDone executes UpdateDone behavior.
-func (r *Repo) UpdateDone(ctx context.Context, req dto.TestCaseUpdateDoneRequest) (dto.TestCaseMutationResponse, error) {
+func (r *Repo) UpdateDone(ctx context.Context, req domain.TestCaseUpdateDoneRequest) (domain.TestCaseMutationResponse, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return dto.TestCaseMutationResponse{}, err
+		return domain.TestCaseMutationResponse{}, err
 	}
 	defer tx.Rollback(ctx)
 
 	testCase, err := updateTestCaseDone(ctx, tx, req.ID, req.Done)
 	if err != nil {
-		return dto.TestCaseMutationResponse{}, err
+		return domain.TestCaseMutationResponse{}, err
 	}
 	return finishMutation(ctx, tx, testCase.ChangeID, &testCase)
 }
 
-func updateTestCaseDone(ctx context.Context, tx pgx.Tx, id int, done bool) (dto.TestCase, error) {
+func updateTestCaseDone(ctx context.Context, tx pgx.Tx, id int, done bool) (domain.TestCase, error) {
 	if _, err := tx.Exec(ctx, "call public.sp_test_case_update_done($1, $2)", id, done); err != nil {
-		return dto.TestCase{}, err
+		return domain.TestCase{}, err
 	}
 	return getTestCase(ctx, tx, id)
 }
 
 // Delete executes Delete behavior.
-func (r *Repo) Delete(ctx context.Context, req dto.TestCaseIDRequest) (dto.TestCaseMutationResponse, error) {
+func (r *Repo) Delete(ctx context.Context, req domain.TestCaseIDRequest) (domain.TestCaseMutationResponse, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return dto.TestCaseMutationResponse{}, err
+		return domain.TestCaseMutationResponse{}, err
 	}
 	defer tx.Rollback(ctx)
 
 	current, err := getTestCase(ctx, tx, req.ID)
 	if err != nil {
-		return dto.TestCaseMutationResponse{}, err
+		return domain.TestCaseMutationResponse{}, err
 	}
 	if _, err := tx.Exec(ctx, "call public.sp_test_case_delete($1)", req.ID); err != nil {
-		return dto.TestCaseMutationResponse{}, err
+		return domain.TestCaseMutationResponse{}, err
 	}
 	return finishMutation(ctx, tx, current.ChangeID, nil)
 }
 
-func finishMutation(ctx context.Context, tx pgx.Tx, responseChangeID int, testCase *dto.TestCase) (dto.TestCaseMutationResponse, error) {
+func finishMutation(ctx context.Context, tx pgx.Tx, responseChangeID int, testCase *domain.TestCase) (domain.TestCaseMutationResponse, error) {
 	change, err := getChange(ctx, tx, responseChangeID)
 	if err != nil {
-		return dto.TestCaseMutationResponse{}, err
+		return domain.TestCaseMutationResponse{}, err
 	}
 	testCases, err := listTestCases(ctx, tx, responseChangeID)
 	if err != nil {
-		return dto.TestCaseMutationResponse{}, err
+		return domain.TestCaseMutationResponse{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return dto.TestCaseMutationResponse{}, err
+		return domain.TestCaseMutationResponse{}, err
 	}
-	return dto.TestCaseMutationResponse{TestCase: testCase, Change: change, TestCases: testCases}, nil
+	return domain.TestCaseMutationResponse{TestCase: testCase, Change: change, TestCases: testCases}, nil
 }
 
-func getTestCase(ctx context.Context, tx pgx.Tx, id int) (dto.TestCase, error) {
+func getTestCase(ctx context.Context, tx pgx.Tx, id int) (domain.TestCase, error) {
 	testCase, err := scanTestCase(tx.QueryRow(ctx, `
 		select id, version, scenario, done, change_id, created, modified
 		from public.test_case
 		where id = $1
 	`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.TestCase{}, ErrNotFound
+		return domain.TestCase{}, ErrNotFound
 	}
 	if err != nil {
-		return dto.TestCase{}, err
+		return domain.TestCase{}, err
 	}
 	return testCase, nil
 }
@@ -191,7 +191,7 @@ func ensureChangeExists(ctx context.Context, q queryer, id int) error {
 	return nil
 }
 
-func listTestCases(ctx context.Context, q queryer, changeID int) ([]dto.TestCase, error) {
+func listTestCases(ctx context.Context, q queryer, changeID int) ([]domain.TestCase, error) {
 	rows, err := q.Query(ctx, `
 		select id, version, scenario, done, change_id, created, modified
 		from public.test_case
@@ -202,7 +202,7 @@ func listTestCases(ctx context.Context, q queryer, changeID int) ([]dto.TestCase
 		return nil, err
 	}
 	defer rows.Close()
-	testCases := make([]dto.TestCase, 0)
+	testCases := make([]domain.TestCase, 0)
 	for rows.Next() {
 		testCase, err := scanTestCase(rows)
 		if err != nil {
@@ -213,8 +213,8 @@ func listTestCases(ctx context.Context, q queryer, changeID int) ([]dto.TestCase
 	return testCases, rows.Err()
 }
 
-func scanTestCase(row pgx.Row) (dto.TestCase, error) {
-	var testCase dto.TestCase
+func scanTestCase(row pgx.Row) (domain.TestCase, error) {
+	var testCase domain.TestCase
 	err := row.Scan(
 		&testCase.ID, &testCase.Version, &testCase.Scenario, &testCase.Done,
 		&testCase.ChangeID, &testCase.Created, &testCase.Modified,
@@ -222,16 +222,16 @@ func scanTestCase(row pgx.Row) (dto.TestCase, error) {
 	return testCase, err
 }
 
-func getChange(ctx context.Context, q queryer, id int) (dto.Change, error) {
+func getChange(ctx context.Context, q queryer, id int) (domain.Change, error) {
 	change, err := scanChange(q.QueryRow(ctx, "select "+changeColumns+" from public.vw_change_details where id = $1", id))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Change{}, ErrNotFound
+		return domain.Change{}, ErrNotFound
 	}
 	return change, err
 }
 
-func scanChange(row pgx.Row) (dto.Change, error) {
-	var change dto.Change
+func scanChange(row pgx.Row) (domain.Change, error) {
+	var change domain.Change
 	var refUUID pgtype.UUID
 	var ref pgtype.Int4
 	var slug pgtype.Text
@@ -244,7 +244,7 @@ func scanChange(row pgx.Row) (dto.Change, error) {
 		&change.TotalTC, &change.Completed, &change.Created, &change.Modified,
 	)
 	if err != nil {
-		return dto.Change{}, err
+		return domain.Change{}, err
 	}
 	if refUUID.Valid {
 		change.RefUUID = refUUID.String()

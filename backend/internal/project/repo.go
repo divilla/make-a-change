@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"aipm/internal/dto"
+	"mch_api/internal/domain"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,10 +18,10 @@ type (
 
 	// Repository defines Repository values.
 	Repository interface {
-		List(ctx context.Context) ([]dto.Project, error)
-		Get(ctx context.Context, id int) (dto.Project, error)
-		Create(ctx context.Context, name string) (dto.Project, error)
-		Update(ctx context.Context, id int, name string) (dto.Project, error)
+		List(ctx context.Context) ([]domain.Project, error)
+		Get(ctx context.Context, id int) (domain.Project, error)
+		Create(ctx context.Context, name string) (domain.Project, error)
+		Update(ctx context.Context, id int, name string) (domain.Project, error)
 		Delete(ctx context.Context, id int) error
 	}
 )
@@ -34,7 +34,7 @@ func NewRepo(pool *pgxpool.Pool) *Repo {
 const projectColumns = "id, name, last_ref, created, modified, change_count"
 
 // List executes List behavior.
-func (r *Repo) List(ctx context.Context) ([]dto.Project, error) {
+func (r *Repo) List(ctx context.Context) ([]domain.Project, error) {
 	rows, err := r.pool.Query(ctx, `
 		select `+projectColumns+`
 		from public.vw_project
@@ -43,7 +43,7 @@ func (r *Repo) List(ctx context.Context) ([]dto.Project, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	projects := make([]dto.Project, 0)
+	projects := make([]domain.Project, 0)
 	for rows.Next() {
 		project, err := scanProject(rows)
 		if err != nil {
@@ -55,29 +55,29 @@ func (r *Repo) List(ctx context.Context) ([]dto.Project, error) {
 }
 
 // Get executes Get behavior.
-func (r *Repo) Get(ctx context.Context, id int) (dto.Project, error) {
+func (r *Repo) Get(ctx context.Context, id int) (domain.Project, error) {
 	project, err := scanProject(r.pool.QueryRow(ctx, `
 		select `+projectColumns+`
 		from public.vw_project
 		where id = $1
 	`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Project{}, ErrNotFound
+		return domain.Project{}, ErrNotFound
 	}
 	return project, err
 }
 
 // Create executes Create behavior.
-func (r *Repo) Create(ctx context.Context, name string) (dto.Project, error) {
+func (r *Repo) Create(ctx context.Context, name string) (domain.Project, error) {
 	var id int
 	if err := r.pool.QueryRow(ctx, "insert into public.project (name) values ($1) returning id", name).Scan(&id); err != nil {
-		return dto.Project{}, err
+		return domain.Project{}, err
 	}
 	return r.Get(ctx, id)
 }
 
 // Update executes Update behavior.
-func (r *Repo) Update(ctx context.Context, id int, name string) (dto.Project, error) {
+func (r *Repo) Update(ctx context.Context, id int, name string) (domain.Project, error) {
 	tag, err := r.pool.Exec(ctx, `
 		update public.project
 		set name = $2,
@@ -85,10 +85,10 @@ func (r *Repo) Update(ctx context.Context, id int, name string) (dto.Project, er
 		where id = $1
 	`, id, name)
 	if err != nil {
-		return dto.Project{}, err
+		return domain.Project{}, err
 	}
 	if tag.RowsAffected() == 0 {
-		return dto.Project{}, ErrNotFound
+		return domain.Project{}, ErrNotFound
 	}
 	return r.Get(ctx, id)
 }
@@ -126,8 +126,8 @@ func (r *Repo) Delete(ctx context.Context, id int) error {
 	return ErrProjectHasChanges
 }
 
-func scanProject(row pgx.Row) (dto.Project, error) {
-	var project dto.Project
+func scanProject(row pgx.Row) (domain.Project, error) {
+	var project domain.Project
 	err := row.Scan(&project.ID, &project.Name, &project.LastRef, &project.Created, &project.Modified, &project.ChangeCount)
 	return project, err
 }

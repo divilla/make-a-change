@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"aipm/internal/dto"
+	"mch_api/internal/domain"
 
 	"github.com/labstack/echo/v5"
 )
@@ -34,7 +34,7 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 }
 
 func (a *API) listTestCases(c *echo.Context) error {
-	var req dto.TestCaseListRequest
+	var req domain.TestCaseListRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid test case list payload")
 	}
@@ -46,7 +46,7 @@ func (a *API) listTestCases(c *echo.Context) error {
 }
 
 func (a *API) createTestCase(c *echo.Context) error {
-	var req dto.TestCaseCreateRequest
+	var req domain.TestCaseCreateRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid test case create payload")
 	}
@@ -58,7 +58,7 @@ func (a *API) createTestCase(c *echo.Context) error {
 }
 
 func (a *API) updateTestCase(c *echo.Context) error {
-	var req dto.TestCaseUpdateRequest
+	var req domain.TestCaseUpdateRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid test case update payload")
 	}
@@ -70,7 +70,7 @@ func (a *API) updateTestCase(c *echo.Context) error {
 }
 
 func (a *API) updateTestCaseDone(c *echo.Context) error {
-	var req dto.TestCaseUpdateDoneRequest
+	var req domain.TestCaseUpdateDoneRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid test case done payload")
 	}
@@ -82,7 +82,7 @@ func (a *API) updateTestCaseDone(c *echo.Context) error {
 }
 
 func (a *API) deleteTestCase(c *echo.Context) error {
-	var req dto.TestCaseIDRequest
+	var req domain.TestCaseIDRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid test case delete payload")
 	}

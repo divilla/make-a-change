@@ -1,9 +1,9 @@
 package change_test
 
 import (
-	"aipm/api-tests/shared"
 	"context"
 	"fmt"
+	"mch_api/api-tests/shared"
 	"net/http"
 	"os"
 	"testing"

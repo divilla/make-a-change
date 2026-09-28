@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"aipm/internal/dto"
+	"mch_api/internal/domain"
 
 	"github.com/labstack/echo/v5"
 )
@@ -45,7 +45,7 @@ func (a *API) listProjects(c *echo.Context) error {
 
 func (a *API) getProject(c *echo.Context) error {
 	ctx := c.Request().Context()
-	var req dto.ProjectIDRequest
+	var req domain.ProjectIDRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid project get payload")
 	}
@@ -60,7 +60,7 @@ func (a *API) getProject(c *echo.Context) error {
 
 func (a *API) createProject(c *echo.Context) error {
 	ctx := c.Request().Context()
-	var req dto.ProjectCreateRequest
+	var req domain.ProjectCreateRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid project create payload")
 	}
@@ -75,7 +75,7 @@ func (a *API) createProject(c *echo.Context) error {
 
 func (a *API) updateProject(c *echo.Context) error {
 	ctx := c.Request().Context()
-	var req dto.ProjectUpdateRequest
+	var req domain.ProjectUpdateRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid project update payload")
 	}
@@ -90,7 +90,7 @@ func (a *API) updateProject(c *echo.Context) error {
 
 func (a *API) deleteProject(c *echo.Context) error {
 	ctx := c.Request().Context()
-	var req dto.ProjectIDRequest
+	var req domain.ProjectIDRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid project delete payload")
 	}

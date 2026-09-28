@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strings"
 
-	"aipm/internal/dto"
+	"mch_api/internal/domain"
 
 	"github.com/gofrs/uuid/v5"
 )
@@ -32,7 +32,7 @@ func NewService(changeRepository Repository, renderer Renderer) *Service {
 }
 
 // ListChanges executes ListChanges behavior.
-func (s *Service) ListChanges(ctx context.Context, req dto.ChangeListRequest) ([]dto.ChangeListItem, error) {
+func (s *Service) ListChanges(ctx context.Context, req domain.ChangeListRequest) ([]domain.ChangeListItem, error) {
 	if req.ProjectID <= 0 {
 		return nil, ErrInvalidInput
 	}
@@ -40,186 +40,186 @@ func (s *Service) ListChanges(ctx context.Context, req dto.ChangeListRequest) ([
 }
 
 // GetChange executes GetChange behavior.
-func (s *Service) GetChange(ctx context.Context, req dto.ChangeIDRequest) (dto.ChangeDetails, error) {
+func (s *Service) GetChange(ctx context.Context, req domain.ChangeIDRequest) (domain.ChangeDetails, error) {
 	if req.ID <= 0 {
-		return dto.ChangeDetails{}, ErrInvalidInput
+		return domain.ChangeDetails{}, ErrInvalidInput
 	}
 	detail, err := s.repo.Details(ctx, req.ID)
 	if err != nil {
-		return dto.ChangeDetails{}, err
+		return domain.ChangeDetails{}, err
 	}
 	detail.Change = s.renderer.RenderChange(detail.Change)
 	return detail, nil
 }
 
 // RenderedArtifacts executes RenderedArtifacts behavior.
-func (s *Service) RenderedArtifacts(ctx context.Context, req dto.ChangeRenderedArtifactsRequest) (dto.ChangeRenderedArtifactsResponse, error) {
+func (s *Service) RenderedArtifacts(ctx context.Context, req domain.ChangeRenderedArtifactsRequest) (domain.ChangeRenderedArtifactsResponse, error) {
 	ids, err := normalizeIDs(req.IDs)
 	if err != nil {
-		return dto.ChangeRenderedArtifactsResponse{}, err
+		return domain.ChangeRenderedArtifactsResponse{}, err
 	}
 	if len(ids) == 0 {
-		return dto.ChangeRenderedArtifactsResponse{Artifacts: []dto.ChangeRenderedArtifact{}}, nil
+		return domain.ChangeRenderedArtifactsResponse{Artifacts: []domain.ChangeRenderedArtifact{}}, nil
 	}
 	changes, err := s.repo.Artifacts(ctx, ids)
 	if err != nil {
-		return dto.ChangeRenderedArtifactsResponse{}, err
+		return domain.ChangeRenderedArtifactsResponse{}, err
 	}
-	artifacts := make([]dto.ChangeRenderedArtifact, 0, len(changes))
+	artifacts := make([]domain.ChangeRenderedArtifact, 0, len(changes))
 	for _, item := range changes {
 		item = s.renderer.RenderChange(item)
-		artifacts = append(artifacts, dto.ChangeRenderedArtifact{
+		artifacts = append(artifacts, domain.ChangeRenderedArtifact{
 			ID:       item.ID,
 			SpecHTML: item.SpecHTML,
 			PRHtml:   item.PRHtml,
 		})
 	}
-	return dto.ChangeRenderedArtifactsResponse{Artifacts: artifacts}, nil
+	return domain.ChangeRenderedArtifactsResponse{Artifacts: artifacts}, nil
 }
 
 // CreateChange executes CreateChange behavior.
-func (s *Service) CreateChange(ctx context.Context, req dto.ChangeCreateRequest) (dto.Change, error) {
+func (s *Service) CreateChange(ctx context.Context, req domain.ChangeCreateRequest) (domain.Change, error) {
 	req.Title = strings.TrimSpace(req.Title)
 	req.Brief = strings.TrimSpace(req.Brief)
 	if req.ProjectID <= 0 || req.Title == "" || req.Brief == "" {
-		return dto.Change{}, ErrInvalidInput
+		return domain.Change{}, ErrInvalidInput
 	}
 	if req.RefUUID == nil {
 		u, err := uuid.NewV7()
 		if err != nil {
-			return dto.Change{}, err
+			return domain.Change{}, err
 		}
 		req.RefUUID = &u
 	}
 	change, err := s.repo.Create(ctx, req)
 	if err != nil {
-		return dto.Change{}, err
+		return domain.Change{}, err
 	}
 	return s.renderer.RenderChange(change), nil
 }
 
 // UpdateChangeTypes executes UpdateChangeTypes behavior.
-func (s *Service) UpdateChangeTypes(ctx context.Context, req dto.ChangeUpdateChangeTypesRequest) (dto.Change, error) {
+func (s *Service) UpdateChangeTypes(ctx context.Context, req domain.ChangeUpdateChangeTypesRequest) (domain.Change, error) {
 	req.ChangeTypes = normalizeTypes(req.ChangeTypes)
 	if req.ID <= 0 {
-		return dto.Change{}, ErrInvalidInput
+		return domain.Change{}, ErrInvalidInput
 	}
 	available, err := s.repo.AvailableChangeTypes(ctx)
 	if err != nil {
-		return dto.Change{}, err
+		return domain.Change{}, err
 	}
 	req.ChangeTypes = intersectTypes(req.ChangeTypes, available)
 	change, err := s.repo.UpdateChangeTypes(ctx, req)
 	if err != nil {
-		return dto.Change{}, err
+		return domain.Change{}, err
 	}
 	return s.renderer.RenderChange(change), nil
 }
 
 // UpdateTitle executes UpdateTitle behavior.
-func (s *Service) UpdateTitle(ctx context.Context, req dto.ChangeUpdateTitleRequest) (dto.Change, error) {
+func (s *Service) UpdateTitle(ctx context.Context, req domain.ChangeUpdateTitleRequest) (domain.Change, error) {
 	req.Title = strings.TrimSpace(req.Title)
 	if req.ID <= 0 || req.Title == "" {
-		return dto.Change{}, ErrInvalidInput
+		return domain.Change{}, ErrInvalidInput
 	}
 	change, err := s.repo.UpdateTitle(ctx, req)
 	if err != nil {
-		return dto.Change{}, err
+		return domain.Change{}, err
 	}
 	return s.renderer.RenderChange(change), nil
 }
 
 // UpdateBrief executes UpdateBrief behavior.
-func (s *Service) UpdateBrief(ctx context.Context, req dto.ChangeUpdateBriefRequest) (dto.Change, error) {
+func (s *Service) UpdateBrief(ctx context.Context, req domain.ChangeUpdateBriefRequest) (domain.Change, error) {
 	req.Brief = strings.TrimSpace(req.Brief)
 	if req.ID <= 0 || req.Brief == "" || req.AgentEdit == nil {
-		return dto.Change{}, ErrInvalidInput
+		return domain.Change{}, ErrInvalidInput
 	}
 	change, err := s.repo.UpdateBrief(ctx, req)
 	if err != nil {
-		return dto.Change{}, err
+		return domain.Change{}, err
 	}
 	return s.renderer.RenderChange(change), nil
 }
 
 // UpdateSpec executes UpdateSpec behavior.
-func (s *Service) UpdateSpec(ctx context.Context, req dto.ChangeUpdateSpecRequest) (dto.Change, error) {
+func (s *Service) UpdateSpec(ctx context.Context, req domain.ChangeUpdateSpecRequest) (domain.Change, error) {
 	req.Spec = strings.TrimSpace(req.Spec)
 	if req.ID <= 0 || req.Spec == "" || req.AgentEdit == nil {
-		return dto.Change{}, ErrInvalidInput
+		return domain.Change{}, ErrInvalidInput
 	}
 	change, err := s.repo.UpdateSpec(ctx, req)
 	if err != nil {
-		return dto.Change{}, err
+		return domain.Change{}, err
 	}
 	return s.renderer.RenderChange(change), nil
 }
 
 // UpdatePR executes UpdatePR behavior.
-func (s *Service) UpdatePR(ctx context.Context, req dto.ChangeUpdatePRRequest) (dto.Change, error) {
+func (s *Service) UpdatePR(ctx context.Context, req domain.ChangeUpdatePRRequest) (domain.Change, error) {
 	req.PR = strings.TrimSpace(req.PR)
 	if req.ID <= 0 || req.PR == "" || req.AgentEdit == nil {
-		return dto.Change{}, ErrInvalidInput
+		return domain.Change{}, ErrInvalidInput
 	}
 	change, err := s.repo.UpdatePR(ctx, req)
 	if err != nil {
-		return dto.Change{}, err
+		return domain.Change{}, err
 	}
 	return s.renderer.RenderChange(change), nil
 }
 
 // UpdatePRUrl executes UpdatePRUrl behavior.
-func (s *Service) UpdatePRUrl(ctx context.Context, req dto.ChangeUpdatePRUrlRequest) (dto.Change, error) {
+func (s *Service) UpdatePRUrl(ctx context.Context, req domain.ChangeUpdatePRUrlRequest) (domain.Change, error) {
 	req.PRUrl = strings.TrimSpace(req.PRUrl)
 	if req.ID <= 0 || req.PRUrl == "" || invalidPRURL(req.PRUrl) {
-		return dto.Change{}, ErrInvalidInput
+		return domain.Change{}, ErrInvalidInput
 	}
 	change, err := s.repo.UpdatePRUrl(ctx, req)
 	if err != nil {
-		return dto.Change{}, err
+		return domain.Change{}, err
 	}
 	return s.renderer.RenderChange(change), nil
 }
 
 // UpdateEpic executes UpdateEpic behavior.
-func (s *Service) UpdateEpic(ctx context.Context, req dto.ChangeUpdateEpicRequest) (dto.Change, error) {
+func (s *Service) UpdateEpic(ctx context.Context, req domain.ChangeUpdateEpicRequest) (domain.Change, error) {
 	if req.ID <= 0 || invalidOptionalID(req.EpicID) {
-		return dto.Change{}, ErrInvalidInput
+		return domain.Change{}, ErrInvalidInput
 	}
 	change, err := s.repo.UpdateEpic(ctx, req)
 	if err != nil {
-		return dto.Change{}, err
+		return domain.Change{}, err
 	}
 	return s.renderer.RenderChange(change), nil
 }
 
 // UpdatePhase executes UpdatePhase behavior.
-func (s *Service) UpdatePhase(ctx context.Context, req dto.ChangeUpdatePhaseRequest) (dto.Change, error) {
+func (s *Service) UpdatePhase(ctx context.Context, req domain.ChangeUpdatePhaseRequest) (domain.Change, error) {
 	req.ChangePhase = strings.TrimSpace(req.ChangePhase)
 	if req.ID <= 0 || req.ChangePhase == "" {
-		return dto.Change{}, ErrInvalidInput
+		return domain.Change{}, ErrInvalidInput
 	}
 	change, err := s.repo.UpdatePhase(ctx, req)
 	if err != nil {
-		return dto.Change{}, err
+		return domain.Change{}, err
 	}
 	return s.renderer.RenderChange(change), nil
 }
 
 // UpdateOpen executes UpdateOpen behavior.
-func (s *Service) UpdateOpen(ctx context.Context, req dto.ChangeUpdateOpenRequest) (dto.Change, error) {
+func (s *Service) UpdateOpen(ctx context.Context, req domain.ChangeUpdateOpenRequest) (domain.Change, error) {
 	if req.ID <= 0 || req.Open == nil {
-		return dto.Change{}, ErrInvalidInput
+		return domain.Change{}, ErrInvalidInput
 	}
 	change, err := s.repo.UpdateOpen(ctx, req)
 	if err != nil {
-		return dto.Change{}, err
+		return domain.Change{}, err
 	}
 	return s.renderer.RenderChange(change), nil
 }
 
 // DeleteChange executes DeleteChange behavior.
-func (s *Service) DeleteChange(ctx context.Context, req dto.ChangeIDRequest) error {
+func (s *Service) DeleteChange(ctx context.Context, req domain.ChangeIDRequest) error {
 	if req.ID <= 0 {
 		return ErrInvalidInput
 	}

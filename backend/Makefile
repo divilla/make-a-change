@@ -1,69 +1,84 @@
-PKG := "aipm"
-PKG_LIST := $(shell go list ${PKG}/... | grep -v '/api-tests')
+SHELL := /bin/sh
+.SHELLFLAGS := -eu -c
+.DEFAULT_GOAL := help
+
+GO ?= go
+GOLANGCI_LINT ?= golangci-lint
+GOVULNCHECK ?= govulncheck
+GOLANGCI_LINT_VERSION := v2.13.1
+GOVULNCHECK_VERSION := v1.7.0
+
+# Explicit patterns fail visibly on build errors; no parse-time go list pipeline.
+# The HTTP test client is a test harness, not production coverage.
+UNIT_PACKAGES := ./cmd/... ./internal/... ./pkg/...
+ALL_PACKAGES := $(UNIT_PACKAGES) ./api-tests/...
+COVER_PACKAGES := ./cmd/...,./internal/...,./pkg/...
+COVERAGE_FILE := .coverage/unit/coverage.out
+
+goversion ?= $(shell awk '$$1 == "go" { print $$2; exit }' go.mod)
 DATABASE_URL ?= postgres://postgres:postgres@localhost:5432/changes
 API_TEST_DB_URL ?= postgres://postgres:postgres@localhost:5432/changes_test
 API_TEST_PORT ?= 19080
 API_TEST_BASE_URL ?= http://localhost:$(API_TEST_PORT)
+export API_TEST_DB_URL API_TEST_PORT API_TEST_BASE_URL GO
 
-.DEFAULT_GOAL := check
-check: lint vet race ## Check project
+.PHONY: check init format format-check lint vet test race coverage coverage-html \
+        benchmark deps-audit tooling-test help test_version import-db api-test
 
-init:
-	@go install golang.org/x/lint/golint@latest
-	@go install honnef.co/go/tools/cmd/staticcheck@latest
+check: format-check lint vet race tooling-test ## Run read-only formatting, lint, vet, race and tooling checks
 
-import-db: ## Initialize and seed the database
-	@psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f ../db/init.sql
-	@psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f ../db/seed.sql
-	@psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f ../db/seed-demo.sql
+init: ## Install pinned development tools (without changing go.mod)
+	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	$(GO) install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
 
-lint: ## Lint the files
-	@goimports -w .
-	@staticcheck ${PKG_LIST}
-	@golint -set_exit_status ${PKG_LIST}
+format: ## Apply gofumpt and goimports formatting to backend Go files
+	$(GOLANGCI_LINT) fmt --no-config --enable gofumpt --enable goimports $(ALL_PACKAGES)
 
-vet: ## Vet the files
-	@go vet ${PKG_LIST}
+format-check: ## Report formatting differences without rewriting files
+	$(GOLANGCI_LINT) fmt --no-config --enable gofumpt --enable goimports --diff $(ALL_PACKAGES)
 
-test: ## Run tests
-	@go clean -testcache
-	@go test -short ${PKG_LIST}
+lint: ## Run standard golangci-lint checks plus revive (includes staticcheck)
+	$(GOLANGCI_LINT) run --no-config --default standard --enable revive --timeout 5m $(ALL_PACKAGES)
 
-api-test: ## Rebuild changes_test and run HTTP integration tests
-	@go clean -testcache
-	@case "$(API_TEST_DB_URL)" in \
-		*/changes_test|*/changes_test\?*) ;; \
-		*) echo "API_TEST_DB_URL must target changes_test"; exit 1 ;; \
-	esac
-	@(command -v pkill >/dev/null 2>&1 && pkill -f '[a]ipm-server .* -port $(API_TEST_PORT)' >/dev/null 2>&1) || true
-	@psql $(API_TEST_DB_URL) -v ON_ERROR_STOP=1 -f ../db/init.sql >/tmp/aipm-api-test-db.log 2>&1
-	@psql $(API_TEST_DB_URL) -v ON_ERROR_STOP=1 -f ../db/seed.sql >>/tmp/aipm-api-test-db.log 2>&1
-	@go build -o aipm-server cmd/server/*.go
-	@./aipm-server -db $(API_TEST_DB_URL) -port $(API_TEST_PORT) >/tmp/aipm-api-test.log 2>&1 & pid=$$!; \
-		trap 'kill $$pid >/dev/null 2>&1 || true; rm -f aipm-server' EXIT; \
-		for _ in $$(seq 1 50); do \
-			if ! kill -0 $$pid >/dev/null 2>&1; then \
-				cat /tmp/aipm-api-test.log; \
-				exit 1; \
-			fi; \
-			if curl -fsS $(API_TEST_BASE_URL)/api/v1/health >/dev/null 2>&1; then \
-				API_TEST_DB_URL=$(API_TEST_DB_URL) API_TEST_BASE_URL=$(API_TEST_BASE_URL) go test -count=1 ./api-tests/...; \
-				exit $$?; \
-			fi; \
-			sleep 0.1; \
-		done; \
-		cat /tmp/aipm-api-test.log; \
-		exit 1
+vet: ## Vet all backend packages, including the HTTP test harness
+	$(GO) vet $(ALL_PACKAGES)
 
-race: ## Run tests with data race detector
-	@go test -race ${PKG_LIST}
+test: ## Run uncached unit tests without database or HTTP integration tests
+	$(GO) test -short -count=1 $(UNIT_PACKAGES)
 
-benchmark: ## Run benchmarks
-	@go test -run="-" -benchmem -bench=".*" ${PKG_LIST}
+race: ## Run uncached unit tests with the race detector
+	$(GO) test -short -count=1 -race $(UNIT_PACKAGES)
 
-help: ## Display this help screen
-	@grep -h -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+coverage: ## Measure unit coverage for every production package (target: above 95%)
+	mkdir -p .coverage/unit
+	rm -f "$(COVERAGE_FILE)" .coverage/unit/coverage.html
+	$(GO) test -short -count=1 -race -covermode=atomic -coverpkg=$(COVER_PACKAGES) -coverprofile="$(COVERAGE_FILE)" $(UNIT_PACKAGES)
+	$(GO) tool cover -func="$(COVERAGE_FILE)"
 
-goversion ?= "1.25"
-test_version: ## Run tests inside Docker with given version (defaults to 1.25 oldest supported). Example: make test_version goversion=1.25
-	@docker run --rm -it -v $(shell pwd):/project golang:$(goversion) /bin/sh -c "cd /project && make init check"
+coverage-html: coverage ## Generate an HTML report after a successful unit coverage run
+	$(GO) tool cover -html="$(COVERAGE_FILE)" -o .coverage/unit/coverage.html
+
+benchmark: ## Run benchmarks without ordinary or database integration tests
+	$(GO) test -short -run='^$$' -bench=. -benchmem $(UNIT_PACKAGES)
+
+deps-audit: ## Check backend dependencies for known vulnerabilities
+	$(GOVULNCHECK) $(ALL_PACKAGES)
+
+tooling-test: ## Test Makefile behavior with isolated tool and service fixtures
+	python3 -B -m unittest discover -s scripts -p '*_test.py' -v
+
+import-db: ## Initialize and seed DATABASE_URL (destructive; explicit target only)
+	psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f ../db/init.sql
+	psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f ../db/seed.sql
+	psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f ../db/seed-demo.sql
+
+# Retain the existing Go HTTP tests until P0 introduces the APIHydra runner.
+# This target does not measure the future APIHydra integration coverage gate.
+api-test: ## Rebuild changes_test and run the existing Go HTTP integration suite
+	bash scripts/run-api-tests.sh
+
+help: ## Display available backend targets
+	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "%-20s %s\n", $$1, $$2}' Makefile
+
+test_version: ## Run checks in Docker using go.mod's Go version; override with goversion=X
+	docker run --rm -v "$(CURDIR):/project" -w /project "golang:$(goversion)" sh -eu -c 'command -v python3 >/dev/null || { apt-get update && apt-get install -y --no-install-recommends python3; }; go version; make init check'

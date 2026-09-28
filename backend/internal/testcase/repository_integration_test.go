@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"aipm/internal/change"
-	"aipm/internal/dto"
+	"mch_api/internal/change"
+	"mch_api/internal/domain"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -47,13 +47,13 @@ func TestRepositoryHistoryProcedures(t *testing.T) {
 	})
 
 	repo := NewRepo(pool)
-	first, err := repo.Create(ctx, dto.TestCaseCreateRequest{ChangeID: changeID, Scenario: "Initial scenario"})
+	first, err := repo.Create(ctx, domain.TestCaseCreateRequest{ChangeID: changeID, Scenario: "Initial scenario"})
 	require.NoError(t, err)
 	require.NotNil(t, first.TestCase)
 	assert.Equal(t, int16(0), first.TestCase.Version)
 	assert.False(t, first.TestCase.Done)
 	assert.Equal(t, int16(1), first.Change.TotalTC)
-	second, err := repo.Create(ctx, dto.TestCaseCreateRequest{ChangeID: changeID, Scenario: "Unedited scenario"})
+	second, err := repo.Create(ctx, domain.TestCaseCreateRequest{ChangeID: changeID, Scenario: "Unedited scenario"})
 	require.NoError(t, err)
 	require.NotNil(t, second.TestCase)
 	assert.Equal(t, int16(2), second.Change.TotalTC)
@@ -61,20 +61,20 @@ func TestRepositoryHistoryProcedures(t *testing.T) {
 	var initialHistoryCount int
 	require.NoError(t, pool.QueryRow(ctx, "select count(*) from public.test_case_history where change_id = $1 and version = 0 and not deleted", changeID).Scan(&initialHistoryCount))
 	assert.Equal(t, 2, initialHistoryCount)
-	updated, err := repo.Update(ctx, dto.TestCaseUpdateRequest{ID: firstID, Scenario: "Updated scenario"})
+	updated, err := repo.Update(ctx, domain.TestCaseUpdateRequest{ID: firstID, Scenario: "Updated scenario"})
 	require.NoError(t, err)
 	require.NotNil(t, updated.TestCase)
 	assert.Equal(t, int16(1), updated.TestCase.Version)
 	assert.Equal(t, "Updated scenario", updated.TestCase.Scenario)
-	unchanged, err := repo.Update(ctx, dto.TestCaseUpdateRequest{ID: firstID, Scenario: "Updated scenario"})
+	unchanged, err := repo.Update(ctx, domain.TestCaseUpdateRequest{ID: firstID, Scenario: "Updated scenario"})
 	require.NoError(t, err)
 	require.NotNil(t, unchanged.TestCase)
 	assert.Equal(t, int16(1), unchanged.TestCase.Version)
 
-	_, err = repo.UpdateDone(ctx, dto.TestCaseUpdateDoneRequest{ID: firstID, Done: true})
+	_, err = repo.UpdateDone(ctx, domain.TestCaseUpdateDoneRequest{ID: firstID, Done: true})
 	require.NoError(t, err)
-	require.NoError(t, change.NewRepo(pool).Delete(ctx, dto.ChangeIDRequest{ID: changeID}))
-	_, err = repo.Create(ctx, dto.TestCaseCreateRequest{ChangeID: changeID, Scenario: "Missing parent"})
+	require.NoError(t, change.NewRepo(pool).Delete(ctx, domain.ChangeIDRequest{ID: changeID}))
+	_, err = repo.Create(ctx, domain.TestCaseCreateRequest{ChangeID: changeID, Scenario: "Missing parent"})
 	require.ErrorIs(t, err, ErrNotFound)
 
 	type historyEntry struct {

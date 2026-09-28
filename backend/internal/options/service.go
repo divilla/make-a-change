@@ -3,13 +3,13 @@ package options
 import (
 	"context"
 
-	"aipm/internal/dto"
+	"mch_api/internal/domain"
 )
 
 // Repository defines Repository values.
 type Repository interface {
-	ChangePhases(ctx context.Context) ([]dto.ChangePhase, error)
-	ChangeTypes(ctx context.Context) ([]dto.ChangeType, error)
+	ChangePhases(ctx context.Context) ([]domain.ChangePhase, error)
+	ChangeTypes(ctx context.Context) ([]domain.ChangeType, error)
 }
 
 // Service defines Service values.
@@ -23,11 +23,11 @@ func NewService(repo Repository) *Service {
 }
 
 // ChangePhases executes ChangePhases behavior.
-func (s *Service) ChangePhases(ctx context.Context) ([]dto.ChangePhase, error) {
+func (s *Service) ChangePhases(ctx context.Context) ([]domain.ChangePhase, error) {
 	return s.repo.ChangePhases(ctx)
 }
 
 // ChangeTypes executes ChangeTypes behavior.
-func (s *Service) ChangeTypes(ctx context.Context) ([]dto.ChangeType, error) {
+func (s *Service) ChangeTypes(ctx context.Context) ([]domain.ChangeType, error) {
 	return s.repo.ChangeTypes(ctx)
 }

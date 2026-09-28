@@ -1,8 +1,8 @@
 package testcase_test
 
 import (
-	"aipm/api-tests/shared"
 	"fmt"
+	"mch_api/api-tests/shared"
 	"net/http"
 	"testing"
 	"time"

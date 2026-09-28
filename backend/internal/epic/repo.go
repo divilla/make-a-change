@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"aipm/internal/dto"
+	"mch_api/internal/domain"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -23,7 +23,7 @@ func NewRepo(pool *pgxpool.Pool) *Repo {
 }
 
 // List executes List behavior.
-func (r *Repo) List(ctx context.Context, projectID int) ([]dto.Epic, error) {
+func (r *Repo) List(ctx context.Context, projectID int) ([]domain.Epic, error) {
 	rows, err := r.pool.Query(ctx, `
 		select `+epicColumns+`
 		from public.vw_epic
@@ -34,7 +34,7 @@ func (r *Repo) List(ctx context.Context, projectID int) ([]dto.Epic, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	epics := make([]dto.Epic, 0)
+	epics := make([]domain.Epic, 0)
 	for rows.Next() {
 		epic, err := scanEpic(rows)
 		if err != nil {
@@ -46,18 +46,18 @@ func (r *Repo) List(ctx context.Context, projectID int) ([]dto.Epic, error) {
 }
 
 // Get executes Get behavior.
-func (r *Repo) Get(ctx context.Context, id int) (dto.Epic, error) {
+func (r *Repo) Get(ctx context.Context, id int) (domain.Epic, error) {
 	epic, err := scanEpic(r.pool.QueryRow(ctx, "select "+epicColumns+" from public.vw_epic where id = $1", id))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Epic{}, ErrNotFound
+		return domain.Epic{}, ErrNotFound
 	}
 	return epic, err
 }
 
 // Create executes Create behavior.
-func (r *Repo) Create(ctx context.Context, req dto.EpicCreateRequest) (dto.Epic, error) {
+func (r *Repo) Create(ctx context.Context, req domain.EpicCreateRequest) (domain.Epic, error) {
 	if err := r.ensureProject(ctx, req.ProjectID); err != nil {
-		return dto.Epic{}, err
+		return domain.Epic{}, err
 	}
 	var id int
 	if err := r.pool.QueryRow(ctx, `
@@ -65,31 +65,31 @@ func (r *Repo) Create(ctx context.Context, req dto.EpicCreateRequest) (dto.Epic,
 		values ($1, $2)
 		returning id
 	`, req.ProjectID, req.Name).Scan(&id); err != nil {
-		return dto.Epic{}, err
+		return domain.Epic{}, err
 	}
 	return r.Get(ctx, id)
 }
 
 // Update executes Update behavior.
-func (r *Repo) Update(ctx context.Context, req dto.EpicUpdateRequest) (dto.Epic, error) {
+func (r *Repo) Update(ctx context.Context, req domain.EpicUpdateRequest) (domain.Epic, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return dto.Epic{}, err
+		return domain.Epic{}, err
 	}
 	defer tx.Rollback(ctx)
 
 	current, err := getEpic(ctx, tx, req.ID)
 	if err != nil {
-		return dto.Epic{}, err
+		return domain.Epic{}, err
 	}
 	if current.Name == req.Name {
 		if err := tx.Commit(ctx); err != nil {
-			return dto.Epic{}, err
+			return domain.Epic{}, err
 		}
 		return current, nil
 	}
 	if _, err := tx.Exec(ctx, "call public.sp_epic_to_history($1, false)", req.ID); err != nil {
-		return dto.Epic{}, err
+		return domain.Epic{}, err
 	}
 	tag, err := tx.Exec(ctx, `
 		update public.epic
@@ -99,17 +99,17 @@ func (r *Repo) Update(ctx context.Context, req dto.EpicUpdateRequest) (dto.Epic,
 		where id = $1
 	`, req.ID, req.Name)
 	if err != nil {
-		return dto.Epic{}, err
+		return domain.Epic{}, err
 	}
 	if tag.RowsAffected() == 0 {
-		return dto.Epic{}, ErrNotFound
+		return domain.Epic{}, ErrNotFound
 	}
 	epic, err := getEpic(ctx, tx, req.ID)
 	if err != nil {
-		return dto.Epic{}, err
+		return domain.Epic{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return dto.Epic{}, err
+		return domain.Epic{}, err
 	}
 	return epic, nil
 }
@@ -156,16 +156,16 @@ func (r *Repo) ensureProject(ctx context.Context, id int) error {
 	return nil
 }
 
-func getEpic(ctx context.Context, q queryer, id int) (dto.Epic, error) {
+func getEpic(ctx context.Context, q queryer, id int) (domain.Epic, error) {
 	epic, err := scanEpic(q.QueryRow(ctx, "select "+epicColumns+" from public.vw_epic where id = $1", id))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Epic{}, ErrNotFound
+		return domain.Epic{}, ErrNotFound
 	}
 	return epic, err
 }
 
-func scanEpic(row pgx.Row) (dto.Epic, error) {
-	var epic dto.Epic
+func scanEpic(row pgx.Row) (domain.Epic, error) {
+	var epic domain.Epic
 	err := row.Scan(
 		&epic.ID, &epic.Version, &epic.ProjectID, &epic.Name, &epic.DoneTC,
 		&epic.TotalTC, &epic.Completed, &epic.ChangeCount, &epic.Created, &epic.Modified,

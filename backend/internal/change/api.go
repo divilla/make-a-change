@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"aipm/internal/dto"
+	"mch_api/internal/domain"
 
 	"github.com/labstack/echo/v5"
 )
@@ -43,7 +43,7 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 }
 
 func (a *API) listChanges(c *echo.Context) error {
-	var req dto.ChangeListRequest
+	var req domain.ChangeListRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change list payload")
 	}
@@ -55,7 +55,7 @@ func (a *API) listChanges(c *echo.Context) error {
 }
 
 func (a *API) getChange(c *echo.Context) error {
-	var req dto.ChangeIDRequest
+	var req domain.ChangeIDRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change get payload")
 	}
@@ -67,7 +67,7 @@ func (a *API) getChange(c *echo.Context) error {
 }
 
 func (a *API) renderedArtifacts(c *echo.Context) error {
-	var req dto.ChangeRenderedArtifactsRequest
+	var req domain.ChangeRenderedArtifactsRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change rendered artifacts payload")
 	}
@@ -79,7 +79,7 @@ func (a *API) renderedArtifacts(c *echo.Context) error {
 }
 
 func (a *API) createChange(c *echo.Context) error {
-	var req dto.ChangeCreateRequest
+	var req domain.ChangeCreateRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change create payload")
 	}
@@ -91,7 +91,7 @@ func (a *API) createChange(c *echo.Context) error {
 }
 
 func (a *API) updateEpic(c *echo.Context) error {
-	var req dto.ChangeUpdateEpicRequest
+	var req domain.ChangeUpdateEpicRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change epic payload")
 	}
@@ -103,7 +103,7 @@ func (a *API) updateEpic(c *echo.Context) error {
 }
 
 func (a *API) updateChangeTypes(c *echo.Context) error {
-	var req dto.ChangeUpdateChangeTypesRequest
+	var req domain.ChangeUpdateChangeTypesRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change types payload")
 	}
@@ -115,7 +115,7 @@ func (a *API) updateChangeTypes(c *echo.Context) error {
 }
 
 func (a *API) updateTitle(c *echo.Context) error {
-	var req dto.ChangeUpdateTitleRequest
+	var req domain.ChangeUpdateTitleRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change title payload")
 	}
@@ -127,7 +127,7 @@ func (a *API) updateTitle(c *echo.Context) error {
 }
 
 func (a *API) updateBrief(c *echo.Context) error {
-	var req dto.ChangeUpdateBriefRequest
+	var req domain.ChangeUpdateBriefRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change brief payload")
 	}
@@ -139,7 +139,7 @@ func (a *API) updateBrief(c *echo.Context) error {
 }
 
 func (a *API) updateSpec(c *echo.Context) error {
-	var req dto.ChangeUpdateSpecRequest
+	var req domain.ChangeUpdateSpecRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change spec payload")
 	}
@@ -151,7 +151,7 @@ func (a *API) updateSpec(c *echo.Context) error {
 }
 
 func (a *API) updatePR(c *echo.Context) error {
-	var req dto.ChangeUpdatePRRequest
+	var req domain.ChangeUpdatePRRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change pr payload")
 	}
@@ -163,7 +163,7 @@ func (a *API) updatePR(c *echo.Context) error {
 }
 
 func (a *API) updatePRUrl(c *echo.Context) error {
-	var req dto.ChangeUpdatePRUrlRequest
+	var req domain.ChangeUpdatePRUrlRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change pr url payload")
 	}
@@ -175,7 +175,7 @@ func (a *API) updatePRUrl(c *echo.Context) error {
 }
 
 func (a *API) updatePhase(c *echo.Context) error {
-	var req dto.ChangeUpdatePhaseRequest
+	var req domain.ChangeUpdatePhaseRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change phase payload")
 	}
@@ -187,7 +187,7 @@ func (a *API) updatePhase(c *echo.Context) error {
 }
 
 func (a *API) updateOpen(c *echo.Context) error {
-	var req dto.ChangeUpdateOpenRequest
+	var req domain.ChangeUpdateOpenRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change open payload")
 	}
@@ -199,7 +199,7 @@ func (a *API) updateOpen(c *echo.Context) error {
 }
 
 func (a *API) deleteChange(c *echo.Context) error {
-	var req dto.ChangeIDRequest
+	var req domain.ChangeIDRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change delete payload")
 	}

@@ -1,7 +1,7 @@
 package health_test
 
 import (
-	"aipm/api-tests/shared"
+	"mch_api/api-tests/shared"
 	"net/http"
 	"testing"
 

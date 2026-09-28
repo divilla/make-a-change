@@ -8,8 +8,8 @@ import {
 } from '../api/projectApi';
 import type { Project } from './project.types';
 
-const CURRENT_PROJECT_STORAGE_KEY = 'aipm.currentProjectId';
-const LEGACY_ACTIVE_PROJECT_STORAGE_KEY = 'aipm.activeProjectId';
+const CURRENT_PROJECT_STORAGE_KEY = 'mch.currentProjectId';
+const LEGACY_ACTIVE_PROJECT_STORAGE_KEY = 'mch.activeProjectId';
 
 function readPersistedProjectId() {
   if (typeof localStorage === 'undefined') return 0;

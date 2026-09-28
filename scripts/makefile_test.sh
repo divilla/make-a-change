@@ -21,15 +21,15 @@ set -euo pipefail
 printf 'go:%s\n' "$*" >>"$MAKEFILE_TEST_LOG"
 if [[ $1 == build ]]; then
     [[ $PWD == "$MAKEFILE_TEST_REPO/backend" ]]
-    [[ $* == 'build -o aipm-server cmd/server/main.go' ]]
+    [[ $* == 'build -o mch-server cmd/server/main.go' ]]
     [[ ${MAKEFILE_TEST_FAIL_BUILD:-0} == 0 ]] || exit 17
-    cat >aipm-server <<'SERVER'
+    cat >mch-server <<'SERVER'
 #!/usr/bin/env bash
 set -euo pipefail
 [[ $PWD == "$MAKEFILE_TEST_REPO/backend" ]]
 printf '%s\n' 'backend:started' >>"$MAKEFILE_TEST_LOG"
 SERVER
-    chmod +x aipm-server
+    chmod +x mch-server
 else
     [[ $1 == install && $# -eq 2 ]]
 fi
@@ -74,7 +74,7 @@ make -s -C "$repo" run >"$test_root/run.out"
 grep -Fxq 'lsof:-ti tcp:8080' "$log"
 grep -Fxq 'lsof:-ti tcp:8000' "$log"
 grep -Fxq 'docker-compose:up -d' "$log"
-grep -Fxq 'go:build -o aipm-server cmd/server/main.go' "$log"
+grep -Fxq 'go:build -o mch-server cmd/server/main.go' "$log"
 grep -Fxq 'backend:started' "$log"
 grep -Fxq 'pnpm:dev' "$log"
 grep -Fq 'Backend:  http://localhost:8080' "$test_root/run.out"

@@ -42,7 +42,7 @@ describe('projectSelection store', () => {
   });
 
   it('selects the persisted project when it still exists', async () => {
-    localStorage.setItem('aipm.currentProjectId', '5');
+    localStorage.setItem('mch.currentProjectId', '5');
     vi.mocked(listProjects).mockResolvedValue([
       projectFixture({ id: 10, name: 'Later', change_count: 0 }),
       projectFixture({ id: 5, name: 'Persisted', change_count: 0 }),
@@ -56,7 +56,7 @@ describe('projectSelection store', () => {
   });
 
   it('migrates the legacy active project key to the current project key', async () => {
-    localStorage.setItem('aipm.activeProjectId', '5');
+    localStorage.setItem('mch.activeProjectId', '5');
     vi.mocked(listProjects).mockResolvedValue([
       projectFixture({ id: 5, name: 'Persisted', change_count: 0 }),
     ]);
@@ -65,8 +65,8 @@ describe('projectSelection store', () => {
     await store.loadProjects();
 
     expect(store.currentProjectId).toBe(5);
-    expect(localStorage.getItem('aipm.currentProjectId')).toBe('5');
-    expect(localStorage.getItem('aipm.activeProjectId')).toBeNull();
+    expect(localStorage.getItem('mch.currentProjectId')).toBe('5');
+    expect(localStorage.getItem('mch.activeProjectId')).toBeNull();
   });
 
   it('loads the complete project list in one request', async () => {
@@ -101,7 +101,7 @@ describe('projectSelection store', () => {
   });
 
   it('repairs invalid persisted selections by choosing the lowest project id', async () => {
-    localStorage.setItem('aipm.currentProjectId', '99');
+    localStorage.setItem('mch.currentProjectId', '99');
     vi.mocked(listProjects).mockResolvedValue([
       projectFixture({ id: 10, name: 'Later', change_count: 0 }),
       projectFixture({ id: 5, name: 'First', change_count: 0 }),
@@ -111,11 +111,11 @@ describe('projectSelection store', () => {
     await store.loadProjects();
 
     expect(store.currentProjectId).toBe(5);
-    expect(localStorage.getItem('aipm.currentProjectId')).toBe('5');
+    expect(localStorage.getItem('mch.currentProjectId')).toBe('5');
   });
 
   it('clears selection when no projects exist', async () => {
-    localStorage.setItem('aipm.currentProjectId', '5');
+    localStorage.setItem('mch.currentProjectId', '5');
     vi.mocked(listProjects).mockResolvedValue([]);
 
     const store = useProjectSelectionStore();
@@ -123,7 +123,7 @@ describe('projectSelection store', () => {
 
     expect(store.currentProjectId).toBe(0);
     expect(store.currentProject).toBeNull();
-    expect(localStorage.getItem('aipm.currentProjectId')).toBeNull();
+    expect(localStorage.getItem('mch.currentProjectId')).toBeNull();
   });
 
   it('selects a created project', async () => {

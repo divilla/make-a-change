@@ -1,0 +1,5 @@
+# Backend verification artifacts.
+/.coverage/
+
+# Generated backend executable.
+/mch-server

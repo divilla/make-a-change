@@ -10,8 +10,8 @@ run:
 	@kill $$(lsof -ti tcp:8080) >/dev/null 2>&1 || true
 	@kill $$(lsof -ti tcp:8000) >/dev/null 2>&1 || true
 	@docker-compose up -d
-	@cd backend && go build -o aipm-server cmd/server/*.go
-	@(cd backend && ./aipm-server) & \
+	@cd backend && go build -o mch-server cmd/server/*.go
+	@(cd backend && ./mch-server) & \
 		backend_pid=$$!; \
 		(cd frontend && pnpm dev) & \
 		frontend_pid=$$!; \
