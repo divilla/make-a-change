@@ -49,7 +49,7 @@ func (a *API) getProject(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid project get payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.ErrProjectInvalidInput)
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrProjectInvalidInput))
 	}
 
 	res, err := a.s.GetProject(ctx, req)
@@ -67,7 +67,7 @@ func (a *API) createProject(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid project create payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.ErrProjectInvalidInput)
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrProjectInvalidInput))
 	}
 
 	res, err := a.s.CreateProject(ctx, req)
@@ -85,7 +85,7 @@ func (a *API) updateProject(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid project update payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.ErrProjectInvalidInput)
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrProjectInvalidInput))
 	}
 
 	err := a.s.UpdateProject(ctx, req)
@@ -103,7 +103,7 @@ func (a *API) deleteProject(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid project delete payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.ErrProjectInvalidInput)
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrProjectInvalidInput))
 	}
 
 	if err := a.s.DeleteProject(ctx, req); err != nil {
@@ -119,7 +119,7 @@ func (a *API) config(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid project config payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.ErrProjectInvalidInput)
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrProjectInvalidInput))
 	}
 	res, err := a.s.Config(c.Request().Context(), req)
 	if err != nil {

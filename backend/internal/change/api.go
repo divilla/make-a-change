@@ -49,7 +49,7 @@ func (a *API) listChanges(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid change list payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.InvalidPayload(v.Errors, "invalid change payload")
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
 	res, err := a.s.ListChanges(c.Request().Context(), req)
 	if err != nil {
@@ -64,7 +64,7 @@ func (a *API) getChange(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid change get payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.InvalidPayload(v.Errors, "invalid change payload")
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
 	res, err := a.s.GetChange(c.Request().Context(), req)
 	if err != nil {
@@ -91,7 +91,7 @@ func (a *API) createChange(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid change create payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.InvalidPayload(v.Errors, "invalid change payload")
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
 	res, err := a.s.CreateChange(c.Request().Context(), req)
 	if err != nil {
@@ -106,7 +106,7 @@ func (a *API) updateEpic(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid change epic payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.InvalidPayload(v.Errors, "invalid change payload")
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
 	err := a.s.UpdateEpic(c.Request().Context(), req)
 	if err != nil {
@@ -121,7 +121,7 @@ func (a *API) updateChangeTypes(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid change types payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.InvalidPayload(v.Errors, "invalid change payload")
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
 	err := a.s.UpdateChangeTypes(c.Request().Context(), req)
 	if err != nil {
@@ -136,7 +136,7 @@ func (a *API) updateTitle(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid change title payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.InvalidPayload(v.Errors, "invalid change payload")
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
 	err := a.s.UpdateTitle(c.Request().Context(), req)
 	if err != nil {
@@ -151,7 +151,7 @@ func (a *API) updateBrief(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid change brief payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.InvalidPayload(v.Errors, "invalid change payload")
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
 	err := a.s.UpdateBrief(c.Request().Context(), req)
 	if err != nil {
@@ -166,7 +166,7 @@ func (a *API) updateSpec(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid change spec payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.InvalidPayload(v.Errors, "invalid change payload")
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
 	err := a.s.UpdateSpec(c.Request().Context(), req)
 	if err != nil {
@@ -181,7 +181,7 @@ func (a *API) updatePR(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid change pr payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.InvalidPayload(v.Errors, "invalid change payload")
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
 	err := a.s.UpdatePR(c.Request().Context(), req)
 	if err != nil {
@@ -196,7 +196,7 @@ func (a *API) updatePRUrl(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid change pr url payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.InvalidPayload(v.Errors, "invalid change payload")
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
 	err := a.s.UpdatePRUrl(c.Request().Context(), req)
 	if err != nil {
@@ -211,7 +211,7 @@ func (a *API) updatePhase(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid change phase payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.InvalidPayload(v.Errors, "invalid change payload")
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
 	err := a.s.UpdatePhase(c.Request().Context(), req)
 	if err != nil {
@@ -226,7 +226,7 @@ func (a *API) updateOpen(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid change open payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.InvalidPayload(v.Errors, "invalid change payload")
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
 	err := a.s.UpdateOpen(c.Request().Context(), req)
 	if err != nil {
@@ -241,7 +241,7 @@ func (a *API) deleteChange(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid change delete payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.InvalidPayload(v.Errors, "invalid change payload")
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
 	if err := a.s.DeleteChange(c.Request().Context(), req); err != nil {
 		return apperror.HTTP(err)
@@ -255,7 +255,7 @@ func (a *API) documents(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid change documents payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.InvalidPayload(v.Errors, "invalid change payload")
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
 	res, err := a.s.Documents(c.Request().Context(), req)
 	if err != nil {
@@ -270,7 +270,7 @@ func (a *API) setDocument(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid change document payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.InvalidPayload(v.Errors, "invalid change payload")
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
 	if err := a.s.SetDocument(c.Request().Context(), req); err != nil {
 		return apperror.HTTP(err)

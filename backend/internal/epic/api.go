@@ -37,7 +37,7 @@ func (a *API) listEpics(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid epic list payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.ErrEpicInvalidInput)
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrEpicInvalidInput))
 	}
 	res, err := a.s.ListEpics(c.Request().Context(), req)
 	if err != nil {
@@ -52,7 +52,7 @@ func (a *API) getEpic(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid epic get payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.ErrEpicInvalidInput)
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrEpicInvalidInput))
 	}
 	res, err := a.s.GetEpic(c.Request().Context(), req)
 	if err != nil {
@@ -67,7 +67,7 @@ func (a *API) createEpic(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid epic create payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.ErrEpicInvalidInput)
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrEpicInvalidInput))
 	}
 	res, err := a.s.CreateEpic(c.Request().Context(), req)
 	if err != nil {
@@ -82,7 +82,7 @@ func (a *API) updateEpic(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid epic update payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.ErrEpicInvalidInput)
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrEpicInvalidInput))
 	}
 	err := a.s.UpdateEpic(c.Request().Context(), req)
 	if err != nil {
@@ -97,7 +97,7 @@ func (a *API) deleteEpic(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid epic delete payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.ErrEpicInvalidInput)
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrEpicInvalidInput))
 	}
 	if err := a.s.DeleteEpic(c.Request().Context(), req); err != nil {
 		return apperror.HTTP(err)

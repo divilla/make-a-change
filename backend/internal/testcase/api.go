@@ -38,7 +38,7 @@ func (a *API) listTestCases(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid test case list payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.ErrTestCaseInvalidInput)
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrTestCaseInvalidInput))
 	}
 	res, err := a.s.ListTestCases(c.Request().Context(), req)
 	if err != nil {
@@ -53,7 +53,7 @@ func (a *API) createTestCase(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid test case create payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.ErrTestCaseInvalidInput)
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrTestCaseInvalidInput))
 	}
 	res, err := a.s.CreateTestCase(c.Request().Context(), req)
 	if err != nil {
@@ -68,7 +68,7 @@ func (a *API) updateTestCase(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid test case update payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.ErrTestCaseInvalidInput)
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrTestCaseInvalidInput))
 	}
 	err := a.s.UpdateTestCase(c.Request().Context(), req)
 	if err != nil {
@@ -83,7 +83,7 @@ func (a *API) updateTestCaseDone(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid test case done payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.ErrTestCaseInvalidInput)
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrTestCaseInvalidInput))
 	}
 	err := a.s.UpdateTestCaseDone(c.Request().Context(), req)
 	if err != nil {
@@ -98,7 +98,7 @@ func (a *API) deleteTestCase(c *echo.Context) error {
 		return apperror.InvalidPayload(err, "invalid test case delete payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.ErrTestCaseInvalidInput)
+		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrTestCaseInvalidInput))
 	}
 	err := a.s.DeleteTestCase(c.Request().Context(), req)
 	if err != nil {

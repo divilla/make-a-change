@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gookit/validate/v2"
 	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -123,11 +124,15 @@ func TestDocumentAPIShapeAndExplicitBooleans(t *testing.T) {
 			require.Equal(t, 400, rec.Code)
 		}
 	}
-	// validate failures retain their validation cause, just as binding failures do.
+	// Validation retains both the module identity and the real field/rule cause.
 	a := NewAPI(e, nil)
 	req = httptest.NewRequest("POST", "/", strings.NewReader(`{"id":0}`))
 	req.Header.Set("Content-Type", "application/json")
 	err := a.getChange(e.NewContext(req, httptest.NewRecorder()))
+	require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
+	var validation validate.Errors
+	require.ErrorAs(t, err, &validation)
+	require.NotEmpty(t, validation["id"]["required"])
 	var he *echo.HTTPError
 	require.ErrorAs(t, err, &he)
 	require.NotNil(t, errors.Unwrap(he))

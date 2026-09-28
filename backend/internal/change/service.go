@@ -207,8 +207,11 @@ func (s *Service) UpdateOpen(ctx context.Context, req domain.ChangeUpdateOpenReq
 // UpdatePRUrl accepts nonblank HTTP(S) URLs only.
 func (s *Service) UpdatePRUrl(ctx context.Context, req domain.ChangeUpdatePRUrlRequest) error {
 	req.PRUrl = strings.TrimSpace(req.PRUrl)
-	if req.ID <= 0 || req.PRUrl == "" || invalidPRURL(req.PRUrl) {
+	if req.ID <= 0 || req.PRUrl == "" {
 		return apperror.ErrChangeInvalidInput
+	}
+	if err := validatePRURL(req.PRUrl); err != nil {
+		return err
 	}
 	return s.repo.UpdatePRUrl(ctx, req)
 }
@@ -304,13 +307,13 @@ func invalidOptionalID(value *int) bool {
 	return value != nil && *value <= 0
 }
 
-func invalidPRURL(value string) bool {
+func validatePRURL(value string) error {
 	parsed, err := url.Parse(value)
 	if err != nil {
-		return true
+		return apperror.Validation(err, apperror.ErrChangeInvalidInput)
 	}
-	if parsed.Host == "" {
-		return true
+	if parsed.Host == "" || (!strings.EqualFold(parsed.Scheme, "https") && !strings.EqualFold(parsed.Scheme, "http")) {
+		return apperror.ErrChangeInvalidInput
 	}
-	return !strings.EqualFold(parsed.Scheme, "https") && !strings.EqualFold(parsed.Scheme, "http")
+	return nil
 }

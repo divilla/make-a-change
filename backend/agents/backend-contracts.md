@@ -1,10 +1,39 @@
-# R1 route, schema and error ledger
+# Backend route, schema and error ledger — validation-cause repair
 
 Authority: read-only `../../docs/backend-architecture.md`, `../../db/init.sql`
 and `../../db/seed.sql`. The inventory is **34 registered method/path pairs**:
 32 after P2 plus documents and set-document. APIHydra exercises all 16 change,
 11 project/epic, five testcase and two health operations successfully (34/34).
 No authentication middleware or invented authentication contract exists.
+
+## 011 validation-cause repair
+
+Spec011 authorizes one new ordinary-error helper, `internal/error.Validation(cause,
+semantic)`. It uses the existing central multiple-`%w` convention: both errors
+remain inspectable, nil cause returns the semantic unchanged, nil semantic
+returns the cause unchanged, and both nil return nil. No duplicate-wrapper
+optimization, transport dependency in services, or registry is introduced.
+
+All 30 tag-validation handlers (project5, epic5, testcase5, change15) now retain
+actual `validate.Errors` and the module invalid-input sentinel through
+`HTTP(Validation(...))`. The JSON field and failed rule remain available through
+`errors.As`; existing `errors.Is` identities and generic400 envelopes remain.
+Change gains sentinel identity without losing its prior validator cause.
+Bind errors retain their operation-specific messages and original wrapping.
+
+Change.UpdatePRUrl preserves the real `*url.Error` and underlying EscapeError on
+parse failure. It still trims before validation, rejects invalid ID/nonblank
+input before parsing/persistence, and returns the original sentinel for parsed
+but business-invalid schemes/hosts. HTTP(S) remains case-insensitive; accepted
+userinfo/query/fragment forms and repository call counts are unchanged. URL
+rules stay in service, wrapping stays in internal/error. No routes, DTOs, SQL,
+dependencies, transactions, database or deployment behavior changed.
+
+The new handler matrices and direct service/helper tests prove cause identity;
+APIHydra retains all408 requests/34 operations, including its existing `%`
+malformed-URL request and safe400 body. Full legacy SQL/HTTP tests also pass.
+See the [current checkpoint](backend-refactor-checkpoint.md) for fresh evidence.
+This is an error-contract repair; R2 remains no actionable duplicate cleanup.
 
 ## R1 removal audit and retained contracts
 
@@ -197,7 +226,7 @@ and migrates project/epic SQL, requests, routes and mutation responses as below.
 
 | Condition | Retained public interpretation | Cause handling |
 | --- | --- | --- |
-| Module input validation | 400 `invalid {project/epic/change/test case} payload` | Distinct central sentinel per module |
+| Module input validation | 400 `invalid {project/epic/change/test case} payload` | Distinct central sentinel plus actual validator/parser cause where present |
 | Bind failure | 400 operation-specific existing payload message | Original Echo/decoder error retained |
 | Missing entity | 404 `{module} not found` | pgx no-row cause retained where present |
 | Invalid change reference | 400 `invalid change reference` | Existing reference checks retained |

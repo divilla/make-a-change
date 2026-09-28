@@ -1,6 +1,6 @@
 # Backend refactor plan
 
-Status: P0–P4 and R1 implemented and reviewed; R2 duplicate-path reassessment found no actionable work after the alignment passes, so no empty cleanup branch is created. R1 preserves all408 APIHydra requests and both coverage gates pass: unit910/928 (98.0603%), integration843/928 (90.8405%). Baseline lint remains tracked for R5. Next is the separately scoped011 validation-cause repair, then012 startup boundaries (R3), R4 configuration, R5 conventions and R6 reassessment, each from fresh origin/dev after the preceding authorized merge. See [the current checkpoint](../backend/agents/backend-refactor-checkpoint.md).
+Status: P0–P4 and R1 implemented and reviewed; R2 duplicate reassessment remains no actionable work. The separately scoped011 validation-cause repair is implemented and passed native review without findings at `db415e2`, preserving all408 APIHydra requests/34 operations and full legacy HTTP/SQL parity. Fresh gates pass: unit917/935 (98.0749%), APIHydra848/935 (90.6952%). Required check remains incomplete only for the11 known R5 lint findings; formatting, vet, race and tooling pass. Implementation is published; supervisor is completing the authorized squash merge to dev. Next category after review/merge is012 startup boundaries (R3), then R4 configuration, R5 conventions and R6 reassessment. See [the current checkpoint](../backend/agents/backend-refactor-checkpoint.md).
 Inspected on 2026-09-28 at commit `7a89905`, branch `change/004-refactor-backend`.
 
 ## Recommendation and scope

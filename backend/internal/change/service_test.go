@@ -6,6 +6,7 @@ import (
 	"mch_api/internal/domain"
 	apperror "mch_api/internal/error"
 	"mch_api/pkg/markdown"
+	"net/url"
 	"testing"
 
 	"github.com/gofrs/uuid/v5"
@@ -457,4 +458,60 @@ func TestServiceCustomPhaseAndDocuments(t *testing.T) {
 	require.ErrorIs(t, s.UpdatePhase(ctx, domain.ChangeUpdatePhaseRequest{ID: 7, ChangePhase: "backlog"}), apperror.ErrChangeInvalidReference)
 	require.ErrorIs(t, s.UpdateBrief(ctx, domain.ChangeUpdateBriefRequest{ID: 7, Brief: "Raw", AgentEdit: boolPtr(false)}), apperror.ErrChangeInvalidReference)
 	require.Equal(t, []string{"Project", "UpdatePhase", "Project", "SetDocument", "Project", "Project"}, r.calls)
+}
+
+func TestUpdatePRURLValidationCauses(t *testing.T) {
+	failure := errors.New("repository failure")
+	for _, tc := range []struct {
+		name, input, normalized string
+		id                      int
+		parser, escape          bool
+		repoError               error
+	}{
+		{name: "escape", input: "https://host/%zz", id: 7, parser: true, escape: true},
+		{name: "syntax", input: "https://[host", id: 7, parser: true},
+		{name: "invalid ID before parser", input: "https://host/%zz", id: 0},
+		{name: "negative ID before parser", input: "https://host/%zz", id: -1},
+		{name: "empty", input: "", id: 7},
+		{name: "blank", input: " \t ", id: 7},
+		{name: "missing host", input: "https:///path", id: 7},
+		{name: "unsupported scheme", input: "ftp://host", id: 7},
+		{name: "relative", input: "/path", id: 7},
+		{name: "uppercase", input: "HTTPS://host", normalized: "HTTPS://host", id: 7},
+		{name: "trimmed", input: " \t https://host/path ", normalized: "https://host/path", id: 7},
+		{name: "userinfo query fragment", input: "http://user:pass@host/path?q=1#fragment", normalized: "http://user:pass@host/path?q=1#fragment", id: 7},
+		{name: "repository failure", input: "https://host", normalized: "https://host", id: 7, repoError: failure},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &fakeChangeRepository{err: tc.repoError}
+			config := defaultConfig()
+			err := NewService(repo, Renderer{}, config).UpdatePRUrl(context.Background(), domain.ChangeUpdatePRUrlRequest{ID: tc.id, PRUrl: tc.input})
+			require.Empty(t, config.ids)
+			if tc.normalized != "" {
+				require.Equal(t, []string{"UpdatePRUrl"}, repo.calls)
+				require.Equal(t, []any{domain.ChangeUpdatePRUrlRequest{ID: tc.id, PRUrl: tc.normalized}}, repo.requests)
+				if tc.repoError != nil {
+					require.Same(t, tc.repoError, err)
+				} else {
+					require.NoError(t, err)
+				}
+				return
+			}
+			require.Empty(t, repo.calls)
+			require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
+			var parser *url.Error
+			require.Equal(t, tc.parser, errors.As(err, &parser))
+			if tc.parser {
+				require.Equal(t, tc.input, parser.URL)
+				require.Equal(t, "parse", parser.Op)
+				var escape url.EscapeError
+				require.Equal(t, tc.escape, errors.As(err, &escape))
+				if tc.escape {
+					require.Equal(t, url.EscapeError("%zz"), escape)
+				}
+			} else {
+				require.Same(t, apperror.ErrChangeInvalidInput, err)
+			}
+		})
+	}
 }

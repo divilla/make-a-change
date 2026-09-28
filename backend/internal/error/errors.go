@@ -57,6 +57,18 @@ func Database(err, missing, foreignKey error) error {
 	return fmt.Errorf("%w: %w", semantic, err)
 }
 
+// Validation retains an invalid-input semantic error and its external cause.
+// A missing cause or semantic leaves the other error unchanged.
+func Validation(cause, semantic error) error {
+	if cause == nil {
+		return semantic
+	}
+	if semantic == nil {
+		return cause
+	}
+	return fmt.Errorf("%w: %w", semantic, cause)
+}
+
 // InvalidPayload retains binding failures while exposing the operation's safe message.
 func InvalidPayload(err error, message string) error {
 	return echo.NewHTTPError(http.StatusBadRequest, message).Wrap(err)

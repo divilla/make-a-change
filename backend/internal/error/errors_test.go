@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -163,4 +164,49 @@ func TestChangeDatabaseContracts(t *testing.T) {
 	code, msg := Interpret(err)
 	require.Equal(t, 409, code)
 	require.Equal(t, "change has testcases and cannot be deleted", msg)
+}
+
+func TestValidationCauses(t *testing.T) {
+	for _, input := range []string{"https://host/%zz", "https://[host"} {
+		t.Run(input, func(t *testing.T) {
+			_, cause := url.Parse(input)
+			require.Error(t, cause)
+			wrapped := Wrap(cause, "parser")
+			for _, tc := range []struct {
+				name            string
+				cause, semantic error
+			}{
+				{"direct", cause, ErrChangeInvalidInput},
+				{"wrapped cause", wrapped, ErrChangeInvalidInput},
+				{"wrapped semantic", cause, Wrap(ErrChangeInvalidInput, "input")},
+				{"nil cause", nil, ErrChangeInvalidInput},
+				{"nil semantic", cause, nil},
+				{"nil semantic wrapped", wrapped, nil},
+				{"both nil", nil, nil},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					got := Validation(tc.cause, tc.semantic)
+					var httpErr *echo.HTTPError
+					require.False(t, errors.As(got, &httpErr))
+					if tc.semantic != nil {
+						require.ErrorIs(t, got, tc.semantic)
+						require.ErrorIs(t, got, ErrChangeInvalidInput)
+					}
+					if tc.cause != nil {
+						require.ErrorIs(t, got, tc.cause)
+						require.ErrorIs(t, got, cause)
+						var parser *url.Error
+						require.ErrorAs(t, got, &parser)
+						require.Same(t, cause, parser)
+					}
+					if tc.cause == nil {
+						require.Equal(t, tc.semantic, got)
+					}
+					if tc.semantic == nil {
+						require.Equal(t, tc.cause, got)
+					}
+				})
+			}
+		})
+	}
 }
