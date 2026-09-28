@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"bytes"
+	"cli/internal/agent"
 	"cli/internal/app"
 	"context"
 	"encoding/json"
@@ -110,7 +111,7 @@ type programSession struct {
 	controller chan app.ProgramController
 }
 
-func startProgram(t *testing.T, root, editorOutput string) *programSession {
+func startProgram(t *testing.T, root, editorOutput string, runners ...agent.Runner) *programSession {
 	t.Helper()
 	reader, writer, err := os.Pipe()
 	require.NoError(t, err)
@@ -124,9 +125,14 @@ func startProgram(t *testing.T, root, editorOutput string) *programSession {
 		controller: make(chan app.ProgramController, 1),
 	}
 	go func() {
+		var runner agent.Runner
+		if len(runners) > 0 {
+			runner = runners[0]
+		}
 		session.done <- app.RunProgramWithIO(nil, reader, output, app.ProgramOptions{
 			Context:        ctx,
 			RepositoryRoot: root,
+			BriefRunner:    runner,
 			ProgramReady: func(controller app.ProgramController) {
 				session.controller <- controller
 			},

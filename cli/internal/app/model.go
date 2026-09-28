@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cli/internal/agent"
 	"cli/internal/changes"
 	"cli/internal/configurations"
 	"cli/internal/documents"
@@ -10,6 +11,7 @@ import (
 	"cli/internal/projects"
 	"cli/internal/styles"
 	"cli/internal/testcases"
+	"cli/pkg/briefprocess"
 	"context"
 	"strconv"
 
@@ -194,6 +196,12 @@ type Model struct {
 	document            documents.Model
 	documentReturn      State
 	documentForm        bool
+	brief               agent.Model
+	briefField          string
+	briefReturn         State
+	briefRunner         agent.Runner
+	briefOperation      *briefOperation
+	briefOffset         int
 }
 
 // NewModel creates the default mch model using local config and HTTP backend access.
@@ -249,6 +257,7 @@ func newModelWithConfig(client appClient, cfg appConfig) Model {
 		appConfig:      cfg,
 		configPath:     cfg.ConfigPath,
 		status:         "MainState",
+		briefRunner:    briefprocess.Runner{},
 	}
 }
 

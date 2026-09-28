@@ -741,3 +741,67 @@ P7 review fix 08 extends `TestP703ConfigurationExitCancelsCatalogRefreshAndIgnor
 returning to the main screen cancels the owned read, ignores its late result,
 and issues a fresh `/project/config` read that restores document, phase and type
 options. Quitting still cancels without scheduling another read.
+
+## P8 brief clarification (028)
+
+`internal/agent` owns original input, revision, scope, committed IDs, questions,
+answers, blockers, operation generation and readiness. The shell owns only entry,
+editor/input routing and presentation. `pkg/briefprocess` invokes the two brief
+prompts with operation-owned files; the ordinary HTTP client and screens have no
+agent dependency. Agent JSON is checked for revision, complete fields, distinct
+question IDs, concrete question/context text, referenced blockers and explicit
+readiness. `brief` and `spec` must be in the selected project catalog; new
+changes also require `backlog`.
+
+| Criterion | Named unit evidence | Program / PTY evidence |
+| --- | --- | --- |
+| P8-01 controller and entry | `TestP801ControllerPhasesAndOriginalInput`, `TestP801NewAndExistingWorkflowEntryAndIdentity`, `TestP801ShellRoutesTypedWorkflowMessages`, `TestBriefCommandDropdownRoutesSelectionAndEscape`, `TestCLIPackageBoundariesFixtures` | `TestCLIProgramBriefNewAndExistingPersistence` enters from the main screen and loaded details; retained ordinary API scenarios start without runner resources. |
+| P8-02 original and first write | `TestP802OriginalBriefExactEditorAndNoOp`, `TestP802NewCreateAndExistingHumanInsertPayloads`, `TestP802CommittedIdentitySurvivesReadAndAgentFailure`, `TestP802FailedWriteRetainsDraftAndBusyDeduplication`, `TestP802CreatedBriefConflictBeforeRunner`, `TestBriefDirectInputPreservesMoreThanDefaultLimit` | `TestCLIProgramBriefNewAndExistingPersistence` checks exact create bytes; `TestCLIProgramBriefFailuresAndStaleCancellation` shows a retained draft after a failed create, checks the successful keyboard retry and exact create/read calls, then confirms again after a failed refresh without recreating the change. |
+| P8-03 prompts and owned process | `TestP803PromptSelectionAndStructuredOutput`, `TestP803MissingPromptsAndMalformedOutputStayIncomplete`, `TestP803RunnerCancellationProgressAndReaping`, `TestP803ScratchOwnershipRefusalAndCleanup` | Program tests inject a scripted runner. PTY editor restoration uses an owned process. |
+| P8-04 answers and readiness | `TestP804MultipleQuestionsAnswersAndResolveLoops`, `TestP804UnansweredAndConflictingBlockersCannotAdvance`, `TestP804NonReadyWithoutBlockersStaysRecoverable`, `TestP804AnsweredPairsSurviveAgentOmissionAndFollowUp`, `TestP804EditsInvalidateReadinessAndStaleOutput`, `TestP804UnchangedRewriteRevalidatesBeforeReady` | `TestCLIProgramBriefNewAndExistingPersistence` shows a new unresolved question after the first answer/resolve round, then answers and resolves a second time before explicit ready handoff. |
+| P8-05 versioned persistence | `TestP802NewCreateAndExistingHumanInsertPayloads`, `TestP805CommittedBriefSurvivesRepeatedFailedRefresh`, `TestP805RefreshRetryKeepsUnsavedEditInDraft`, `TestP805ConfirmAfterCommittedBriefRetriesRefresh`, `TestP805StaleSelectionRevisionAndShutdownCancellation` | `TestCLIProgramBriefNewAndExistingPersistence` checks exact provenance and confirms again after a committed existing-change insert with a failed refresh, without another insert. The separate failed-refresh scenario never repeats creation; `TestCLIProgramBriefStaleCancellation` cancels a running agent and ignores its late ready output. |
+| P8-06 missing contracts and retained behavior | `TestP806MissingCatalogAndCurrentBriefRecovery`, `TestP806MissingBacklogWrongOwnerAndConflict`, `TestP806ConflictingCurrentRowsNeverStartRunner`, retained P1–P7 unit and architecture tests | `TestCLIProgramBriefFailuresAndStaleCancellation` blocks missing spec and malformed agent output; retained ordinary API/PTY scenarios remain selected. |
+| P8-07 scenario inventory | `TestP807ScenarioManifestIncludesBriefAndPTY`, `CoverageTest.test_scenario_manifest_rejects_scripts_empty_and_unmatched` | `TestCLIProgramBriefNewAndExistingPersistence`, `TestCLIProgramBriefFailuresAndStaleCancellation`, `TestCLIProgramBriefStaleCancellation`, and extended `TestShellNavigationEditorAndScrolling`. |
+
+P8 review fixes 08: `TestP805ReentryRejectsLateCommittedResultForSameScope`
+reopens both new and existing brief workflows for the same identity and rejects
+the prior session's late write result even when revision and pending step match.
+`TestP805WhitespaceOnlyHumanAndAgentChangesDoNotAppend` verifies the backend's
+outer-whitespace normalization for both no-op paths, exact user bytes passed to
+the runner, and no additional document version after approval.
+
+The PTY child enters existing-change clarification, scrolls its brief view,
+hands its brief to the editor, redraws, then cancels a running fake agent and
+continues ordinary change use. The program
+fixtures use fake HTTP servers and a scripted runner. No live backend or database
+was designated. Direct controller, adapter, architecture and tooling tests are
+excluded from terminal counters.
+
+P8 review fixes 04: `TestP802ExistingFirstUserEditRemainsOriginalAfterAgentRewrite`
+checks that an existing change keeps its backend brief separately, sends the exact
+first user-edited bytes to the runner, and retains them after an approved agent
+rewrite and later edit. `TestP803RunnerRejectsDuplicateTopLevelFields` checks
+that conflicting readiness and repeated revision fields are rejected before a
+structured result can reach the controller.
+
+P8 review fixes 05: `TestP802PendingBriefSeedsEditorAndBecomesOriginal` checks
+that pending input seeds Ctrl+E and edited bytes become the original brief;
+`TestBriefEditorUsesSavedDraftWhenInputIsEmpty` covers reopening a saved draft.
+`TestP804QuestionIDsMatchAnswerInputSyntax` rejects IDs that the `ID: answer`
+input cannot represent and retains IDs with internal spaces.
+
+P8 review fixes 06: `TestP803RunnerCancellationProgressAndReaping` observes
+process output before exit and verifies cancellation/reaping;
+`TestP803ProgressCaptureIsBoundedAndNeverBlocks` covers a full progress channel,
+the capture limit and cancellation. `TestP803ControllerForwardsProgressChannel`
+checks runner request wiring, while `TestP803ShellShowsLiveProgressAndDropsStaleProgress`
+checks typed UI delivery, terminal-safe text and stale-message rejection.
+
+P8 review fixes 07: `TestP803ControllerOwnsRunnerPathsAndRejectsMissingArrays`
+checks explicit controller-owned file paths, rejects missing result arrays and an
+unrelated output directory, and accepts explicit empty arrays. The controller
+also refuses an unowned scratch path in
+`TestP803ControllerRefusesUnownedScratchPath`. The existing program fixture now
+returns explicit arrays in its ready round. `TestShellNavigationEditorAndScrolling`
+pages through the live brief view, confirms editor redraw, and cancels a running
+fake agent in the real PTY; it checks child reaping and scratch cleanup.

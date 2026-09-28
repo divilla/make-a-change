@@ -54,3 +54,14 @@
 +59 -6 code - +28 -0 tests --- review fixes 06
 +89 -8 code - +78 -8 tests --- review fixes 07
 +81 -8 code - +31 -3 tests --- review fixes 08
+
+2026-28-09 20:45 028-cli-brief-clarification
++1282 -5 code - +896 -2 tests --- spec
++97 -31 code - +76 -0 tests --- review fixes 01
++63 -2 code - +29 -4 tests --- review fixes 02
++76 -6 code - +102 -9 tests --- review fixes 03
++73 -3 code - +58 -3 tests --- review fixes 04
++69 -6 code - +61 -0 tests --- review fixes 05
++126 -13 code - +106 -6 tests --- review fixes 06
++147 -31 code - +169 -33 tests --- review fixes 07
++41 -2 code - +89 -0 tests --- review fixes 08

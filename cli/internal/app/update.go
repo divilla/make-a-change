@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cli/internal/agent"
 	"cli/internal/changes"
 	"cli/internal/configurations"
 	"cli/internal/documents"
@@ -36,6 +37,15 @@ func (m Model) Init() tea.Cmd {
 // Update applies Bubble Tea messages to the root model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case briefCleanupMsg:
+		if msg.err != nil {
+			m.err = "brief scratch cleanup failed: " + msg.err.Error()
+		}
+		return m, nil
+	case agent.Result:
+		return m.applyBriefResult(msg)
+	case briefProgressMsg:
+		return m.applyBriefProgress(msg)
 	case configSavedMsg:
 		m.configSaveInFlight = false
 		if msg.err != nil {
@@ -199,6 +209,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.selectedConfigSlug = msg.project.Config
 		return m, nil
 	case editorFinishedMsg:
+		if m.state == BriefState && msg.source == BriefState {
+			if msg.err != nil {
+				m.err = msg.err.Error()
+				return m, tea.ClearScreen
+			}
+			m.brief = m.brief.EditBrief(msg.content)
+			m.briefField = "brief"
+			m = m.setPromptValue("")
+			m.status = "brief edited; /confirm saves"
+			return m, tea.ClearScreen
+		}
 		if m.state == BackendConfigFormState && msg.source == BackendConfigFormState {
 			return m.applyConfigurationEditor(msg)
 		}
@@ -276,6 +297,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.quitRequested {
 		return m, nil
+	}
+	if m.state == BriefState {
+		if m.hasDropdown() {
+			m.err = ""
+			return m.handleDropdownKey(msg.String(), msg)
+		}
+		return m.briefKey(msg)
 	}
 	if m.document.Busy && m.state == DocumentState {
 		if msg.Type == tea.KeyEsc || msg.Type == tea.KeyCtrlC {
@@ -769,6 +797,9 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 	if source == DocumentState {
 		return m.documentCommand(command)
 	}
+	if source == BriefState {
+		return m.briefCommand(command)
+	}
 	if isConfigurationState(source) {
 		return m.configurationCommand(source, command)
 	}
@@ -776,6 +807,10 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		return m.healthCommand(command)
 	}
 	switch command {
+	case "/brief-new":
+		return m.openBrief(true)
+	case "/brief-clarify":
+		return m.openBrief(false)
 	case "/documents":
 		return m.openDocuments(source)
 	case "/quit":
@@ -1023,6 +1058,10 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 }
 
 func (m Model) arrive(state State, status string) (tea.Model, tea.Cmd) {
+	if m.state == BriefState && state != BriefState {
+		m.brief = m.brief.Invalidate()
+		m.briefOperation = nil
+	}
 	var catalog tea.Cmd
 	if isConfigurationState(m.state) && !isConfigurationState(state) {
 		m.configurations = m.configurations.Invalidate()

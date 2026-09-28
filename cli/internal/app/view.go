@@ -47,11 +47,17 @@ func (m Model) viewLines() ([]string, int) {
 	width := terminalWidth(m.width)
 	lines := []string{m.headerLine(width)}
 	epicIndex := 0
+	if m.state == MainHelpState {
+		lines = append(lines, "Selected project: /brief-new starts brief clarification for a new change.\nUse /changes to browse and select an existing change, then /brief-clarify.")
+	}
 	if m.state == ChangesHelpState {
 		lines = append(lines, changes.HelpView())
 	}
 	if m.state == ChangeCreateState {
 		lines = append(lines, "Title: "+m.changeList.Draft.Title, "Optional UUID: "+m.changeList.Draft.UUID)
+	}
+	if m.state == BriefState {
+		lines = append(lines, m.briefView(width))
 	}
 	if m.state == EpicsHelpState {
 		lines = append(lines, epics.HelpView())
@@ -224,6 +230,8 @@ func (m Model) helpText() string {
 		return "<return> select  |  <esc> cancel"
 	}
 	switch m.state {
+	case BriefState:
+		return "Enter edit/answer | /confirm | /approve | /resolve | Ctrl+E editor | PgUp/PgDn scroll | Esc return"
 	case DocumentState:
 		if m.documentForm {
 			return "<return> append selected type  |  <ctrl+e> editor  |  <esc> cancel draft"
@@ -373,6 +381,7 @@ func (m Model) currentProjectFooter() string {
 
 func screenTitle(state State) string {
 	titles := map[State]string{
+		BriefState:                 "BriefScreen - Title: Clarify Brief",
 		DocumentState:              documents.DetailTitle(),
 		MainState:                  "MainScreen - Title: Main",
 		ChangesListState:           changes.ListTitle(),

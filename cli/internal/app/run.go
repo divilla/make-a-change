@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cli/internal/agent"
 	"context"
 	"errors"
 	"flag"
@@ -28,6 +29,7 @@ type ProgramOptions struct {
 	Context        context.Context
 	RepositoryRoot string
 	ProgramReady   func(ProgramController)
+	BriefRunner    agent.Runner
 }
 
 // ProgramController exposes orderly external program shutdown for controlled callers.
@@ -74,6 +76,9 @@ func RunProgramWithIO(args []string, in io.Reader, out io.Writer, options Progra
 	defer cancel()
 	model := newModelWithConfig(httpclient.NewHTTPClient(cfg.BackendURL), cfg)
 	model.ctx = ctx
+	if options.BriefRunner != nil {
+		model.briefRunner = options.BriefRunner
+	}
 	lipgloss.SetColorProfile(termenv.ANSI256)
 	programOptions := []tea.ProgramOption{
 		tea.WithInput(in),

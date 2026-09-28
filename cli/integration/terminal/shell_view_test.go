@@ -10,8 +10,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -35,13 +37,17 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(repoRoot, ".mch", "default"), 0o755))
 	require.NoError(t, exec.Command("git", "init", repoRoot).Run())
 	writeTerminalFile(t, filepath.Join(repoRoot, ".mch", "config.yaml"), "backend_url: "+backend.URL+"\nproject_id: 7\n", 0o644)
+	require.NoError(t, os.MkdirAll(filepath.Join(repoRoot, ".mch", "default", "prompts"), 0o755))
+	writeTerminalFile(t, filepath.Join(repoRoot, ".mch", "default", "prompts", "brief-rewrite.md"), "Clarify the brief and write structured output.\n", 0o644)
 
 	stubDir := filepath.Join(testRoot, "bin")
 	require.NoError(t, os.MkdirAll(stubDir, 0o755))
 	writeTerminalFile(t, filepath.Join(stubDir, "editor"), "#!/bin/sh\nprintf '# PTY Change\\n\\nInitial brief\\n' > \"$1\"\n", 0o755)
+	writeTerminalFile(t, filepath.Join(stubDir, "codex"), "#!/bin/sh\nprintf '%s\\n' \"$$\" > \"$MCH_PTY_AGENT_PID\"\nprintf 'PTY agent started\\n'\nsleep 30\n", 0o755)
 
 	childPIDPath := filepath.Join(testRoot, "mch.pid")
 	childExitPath := filepath.Join(testRoot, "mch.exit")
+	agentPIDPath := filepath.Join(testRoot, "agent.pid")
 	wrapper := filepath.Join(testRoot, "run-mch")
 	writeTerminalFile(t, wrapper, "#!/bin/sh\nstty rows 20 cols 100\nprintf '%s\\n' \"$$\" > \"$MCH_PTY_CHILD_PID\"\n\"$MCH_PTY_BINARY\"\nresult=$?\nprintf '%s\\n' \"$result\" > \"$MCH_PTY_CHILD_EXIT\"\nexit \"$result\"\n", 0o755)
 	cmd := exec.Command("socat", "EXEC:"+wrapper+",pty,setsid,ctty,stderr", "STDIO")
@@ -53,6 +59,7 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 		"MCH_PTY_BINARY="+binPath,
 		"MCH_PTY_CHILD_PID="+childPIDPath,
 		"MCH_PTY_CHILD_EXIT="+childExitPath,
+		"MCH_PTY_AGENT_PID="+agentPIDPath,
 		"GOCOVERDIR="+os.Getenv("MCH_COVER_DIR"),
 	)
 	stdin, err := cmd.StdinPipe()
@@ -125,17 +132,33 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 	send("/", "Commands")
 	send("\x1b", "Type / for commands")
 	send("\r", "loaded change")
+	send("/brief-clarify\r", "brief ready for editing")
+	send("\x1b[6~", "Backend current brief")
+	send("\x1b[5~", "Original user brief")
+	send("\x05", "Original user brief: # PTY Change")
+	assert.Contains(t, capture.after(0), "\x1b[2J", "workflow editor restores terminal redraw")
+	send("/confirm\r", "agent stdout: PTY agent started")
+	send("\x1b", "loaded change")
+	pidBytes, err := os.ReadFile(agentPIDPath)
+	require.NoError(t, err)
+	pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { return syscall.Kill(pid, 0) == syscall.ESRCH }, 3*time.Second, 20*time.Millisecond, "canceled agent must be reaped")
 	send("/new-testcase\r", "TestCaseCreateScreen")
 	send("PTY case\r", "saved test case")
+	send("\x1b[6~", "Initial brief")
 	send("\x1b[6~", "Spec")
-	send("\x1b[6~", "PTY case")
+	send("\x1b[6~", "Complete")
 	send("/title\r", "ChangeUpdateScreen")
 	send("\x05", "saved title")
 	send(strings.Repeat("\x1b[6~", 5), "Complete")
 	assert.Contains(t, capture.after(0), "73%")
 	send("/return\r", "Rows")
 	send("/return\r", "MainScreen")
-	assert.NoDirExists(t, filepath.Join(repoRoot, ".mch/tmp"))
+	require.Eventually(t, func() bool {
+		entries, readErr := os.ReadDir(filepath.Join(repoRoot, ".mch", "tmp"))
+		return readErr == nil && len(entries) == 0
+	}, 3*time.Second, 20*time.Millisecond, "canceled clarification leaves no operation files")
 	_, err = io.WriteString(stdin, "/quit\r")
 	require.NoError(t, err)
 	require.NoError(t, waitTerminal(done, 5*time.Second))
@@ -155,6 +178,8 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 	var mu sync.Mutex
 	epicName := "PTY Epic"
 	changeTitle := "PTY Change"
+	changeBrief := strings.Repeat("Precise workflow context and constraints. ", 12)
+	changeBriefID := 41
 	backendConfigExists := true
 	backendConfig := map[string]any{"slug": "pty", "project_docs": []string{strings.Repeat("very-long-document-name-", 12)}, "epic_docs": []string{}, "change_docs": []string{"brief", "spec"}, "change_phases": []string{"backlog"}, "change_colors": []string{"12"}, "change_types": []string{"feature"}}
 	var testCases []map[string]any
@@ -245,7 +270,7 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 				}
 				value = current
 			} else {
-				value = []any{}
+				value = []any{map[string]any{"id": changeBriefID, "ref_id": request.RefID, "ref_table": "change", "doc_type": "brief", "body": changeBrief, "agent_edit": false, "current": true, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z", "html": "<p>rendered</p>"}}
 			}
 		case "/api/v1/doc/list":
 			var request struct {
@@ -280,6 +305,17 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 				AgentEdit bool   `json:"agent_edit"`
 			}
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+			if request.RefTable == "change" {
+				require.Equal(t, 1, request.RefID)
+				require.Equal(t, "brief", request.DocType)
+				require.Equal(t, "# PTY Change\n\nInitial brief\n", request.Body)
+				require.False(t, request.AgentEdit)
+				changeBrief = strings.TrimSpace(request.Body)
+				changeBriefID++
+				w.WriteHeader(201)
+				value = map[string]int{"id": changeBriefID}
+				break
+			}
 			require.Equal(t, 7, request.RefID)
 			require.Equal(t, "project", request.RefTable)
 			require.Equal(t, "notes", request.DocType)

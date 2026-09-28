@@ -3007,6 +3007,7 @@ func TestChangeDetailsCommandsAreExact(t *testing.T) {
 		"/delete",
 		"/documents",
 		"/return",
+		"/brief-clarify",
 	}, commandsByState[ChangeDetailsState])
 }
 
@@ -3021,6 +3022,7 @@ func TestChangesListCommandsAreExact(t *testing.T) {
 		"/clear-filters",
 		"/help",
 		"/return",
+		"/brief-new",
 	}, commandsByState[ChangesListState])
 }
 

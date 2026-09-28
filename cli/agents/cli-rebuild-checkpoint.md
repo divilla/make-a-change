@@ -1,5 +1,117 @@
 # CLI rebuild checkpoint
 
+## P8 review fixes 04: original brief and duplicate agent fields (2026-09-28)
+
+Both review findings were valid. Existing-change preflight still shows the
+backend brief as the initial draft, but the first actual user edit becomes the
+immutable original sent to the runner; the backend version remains separate.
+The process adapter now rejects duplicate top-level JSON fields before decoding
+the result, including conflicting `ready_for_spec` values. Focused controller
+and adapter tests cover exact bytes through an approved rewrite and duplicate
+readiness/revision fields. No backend or live agent was used.
+
+Final source is uncommitted on HEAD
+`9604fe597a55a3a28deeeb27022655c5c6248a05`. Unit and terminal campaigns
+record this revision, the complete input hashes, tool versions and separate raw
+profiles under `cli/.coverage/`. Source SHA-256: `internal/agent/model.go`
+`70c80494cc655015e1ed250681ee114bc096349eea121396e2fbfea27477693c`,
+`pkg/briefprocess/runner.go`
+`d96993bd5ad32118e842e80f758d81b7a22c4f6c5364ee69a5acf1774a7ae81c`.
+The manifest is unchanged. Final commands from the repository root:
+
+| Command | Exit and result |
+| --- | --- |
+| `go test ./internal/agent ./pkg/briefprocess -count=1` (inside `cli/`) | 0; focused tests pass. |
+| `make -C cli check` | 2; vet, uncached race unit tests, architecture and tooling tests pass. Only the recorded untouched format baseline (`cmd/mch/main.go`, `internal/app/clipboard.go`) and package-comment lint baseline (`internal/help/commands.go`, `internal/styles/styles.go`, `internal/ui/layout.go`) fail. |
+| `make -C cli coverage` | 2; complete unit campaign **4660/5452 (85.4732%)**, below strict >95%. `internal/agent` 265/319; `pkg/briefprocess` 116/149. |
+| `make -C cli deps-audit` | 0; no vulnerabilities found. |
+| `make -C cli integration-test` | 0; complete-program suite passes. |
+| `make -C cli integration-coverage` | 2; all 31 selected program scenarios and the real PTY child pass without skips, crashes or missing counters; complete terminal campaign **4051/5452 (74.3030%)**, below strict >90%. `internal/agent` 241/319; `pkg/briefprocess` 0/149. |
+
+The two coverage status files report complete campaigns with failing numerical
+gates. Broader gaps remain in `internal/app` (unit 2085/2585, terminal
+1883/2585), `internal/changes` (732/869, 666/869), and
+`internal/navigation` (25/40, 18/40); the full package reports are in the
+artifacts. These shortfalls and the untouched static baseline prevent a final
+rebuild completion claim. The authorized intermediate policy permits the caller
+to continue its dev review/merge sequence with these results visible. No commit,
+push, stage or production promotion was performed here.
+
+## P8 brief clarification implementation (028, 2026-09-28)
+
+[Specification](../../agent/specs/028-cli-brief-clarification.md). P7 is merged
+on dev at `b20068e7fb5c8e3a8a796fe8348024506fc1f7f1`. P8 implementation is
+on `change/028-cli-brief-clarification`, based on HEAD
+`6ec2446c8cda5e45d91fa7cea4747b24f1f841d0` with uncommitted P8 files.
+This checkpoint records the implementation campaign before review or helper
+publication; it does not claim a dev merge. The user-authorized helper owns
+commits, pushes, review and merge. No stage or production promotion occurred.
+
+The fixed `internal/agent` controller now owns new/existing brief intake,
+project/change/document identity, exact original user input, a mutable draft,
+current backend version, committed IDs, revision/generation, questions,
+answers, blockers and explicit ready-for-spec handoff. `brief` and `spec`
+catalog entries and new-change `backlog` are required. New creates use the
+backend's initial brief write; existing user edits and accepted agent revisions
+append `brief` documents with the correct `agent_edit` flag. A committed write
+survives read/runner failure, and `/retry` repeats only the failed read or
+agent step. `/reload` revalidates a changed backend brief. Existing ordinary
+change/document/health actions remain independent of the runner. No spec
+document or P9 action is started.
+
+The process adapter reads only the two P8 prompts when invoked. Each invocation
+uses an owned `.mch/tmp/brief-*` directory with distinct original/current
+brief, context, question, answer and output paths. Its JSON output requires
+the complete schema and matching revision. The subprocess is cancelable,
+bounded and reaped; cancellation cleans known owned files, while failures
+retain the reported path. Cleanup refuses unowned or symlink paths. The
+shell offers `/brief-new` from Main/Changes and `/brief-clarify` from loaded
+details, editor handoff, question answers, scrolling, ready status and safe
+return. The architecture boundary test rejects agent → shell/adapter imports
+and adapter → agent imports.
+
+Fresh commands on the implementation source (all from repository root):
+
+| Command | Exit and result |
+| --- | --- |
+| `make -C cli check` | Exit 2. Vet, uncached race unit tests, architecture and tooling tests pass. Format check still fails only on untouched `cli/cmd/mch/main.go` and `cli/internal/app/clipboard.go`; lint still reports only the existing package-comment findings in `cli/internal/help/commands.go`, `cli/internal/styles/styles.go`, and `cli/internal/ui/layout.go`. No new static failure. |
+| `make -C cli coverage` | Exit 2 solely at strict final gate. Complete fresh unit profile: **4600/5413 (84.9806%)** production statements; target strictly >95%. |
+| `make -C cli deps-audit` | Exit 0; no vulnerabilities found. |
+| `make -C cli integration-test` | Exit 0; complete-program tests pass. |
+| `make -C cli integration-coverage` | Exit 2 solely at strict final gate. Complete fresh terminal profile: **4034/5413 (74.5243%)** production statements; target strictly >90%. Its manifest ran 31 complete-program scenarios plus the real PTY child with no skipped or failed scenario. |
+
+The profiles remain independent and complete. Package counts are in
+`cli/.coverage/{unit,integration}/result.json` and `report.txt`, with raw
+profiles, scenario events, provenance and uncovered statements/functions in
+those ignored directories. Unit gaps include `internal/agent` 243/301,
+`internal/app` 2059/2580, `internal/changes` 732/869,
+`internal/navigation` 25/40 and `pkg/briefprocess` 104/133. Terminal gaps
+include `internal/agent` 227/301, `internal/app` 1880/2580,
+`internal/changes` 666/869, `internal/navigation` 18/40,
+`pkg/briefprocess` 0/133 and `pkg/client` 295/394. Production inventory
+includes untested packages; `dto` and `styles` have zero executable statements.
+The terminal suite uses injected fake HTTP/runner collaborators plus the real
+PTY executable; the concrete process adapter is covered by isolated unit
+tests and still has no terminal hits. No live backend or real Codex process was
+used or designated.
+
+The coverage provenance ties the campaigns to HEAD above, Go
+`go1.26.8-X:nodwarf5 linux/amd64`, all input SHA-256 values and the exact
+scenario inventory. Selected source hashes: `internal/agent/model.go`
+`07166cd8c1a21cefd064e05b8a838c3c09b7cb27ebb93755133fb5c75a1c3a70`,
+`internal/app/brief.go`
+`c33ee3adf67c780948b892c2d18b7addf5618120c08f82e055e9cbf7dec52cce`,
+`pkg/briefprocess/runner.go`
+`b54323e9dcaa3b4dbe95e628391036ee8273bdd2bf7a55af1ea458b1b3b5cf0c`,
+and `scripts/terminal-scenarios.json`
+`aadeeba6e404bec53767c2bcaf51eed6729c234a5b332a0db7f22086f10080ff`.
+`cli/agents/cli-contracts.md` maps every P8 acceptance bullet to named unit
+and terminal evidence. Numerical shortfalls are permitted for this intermediate
+dev pass under `AGENTS.md` but are not a final rebuild completion claim.
+Next: review P8 with the authorized helper, fix findings and rerun affected
+checks/coverage, then let the factory perform its dev merge. P9 owns spec
+write/review/fix and must consume only this explicit ready handoff.
+
 ## P7 review fix 08 (2026-09-28)
 
 Leaving configuration management after an update still cancels its in-flight
@@ -1085,3 +1197,318 @@ child binary SHA256 is
 Raw profiles, package totals, uncovered statements/functions, scenarios and
 command journals are in `.coverage/{unit,integration}`. This checkpoint and
 implementation log are documentation edits after the measured source and tests.
+
+## P8 review fixes 01: brief input and refresh retry (2026-09-28)
+
+All three findings were valid. The brief command dropdown now owns keys while
+open; direct brief typing has no character cap; and a successful refresh returns
+to draft when its committed revision differs from the current human draft.
+`TestBriefCommandDropdownRoutesSelectionAndEscape`,
+`TestBriefDirectInputPreservesMoreThanDefaultLimit`, and
+`TestP805RefreshRetryKeepsUnsavedEditInDraft` cover the corrections. The P8
+assertion ledger maps these tests. No live backend or database was used.
+
+| Command on review-fix source | Exit | Result |
+| --- | ---: | --- |
+| Focused app and agent tests | 0 | All three new regressions and the existing committed-refresh regression pass. |
+| `make -C cli check` | 2 | Vet, race, architecture and tooling pass. The established formatting baseline in `cmd/mch/main.go` and `internal/app/clipboard.go`, plus package-comment lint in `internal/help/commands.go`, `internal/styles/styles.go` and `internal/ui/layout.go`, still fail. No touched file is implicated. |
+| `make -C cli coverage` | 2 | Complete unit campaign **4630/5423 (85.3771%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete program/startup suite passes. |
+| `make -C cli integration-coverage` | 2 | Complete 31-program plus real PTY campaign **4038/5423 (74.4606%)**; strict >90% gate fails. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 250/308 | 230/308 |
+| `cli/internal/app` | 2082/2583 | 1881/2583 |
+| `cli/internal/changes` | 732/869 | 666/869 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 268/273 | 224/273 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 214/214 | 187/214 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 18/40 |
+| `cli/internal/projects` | 217/227 | 196/227 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 8/8 | 8/8 |
+| `cli/pkg/briefprocess` | 104/133 | 0/133 |
+| `cli/pkg/client` | 376/394 | 295/394 |
+
+Both campaign status files report `complete: true`; all selected scenarios
+passed without skips. Raw profiles, exact uncovered statements/functions,
+scenario records and command journals remain under `.coverage/{unit,integration}`.
+Unit has 793 uncovered production statements; terminal has 1385. The measured
+checkout revision is `51bc5f24733a6016fded6e1929b34834f9b65e19` plus the
+uncommitted review diff. Both 134-input provenance maps have sorted compact JSON
+SHA256 `3bb19f799ae75813f17278556be0060cdc433ac117270fa55f87ca91627cd8bc`.
+The covered child binary SHA256 is
+`a6cfd6b5b67918635dda745f1cc07e52d5b4418360acd6485869a37e44a29414`.
+The P8 ledger, checkpoint and implementation log were edited after campaign
+measurement; measured production and test source hashes remain current. The
+caller owns all commits, pushes and dev merging.
+
+## P8 review fixes 02: committed brief confirmation (2026-09-28)
+
+The finding was valid. `/confirm` now requests a read-only refresh while a
+committed change or brief ID awaits verification. The controller also converts
+any `Write` request in that state to `Refresh`, so another caller cannot append
+the same brief. The program scenarios confirm again after failed reads following
+both new-change creation and existing-change insert; they assert one write for
+each. Controller and shell tests cover repeated failed reads and draft
+preservation. Fake HTTP and agent
+collaborators were used; no live backend or database was accessed.
+
+| Command on review-fix source | Exit | Result |
+| --- | ---: | --- |
+| Focused agent, app and program tests | 0 | Committed-refresh and existing-insert confirmation regressions pass. |
+| `make -C cli check` | 2 | Vet, race, architecture and tooling pass. Existing format failures remain in `cmd/mch/main.go` and `internal/app/clipboard.go`; existing package-comment lint failures remain in `internal/help/commands.go`, `internal/styles/styles.go` and `internal/ui/layout.go`. |
+| `make -C cli coverage` | 2 | Complete unit campaign **4635/5427 (85.4063%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete program/startup suite passes. |
+| `make -C cli integration-coverage` | 2 | Complete 31-program plus real PTY campaign **4041/5427 (74.4610%)**; strict >90% gate fails. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 252/310 | 231/310 |
+| `cli/internal/app` | 2085/2585 | 1883/2585 |
+| `cli/internal/changes` | 732/869 | 666/869 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 268/273 | 224/273 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 214/214 | 187/214 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 18/40 |
+| `cli/internal/projects` | 217/227 | 196/227 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 8/8 | 8/8 |
+| `cli/pkg/briefprocess` | 104/133 | 0/133 |
+| `cli/pkg/client` | 376/394 | 295/394 |
+
+Both campaign status files report `complete: true`; all selected scenarios
+passed without skips. Raw profiles, exact uncovered statements and functions,
+scenario records and command journals remain under `.coverage/{unit,integration}`.
+Unit has 792 uncovered statements; terminal has 1386. The measured checkout
+revision is `16ce6d15c53c166f085867db34edd1c245798e7e` plus the uncommitted
+review diff. Both 134-input provenance maps have sorted compact JSON SHA256
+`c978d6c04043992be96b1546c42856439c03550f1edaa820396bc3aab90df07b`.
+The covered child binary SHA256 is
+`d878833013fd37e03327d7d817146811a2a842369175099ec47c4b2de8494ff9`.
+Go is `go1.26.8-X:nodwarf5`; golangci-lint is 2.13.1 and govulncheck is 1.7.0.
+This checkpoint, ledger and implementation log are documentation edits after
+campaign measurement; measured production and test source hashes remain current.
+The caller owns commits, pushes and dev merging.
+
+## P8 review fixes 03: brief conflicts and complete-program rounds (2026-09-28)
+
+All five findings were valid. Post-create refresh now rejects a current brief
+whose body differs from the created brief, retaining the committed change ID for
+read-only retry. Approving an unchanged rewrite now rechecks the selected
+project's `brief`/`spec` catalog, change owner and current brief before advancing.
+Non-ready output without an unresolved blocker is a recoverable runner error.
+The program campaign shows two separate answer/resolve rounds with a visible
+follow-up blocker and a failed create with a retained draft, visible error,
+successful keyboard retry and exact create/read call sequence. Controller tests
+cover the new conflict, verification and protocol paths; the P8 ledger maps
+the evidence. Fake backend and runner collaborators were used; no live backend
+or database was accessed.
+
+| Command on review-fix source | Exit | Result |
+| --- | ---: | --- |
+| Focused agent and brief program tests | 0 | All targeted P8 controller and keyboard scenarios pass. |
+| `make -C cli check` | 2 | Vet, race, architecture and tooling pass. Existing format failures remain in `cmd/mch/main.go` and `internal/app/clipboard.go`; existing package-comment lint failures remain in `internal/help/commands.go`, `internal/styles/styles.go` and `internal/ui/layout.go`. |
+| `make -C cli coverage` | 2 | Complete unit campaign **4646/5434 (85.4987%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete program/startup suite passes. |
+| `make -C cli integration-coverage` | 2 | Complete 31-program plus real PTY campaign **4049/5434 (74.5123%)**; strict >90% gate fails. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 263/317 | 239/317 |
+| `cli/internal/app` | 2085/2585 | 1883/2585 |
+| `cli/internal/changes` | 732/869 | 666/869 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 268/273 | 224/273 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 214/214 | 187/214 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 18/40 |
+| `cli/internal/projects` | 217/227 | 196/227 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 8/8 | 8/8 |
+| `cli/pkg/briefprocess` | 104/133 | 0/133 |
+| `cli/pkg/client` | 376/394 | 295/394 |
+
+Both coverage status files report `complete: true`; all selected scenarios
+passed without skips. The 134-input provenance maps have sorted compact JSON
+SHA256 `36e27ca5d47309fa74c96a1bfc426def71453d0c92f1c741808d490047bfbf34`.
+The measured checkout revision is `a8c9ea89bf6a1ec2a169bfe952261a90bb60d0ca`
+plus the uncommitted review diff. The covered child binary SHA256 is
+`311c1c3cf8382cf063481be3f260109695671cac394ccf197b956d760cc4b9a9`.
+Raw profiles, exact uncovered statements/functions, source hashes, scenarios and
+command journals remain under `cli/.coverage/{unit,integration}`. Unit has 788
+uncovered production statements; terminal has 1385. Go is
+`go1.26.8-X:nodwarf5`; golangci-lint is 2.13.1 and govulncheck is 1.7.0.
+This checkpoint and implementation log are documentation edits after campaign
+measurement; measured production and test source hashes remain current. The
+caller owns commits, pushes and dev merging.
+
+## P8 review fixes 05: brief editor seed and answerable IDs (2026-09-28)
+
+Both findings were valid. Pending brief input now seeds Ctrl+E; a saved draft
+seeds it when the input is empty. Agent output rejects question IDs with outer
+whitespace, colons or control characters, matching the `ID: answer` input.
+The brief prompts state that ID syntax. The P8 ledger names the new regression
+tests. Fake collaborators and local processes only; no live backend was used.
+
+| Command on review-fix source | Exit | Result |
+| --- | ---: | --- |
+| Focused `go test ./internal/app ./internal/agent` | 0 | Both editor paths and invalid/valid question IDs pass. |
+| `make -C cli check` | 2 | Vet, race, architecture and tooling pass. Existing format failures: `cmd/mch/main.go`, `internal/app/clipboard.go`; existing package-comment lint: `internal/help/commands.go`, `internal/styles/styles.go`, `internal/ui/layout.go`. |
+| `make -C cli coverage` | 2 | Complete unit campaign **4670/5455 (85.6095%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete program/startup suite passes. |
+| `make -C cli integration-coverage` | 2 | Complete program and real PTY campaign **4053/5455 (74.2988%)**; strict >90% gate fails. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 265/319 | 241/319 |
+| `cli/internal/app` | 2095/2588 | 1885/2588 |
+| `cli/internal/changes` | 732/869 | 666/869 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 268/273 | 224/273 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 214/214 | 187/214 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 18/40 |
+| `cli/internal/projects` | 217/227 | 196/227 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 8/8 | 8/8 |
+| `cli/pkg/briefprocess` | 116/149 | 0/149 |
+| `cli/pkg/client` | 376/394 | 295/394 |
+
+Both campaign status files report `complete: true`; selected scenarios passed
+without skips. Unit has 785 uncovered statements and terminal has 1402. The
+measured checkout revision is `1dfe730a9030fcb1bd22dfefc07905822c256133`
+plus this uncommitted review diff. The source hashes for the changed Go files
+are recorded in each campaign's `provenance.json`; the covered child binary
+SHA256 is `a2ded60b9f412ad03c76b952b80217b66178a306f90b328a839a190b04ae2381`.
+Raw profiles, uncovered statements/functions, scenarios and journals remain
+under `cli/.coverage/{unit,integration}`. Go is `go1.26.8-X:nodwarf5`;
+golangci-lint is 2.13.1 and govulncheck is 1.7.0. Documentation was finalized
+after measurement; production and test source hashes remain current. The caller
+owns commits, pushes and dev merging.
+
+## P8 review fixes 06: live agent progress (2026-09-28)
+
+The process adapter now publishes bounded stdout/stderr excerpts through a
+one-slot progress channel while the child runs. The controller forwards that
+channel with the scoped runner request, and the shell turns it into typed
+Bubble Tea messages. Only a current, busy clarification shows progress; the
+footer escapes terminal controls and late messages are ignored. Cancellation
+still reaps the child and leaves no blocked progress sender. Local process,
+controller and shell regression tests cover these paths; no live backend or
+Codex process was used.
+
+| Command on review-fix source | Exit | Result |
+| --- | ---: | --- |
+| Focused `go test ./internal/agent ./internal/app ./pkg/briefprocess -count=1` | 0 | Progress, cancellation, channel wiring, UI and retained tests pass. |
+| `make -C cli check` | 2 | Vet, race, architecture and tooling pass. Existing format failures remain in `cmd/mch/main.go`, `internal/app/clipboard.go`; existing package-comment lint remains in `internal/help/commands.go`, `internal/styles/styles.go`, `internal/ui/layout.go`. |
+| `make -C cli coverage` | 2 | Complete unit campaign **4698/5486 (85.6362%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete program/startup suite passes. |
+| `make -C cli integration-coverage` | 2 | All 31 selected program scenarios and the real PTY child pass. Complete terminal campaign **4072/5486 (74.2253%)**; strict >90% gate fails. |
+
+The two campaign status files report `complete: true`. Unit package gaps include
+`internal/agent` 268/322, `internal/app` 2115/2611 and `pkg/briefprocess`
+121/154; terminal gaps include `internal/agent` 244/322, `internal/app`
+1901/2611 and `pkg/briefprocess` 0/154. Exact totals for every production
+package, the raw profiles, source hashes, commands and uncovered statements are
+under `cli/.coverage/{unit,integration}`. The measured checkout revision is
+`af2b2711b59423847428f8655175139e20ad6af0` plus this uncommitted review
+diff. The covered child binary SHA256 is
+`e1eb486e41642cdbaebaee8835ba77c1cfdaabd7be8b6c7121d9efe7e2e0523f`.
+Documentation was updated after measurement; production and test source hashes
+remain current. The caller owns commits, pushes and dev merging.
+
+## P8 review fixes 07: structured arrays, owned runner paths and PTY cancellation (2026-09-28)
+
+The controller now rejects nil `questions` and `unresolved` arrays even when an
+injected runner returns a ready result. It allocates the operation directory and
+passes the original, current input, context, question, answer and output paths to
+every runner. The process adapter uses those paths and checks their ownership;
+the controller rejects a runner response naming another directory. Controller
+tests cover explicit empty arrays, missing arrays, wrong locations and an
+unowned scratch path. The program fixture's valid ready result now includes an
+explicit empty blocker array. The real PTY child scrolls the brief view, checks
+editor redraw, starts a fake agent, cancels it and checks process reaping and
+scratch cleanup. Tests use fake HTTP and owned local processes only.
+
+| Command on review-fix source | Exit | Result |
+| --- | ---: | --- |
+| Focused agent, adapter, program and PTY tests | 0 | New regressions and retained workflow paths pass. |
+| `make -C cli check` | 2 | Vet, race, architecture and tooling pass. The existing format failures in `cmd/mch/main.go` and `internal/app/clipboard.go`, and package-comment lint in `internal/help/commands.go`, `internal/styles/styles.go`, `internal/ui/layout.go`, remain. |
+| `make -C cli coverage` | 2 | Complete unit campaign **4734/5528 (85.6368%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete program/startup suite passes. |
+| `make -C cli integration-coverage` | 2 | All 31 selected program scenarios and the real PTY child pass. Complete terminal campaign **4193/5528 (75.8502%)**; strict >90% gate fails. |
+
+Both campaign status files report `complete: true`. Unit package gaps include
+`internal/agent` 297/357, `internal/app` 2115/2611, and `pkg/briefprocess`
+128/161; terminal gaps include `internal/agent` 270/357, `internal/app`
+1912/2611, and `pkg/briefprocess` 84/161. Exact package totals, source hashes,
+scenario manifests, raw profiles and uncovered statements remain under
+`cli/.coverage/{unit,integration}`. The measured checkout is `506f63a8f1dad731d7ddfa949252f576e4389b7b`
+plus the review diff; the covered child binary SHA256 is
+`1fb4f67e2a4f4e07da360e75399b014f1422f1aeda8a3b4dc452783d24fed278`.
+Documentation was finalized after measurement; production and test source hashes
+remain current. The caller owns further commits and dev merging.
+
+## P8 review fixes 08: re-entry generation and normalized brief no-ops (2026-09-28)
+
+Opening a brief carries forward and advances the previous controller generation,
+so a late result from a canceled workflow cannot match a new workflow for the
+same project and change. Existing human edits and agent rewrites compare the
+backend-normalized brief body before deciding to append a version. Inputs for
+actual writes and the user's original draft retain their exact bytes. Focused
+regression tests cover same-scope re-entry and both whitespace-only no-ops.
+
+| Command on review-fix source | Exit | Result |
+| --- | ---: | --- |
+| Focused agent/app regression tests | 0 | Both new tests pass. |
+| `make -C cli check` | 2 | Vet, race, architecture and tooling pass. The existing format failures in `cmd/mch/main.go` and `internal/app/clipboard.go`, and package-comment lint in `internal/help/commands.go`, `internal/styles/styles.go`, `internal/ui/layout.go`, remain. |
+| `make -C cli coverage` | 2 | Complete unit campaign **4748/5530 (85.8590%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete program/startup suite passes. |
+| `make -C cli integration-coverage` | 2 | All 31 selected program scenarios and the real PTY child pass. Complete terminal campaign **4195/5530 (75.8590%)**; strict >90% gate fails. |
+
+Both campaign status files report `complete: true`. Unit package gaps include
+`internal/agent` 297/357, `internal/app` 2129/2613 and `pkg/briefprocess`
+128/161; terminal gaps include `internal/agent` 270/357, `internal/app`
+1914/2613 and `pkg/briefprocess` 84/161. Exact package totals, source hashes,
+scenario manifests, raw profiles and uncovered statements are under
+`cli/.coverage/{unit,integration}`. The measured checkout is
+`1902939038a4edf66466ead9ec48df393df948c3`, and the commands above were
+rerun on that clean committed source with the same exits and measured totals.
+The covered child binary SHA256 is
+`cd1d138ccbae6977cfdfa5bb0cb3a610d44694dd5002636e1118d39223b59091`.
+Documentation was finalized after measurement; production and test source hashes
+remain current. The caller owns commits, pushes and dev merging.
+At the user's request, the subsequent review pass 02 was interrupted after it
+began; no result from that pass is claimed. The strict coverage and recorded
+static-check shortfalls remain open for the final CLI rebuild.

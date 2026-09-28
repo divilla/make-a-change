@@ -41,7 +41,7 @@ func (m *Model) syncEditorDraft() {
 }
 
 func (m *Model) applyPromptLimit() {
-	if m.state == BackendConfigFormState || (m.state == DocumentState && m.documentForm) || m.state == ChangeCreateState || m.state == ChangeUpdateState ||
+	if m.state == BackendConfigFormState || (m.state == DocumentState && m.documentForm) || m.state == BriefState || m.state == ChangeCreateState || m.state == ChangeUpdateState ||
 		m.detailEditField == detailEditBrief || m.detailEditField == detailEditSpec ||
 		m.detailEditField == detailEditPullRequest {
 		m.input.CharLimit = 0

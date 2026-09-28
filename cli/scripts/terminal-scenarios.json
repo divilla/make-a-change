@@ -29,7 +29,10 @@
       "TestCLIProgramHealthRoutesAndDegradedStatus",
       "TestCLIProgramConfigurationCRUDAndCatalogRefresh",
       "TestCLIProgramConfigurationSelectedProjectCatalogRefresh",
-      "TestCLIProgramConfigurationStaleResponseIsolation"
+      "TestCLIProgramConfigurationStaleResponseIsolation",
+      "TestCLIProgramBriefNewAndExistingPersistence",
+      "TestCLIProgramBriefFailuresAndStaleCancellation",
+      "TestCLIProgramBriefStaleCancellation"
     ]
   },
   "pty": {

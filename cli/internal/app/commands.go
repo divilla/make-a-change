@@ -11,10 +11,11 @@ import (
 )
 
 var commandsByState = map[State][]string{
+	BriefState:                {"/title", "/uuid", "/brief", "/confirm", "/approve", "/resolve", "/retry", "/reload", "/return"},
 	DocumentState:             documents.Commands(),
-	MainState:                 {"/changes", "/epics", "/projects", "/select-project", "/config", "/backend-configs", "/health", "/help", "/quit"},
-	ChangesListState:          changes.ListCommands(),
-	ChangeDetailsState:        changes.DetailCommands(),
+	MainState:                 {"/changes", "/epics", "/projects", "/select-project", "/config", "/backend-configs", "/health", "/help", "/quit", "/brief-new"},
+	ChangesListState:          append(changes.ListCommands(), "/brief-new"),
+	ChangeDetailsState:        append(changes.DetailCommands(), "/brief-clarify"),
 	TestCaseDetailsState:      testcases.DetailCommands(),
 	ChangeCreateState:         {"/title", "/uuid", "/save", "/cancel"},
 	ChangeUpdateState:         {"/save", "/cancel"},
