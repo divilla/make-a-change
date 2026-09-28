@@ -91,6 +91,18 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 	assert.Contains(t, capture.after(0), "\x1b[2J", "editor restoration redraws screen")
 	send("/return\r", "ProjectsListScreen")
 	send("/return\r", "MainScreen")
+	send("/epics\r", "PTY Epic")
+	send("\r", "Completed: 63")
+	send("/edit\r", "EpicUpdateScreen")
+	send("\x05", "saved epic")
+	assert.Contains(t, capture.after(0), "Name: # PTY Change")
+	send("/delete\r", "Are you sure?")
+	send("\x1b", "status cancel")
+	send("/return\r", "loaded epics")
+	send("/new-epic\r", "EpicCreateScreen")
+	send("New PTY epic\r", "saved epic")
+	send("/return\r", "loaded epics")
+	send("/return\r", "MainScreen")
 	send("/changes\r", "Rows 1-8 of 30")
 	assert.Contains(t, capture.after(0), "\x1b[", "terminal output retains styles")
 	send("\x1b[6~", "Rows 2-9 of 30")
@@ -115,7 +127,12 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 
 func newTerminalBackend(t *testing.T) *httptest.Server {
 	t.Helper()
+	var mu sync.Mutex
+	epicName := "PTY Epic"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+
 		w.Header().Set("Content-Type", "application/json")
 		var value any
 		switch r.URL.Path {
@@ -128,6 +145,23 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 			value = terminalProject()
 		case "/api/v1/project/list":
 			value = []any{terminalProject()}
+		case "/api/v1/epic/list":
+			value = []any{terminalEpic(epicName)}
+		case "/api/v1/epic/details":
+			value = terminalEpic(epicName)
+		case "/api/v1/epic/create", "/api/v1/epic/update":
+			var body struct {
+				Name string `json:"name"`
+			}
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			epicName = body.Name
+			if strings.HasSuffix(r.URL.Path, "create") {
+				w.WriteHeader(201)
+				value = map[string]int{"id": 3}
+			} else {
+				w.WriteHeader(204)
+				return
+			}
 		case "/api/v1/change/list":
 			rows := []map[string]any{}
 			for i := 1; i <= 30; i++ {
@@ -216,4 +250,8 @@ func (c *terminalCapture) waitForAfter(marker string, offset int, timeout time.D
 
 func terminalProject() map[string]any {
 	return map[string]any{"id": 7, "name": "PTY Project", "config": "pty", "last_ref": 0, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T10:00:00Z", "change_count": 0}
+}
+
+func terminalEpic(name string) map[string]any {
+	return map[string]any{"id": 3, "project_id": 7, "name": name, "done_tc": 2, "total_tc": 8, "completed": 63, "change_count": 4, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z"}
 }

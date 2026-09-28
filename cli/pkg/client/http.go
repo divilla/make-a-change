@@ -204,23 +204,6 @@ func (c HTTPClient) DeleteChange(id int) error {
 	return c.postNoContent("/api/v1/change/delete", map[string]any{"id": id})
 }
 
-// ListEpics loads epic selector options for a project.
-func (c HTTPClient) ListEpics(projectID string) ([]dto.Option, error) {
-	numericProjectID, err := numericCurrentProjectID(projectID)
-	if err != nil {
-		return nil, err
-	}
-	return c.postOptions("/api/v1/epic/list", map[string]any{"project_id": numericProjectID}, "epics")
-}
-
-func (c HTTPClient) postOptions(path string, payload any, group string) ([]dto.Option, error) {
-	data, err := c.postJSON(path, payload)
-	if err != nil {
-		return nil, err
-	}
-	return findOptions(data, group), nil
-}
-
 func (c HTTPClient) postChanges(path string, payload any, group string) ([]dto.Change, error) {
 	data, err := c.postJSON(path, payload)
 	if err != nil {
@@ -284,27 +267,6 @@ func (c HTTPClient) postJSON(path string, payload any) (any, error) {
 		return nil, err
 	}
 	return data, nil
-}
-
-func findOptions(value any, group string) []dto.Option {
-	switch typed := value.(type) {
-	case []any:
-		return optionsFromArray(typed)
-	case map[string]any:
-		for key, candidate := range typed {
-			if key == group {
-				if list, ok := candidate.([]any); ok {
-					return optionsFromArray(list)
-				}
-			}
-		}
-		for _, candidate := range typed {
-			if nested := findOptions(candidate, group); len(nested) > 0 {
-				return nested
-			}
-		}
-	}
-	return nil
 }
 
 func findChanges(value any, group string) []dto.Change {
@@ -376,30 +338,6 @@ func findTestCases(value any) []dto.TestCase {
 		}
 	}
 	return nil
-}
-
-func optionsFromArray(values []any) []dto.Option {
-	options := make([]dto.Option, 0, len(values))
-	for _, value := range values {
-		switch typed := value.(type) {
-		case string:
-			options = append(options, dto.Option{ID: typed, Label: typed})
-		case map[string]any:
-			option := dto.Option{
-				ID:    firstString(typed, "id", "project_id", "epic_id", "slug", "value"),
-				Label: firstString(typed, "name", "title", "slug", "label", "value", "id"),
-				Color: firstString(typed, "color", "colour", "lip_gloss_color", "lipgloss_color"),
-			}
-			if option.Label == "" {
-				continue
-			}
-			if option.ID == "" {
-				option.ID = option.Label
-			}
-			options = append(options, option)
-		}
-	}
-	return options
 }
 
 func changesFromArray(values []any) []dto.Change {

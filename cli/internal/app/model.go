@@ -182,6 +182,7 @@ type Model struct {
 	changeDetailLoaded  bool
 	currentProject      dto.Option
 	projectList         projects.Model
+	epicList            epics.Model
 	client              appClient
 	appConfig           appConfig
 	configSaveInFlight  bool

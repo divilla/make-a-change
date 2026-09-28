@@ -2,6 +2,7 @@ package app
 
 import (
 	"cli/internal/dto"
+	"cli/internal/epics"
 	"cli/internal/projects"
 	"cli/internal/styles"
 	"strconv"
@@ -130,6 +131,10 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 			target := m.dropdown.onSelect
 			previous := m.dropdown.previous
 			m.dropdown = dropdownModel{}
+			if previous == EpicDetailsState {
+				m.state = EpicDetailsState
+				return m.beginEpic(epics.Delete, m.epicList.Detail.ID, "")
+			}
 			if previous == ProjectDetailsState {
 				m.state = ProjectDetailsState
 				return m.beginProject(projects.Delete, m.projectList.Detail.ID, "")
@@ -204,6 +209,7 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.appConfig.ProjectID = id
+		m.epicList = m.epicList.Scope(id)
 		m.state = m.dropdown.onSelect
 		m.status = "selected " + selected.Label + "; saving config"
 		m.dropdown = dropdownModel{}

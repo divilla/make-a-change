@@ -438,3 +438,105 @@ combinations using keyboard-driven deletion and a temporary config destination
 that cannot be replaced. Visible diagnostics and exactly one delete plus the
 follow-up list and read retry are asserted. Existing selection-save, queue/drain,
 CRUD, program and PTY assertions remain; no HTTP contract or manifest changed.
+
+## P3 epic management (022)
+
+[Specification](../../agent/specs/022-cli-epic-management.md). Current backend
+handlers and `domain/epic.go` confirm five POST operations: list(project_id),
+details(id), create(project_id,name), update(id,name), delete(id). Create returns
+201 with ID only; updates/deletes return empty 204. The required response fields
+are id, project_id, name, done_tc, total_tc, completed, change_count, created_at,
+updated_at. Counts/completion are numeric, timestamps are typed and none are
+nullable. Server completion is displayed verbatim, including values inconsistent
+with locally calculated ratios. Empty arrays succeed; missing/null/wrong-shaped
+values fail with retained HTTP status and contract causes.
+
+`internal/epics` owns validation, raw name drafts, scoped generations, mutation/read
+sequencing, no-op detection and results. The shell composes the screens and shared
+editor/prompt. A committed ID/name or deletion survives refresh failure; `/retry`
+only reads. Obsolete requests cancel and their results cannot overwrite a new
+screen, project, draft or error. Change association/filter selectors use the same
+typed list, with display options converted in the epic presentation boundary.
+
+| Criterion | Named unit assertions | Manifest-selected program/PTY assertions |
+| --- | --- | --- |
+| P3-01 | `TestP301EpicRoutesShapesAndExactlyOneOperation`, `TestP301EpicRequiredFieldsAndMalformedResponses`, `TestP301EpicFailuresStatusesCancellationAndInvalidIDs` | `TestCLIProgramEpicCRUDAndPartialSuccess` uses all five current routes; adapter-only counters stay unit-only |
+| P3-02 | `TestP302EpicOperationsValidationFormsAndPresentation`, `TestP302EpicKeyboardCRUDHelpConfirmationAndScope`, `TestP302EpicActionsRequireRealSelection` | `TestCLIProgramEpicCRUDAndPartialSuccess` exercises help, forms, all displayed fields, validation and failures; `TestShellNavigationEditorAndScrolling` renders server completion and edits an epic |
+| P3-03 | `TestP303EpicMutationsExactlyOnceFailureRecoveryAndNoOp`, `TestP303EpicEditorRawDraftRetryCancelAndNoOp`, confirmation assertions in `TestP302EpicKeyboardCRUDHelpConfirmationAndScope` | `TestCLIProgramEpicCRUDAndPartialSuccess` verifies exact editor bytes, failed writes and retries, unchanged editor exit, cancellation, retained committed outcomes, unrelated rows and exactly-once committed writes |
+| P3-04 | `TestP304EpicIdentityCancellationAndHiddenRows`, `TestP304EpicObsoleteReadCannotChangeShellOrDraft`, `TestP304EpicSelectorReopenRejectsOlderSameProjectResult`; retained P1 save-drain and P2 catalog-generation regressions | `TestCLIProgramEpicDelayedScopeAndShutdown` covers leaving detail, project switching and program shutdown with held HTTP work; `TestCLIProgramEpicReloadBlocksCachedRows` rejects Enter during held list refresh; retained startup selection/save-drain programs |
+| P3-05 | `TestP305EpicSelectorUsesTypedValuesAndObsoleteScope`, retained `TestFilterSelectorsReturnToChangesList` and current-contract `TestHTTPClientPostsToSelectorEndpoints` | `TestCLIProgramEpicCRUDAndPartialSuccess` returns to changes and selects the remaining epic filter; architecture checks prohibit sibling feature imports |
+| P3-06 | All named P3 unit assertions above; `CoverageTest.test_scenario_manifest_rejects_scripts_empty_and_unmatched` audits the explicit campaign selection | All three new epic program tests are manifest-selected; existing `TestShellNavigationEditorAndScrolling` adds epic list/detail, completion, edit/editor redraw, delete cancellation and creation with the real PTY child |
+
+Intentional assertion migration: the old selector endpoint test keeps its exact
+POST/path/payload assertions but now expects the complete current DTO array,
+rather than an `epics` envelope with `title`. Invalid selector project IDs now
+use typed zero/negative values; wrong wire types have explicit transport tests.
+The retained filter test uses numeric project/epic fixtures instead of synthetic
+`project-1`/`epic-1` IDs, preserving its selection/clear assertions. Placeholder
+unavailable-action assertions now prove no fake selection or save without a
+project, and advertise real creation. Removed permissive option decoders had no
+remaining caller; unported change/testcase decoders remain owned by P4/P5/P6.
+P1 exact editor bytes, config-save queue draining, P2 catalog recovery ordering,
+manual-read cancellation and deletion/config-write diagnostics remain intact.
+No dependency, backend, database, Flow resource or live service was used or changed.
+
+P3 self-review also closes the shared selector generation gap: every filter and
+detail selector opening gets its own operation identity. A canceled epic read
+cannot replace reopened options (including a new change entity), clear loading
+or install a stale error. The named selector-reopen regression failed before the
+fix and passes for late success and failure on both selector paths.
+
+### P3 review fixes 01 — viewport, literal names and refresh attribution
+
+P3-02 `TestP302EpicViewportKeepsSelectionVisible` covers every selection in 40
+rows at five viewport heights, including a single visible row and no space.
+`TestP302EpicListFitsTerminalWhileMovingAndResizing` drives arrows and Enter,
+checking the complete shell fits resized terminals with error/footer wrapping.
+The feature receives available height and centers the viewport on selection.
+
+P3-03 `TestP303LoadedEpicNamesRemainLiteralOnEnter` checks loaded `/save`,
+`/cancel`, `/editor` and `/return` names: unchanged Enter is a no-op, and prompt
+edits save exact literal bytes. `TestP303EpicOutcomeBelongsOnlyToPendingRefresh`
+covers create/edit/delete with successful and failed refreshes, read-only retries,
+recovery, navigation and unrelated entity failures without repeated writes.
+Only a failed committed refresh retains an outcome, bound to its read operation
+and entity; recovery or unrelated work clears it.
+
+The existing manifest-selected `TestCLIProgramEpicCRUDAndPartialSuccess` adds a
+literal `/save` editor-name case, unchanged Enter after reopening edits, and
+unrelated detail failure/recovery after deletion in all four modes. Existing
+request-count, exact-byte, cancellation and partial-success assertions remain.
+The unchanged real PTY scenario also passes; viewport permutations are unit
+assertions, not additional PTY coverage claims. No HTTP contract changed.
+
+### P3 review fixes 02 — bounded details and linear truncation
+
+P3-02 `TestP302EpicDetailsFitsTerminalAndScrollsEveryField` checks the measured
+shell plus details at 80×24, 60×16 and 120×40, all 40 name lines and returned
+metadata, arrow/page navigation and prompt focus. Feature test
+`TestDetailsViewportScrollResizeAndReset` covers clamping, empty/loading output,
+zero space, resize and offset reset after selection or accepted detail/mutation
+results. `TestCLIProgramEpicCRUDAndPartialSuccess` now pages through a multiline
+epic and back to its IDs using actual keyboard input and the fake backend.
+It remains selected by the existing terminal manifest; all former CRUD assertions
+remain intact.
+
+`TestTruncateBlockTerminalCells` covers ASCII, wide glyphs, combining marks,
+emoji graphemes, ANSI resets, empty lines and default width. The shared helper
+uses the already-pinned ANSI library's linear scan, without dependency changes.
+`TestLongEpicRenderingRemainsResponsive` checks 50,000-character names through
+both table and details with a broad two-second regression ceiling;
+`BenchmarkEpicLongNames` measures 5k/50k/100k inputs separately for both paths.
+No backend DTO, form/editor byte handling or mutation contract changes.
+
+### P3 review fixes 03 — empty find read recovery
+
+P3-04 `TestP304EpicEmptyFindRestartsCanceledRead` covers list and detail reads,
+empty and whitespace-only input, retained find validation feedback, fresh read
+results and rejection of stale results before and after recovery. It failed on
+the original implementation because empty submission returned no read command.
+`submitFindValue` now returns through `arrive`, resuming normal read sequencing.
+The manifest-selected `TestCLIProgramEpicDelayedScopeAndShutdown` adds empty
+find list/detail scenarios with pending HTTP requests, cancellation, successful
+keyboard-driven recovery and orderly exit. No API contract or existing assertion
+changed; the same complete-program driver and fake backend are reused.

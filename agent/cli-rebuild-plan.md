@@ -1,17 +1,15 @@
 # CLI rebuild plan
 
-Status: authorized execution, 2026-09-28. P0/spec019 merged as `e46bf64`;
-P1/spec020 merged as actual dev `6a3d5bb`. P2/spec021 is implemented and published
-through `92c192d`, with native review pass05 clean against P1 dev. The final
-reviewed production revision measures unit2365/2852 (82.9243%) and terminal
-1655/2852 (58.0295%); strict gates fail honestly. Unit/race/program/PTY,
-architecture/tooling/dependency checks pass. Six untouched format files and
-baseline package-comment lint remain tracked in the
-[compact checkpoint](../cli/agents/cli-rebuild-checkpoint.md), with commands,
-exits, hashes and package gaps. The next action is the dev merge helper, verify
-its actual squash SHA, then P3 epics on a fresh change branch. No future merge
-SHA is asserted. The entire sequential factory remains authorized; no stage or
-production promotion. Confirmed scope and final-result coverage policy follow.
+Status: authorized execution, 2026-09-28. P0/spec019 merged as `e46bf64`,
+P1/spec020 as `6a3d5bb`, P2/spec021 as actual dev `1658624`. P3/spec022 is
+published through `c8ba036`, with native review pass04 clean against P2 dev.
+Final unit coverage is2723/3201 (85.0672%), terminal2028/3201 (63.3552%);
+strict gates fail honestly. Unit/race/program/PTY/architecture/tooling/dependency
+checks pass. Remaining four untouched format files and baseline package comments
+are tracked in the [compact checkpoint](../cli/agents/cli-rebuild-checkpoint.md),
+with exact command results and source evidence. Next run the dev merge helper,
+verify its actual squash SHA, then P4 changes. No future SHA is asserted.
+The sequential factory remains authorized; no stage or production promotion.
 
 Reference: [backend refactor plan](backend-refactor-plan.md), especially its
 six-step specification → branch → implementation → verification/review → dev

@@ -1,12 +1,10 @@
-// Package epics provides the retained epic navigation shell.
+// Package epics owns epic forms, operations and presentation.
 package epics
 
-// ListCommands returns slash commands for the epics list screen.
-func ListCommands() []string {
-	return []string{"/help", "/find", "/return"}
-}
+// ListCommands returns discoverable epic list actions.
+func ListCommands() []string { return []string{"/new-epic", "/retry", "/help", "/find", "/return"} }
 
-// DetailCommands returns slash commands for epic details.
+// DetailCommands returns discoverable epic detail actions.
 func DetailCommands() []string {
-	return []string{"/help", "/find", "/return"}
+	return []string{"/edit", "/delete", "/retry", "/help", "/find", "/return"}
 }

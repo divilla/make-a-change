@@ -3,6 +3,7 @@ package app
 import (
 	"cli/internal/changes"
 	"cli/internal/dto"
+	"cli/internal/epics"
 	"cli/internal/navigation"
 	"cli/internal/projects"
 	"strconv"
@@ -93,6 +94,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = "no options available"
 		}
 		return m, nil
+	case epics.Result:
+		return m.applyEpicResult(msg)
 	case projects.Result:
 		return m.applyProjectResult(msg)
 	case changeListLoadedMsg:
@@ -228,7 +231,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.ClearScreen
 			}
 		}
-		if msg.source == ProjectCreateState || msg.source == ProjectUpdateState || msg.source == ChangeCreateState || msg.source == ChangeUpdateState ||
+		if msg.source == EpicCreateState || msg.source == EpicUpdateState || msg.source == ProjectCreateState || msg.source == ProjectUpdateState || msg.source == ChangeCreateState || msg.source == ChangeUpdateState ||
 			msg.source == TestCaseCreateState || msg.source == TestCaseUpdateState ||
 			(msg.source == ChangeDetailsState && m.detailEditField != "") {
 			m = m.setPromptValue(msg.content)
@@ -265,7 +268,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.quitRequested {
 		return m, nil
 	}
-	if m.projectList.Busy {
+	if m.projectList.Busy || m.epicList.Busy {
 		return m, nil
 	}
 	key := msg.String()
@@ -378,6 +381,32 @@ func (m Model) handleListNavigationKey(key string, msg tea.KeyMsg) (Model, tea.C
 			updated, cmd := m.handleDetailCopy()
 			return updated.(Model), cmd, true
 		}
+	case EpicDetailsState:
+		if key == "up" || key == "down" || key == "pgup" || key == "pgdown" {
+			lines, _ := m.viewLines()
+			height := m.epicViewportHeight(lines)
+			delta := 1
+			if key == "pgup" || key == "pgdown" {
+				delta = max(1, height)
+			}
+			if key == "up" || key == "pgup" {
+				delta = -delta
+			}
+			m.epicList = m.epicList.ScrollDetails(delta, terminalWidth(m.width), height)
+			return m, nil, true
+		}
+	case EpicsListState:
+		switch {
+		case key == "up":
+			m.epicList = m.epicList.MoveSelection(-1)
+			return m, nil, true
+		case key == "down":
+			m.epicList = m.epicList.MoveSelection(1)
+			return m, nil, true
+		case key == "enter" || msg.Type == tea.KeyCtrlJ:
+			updated, cmd := m.handleListSelection()
+			return updated.(Model), cmd, true
+		}
 	case ProjectsListState:
 		switch {
 		case key == "up":
@@ -456,6 +485,12 @@ func (m Model) submitPromptValue(value string) (tea.Model, tea.Cmd) {
 		return m.saveChangeDetailTextValue(value)
 	}
 	if commandAllowed(m.state, "/save") {
+		if m.state == EpicCreateState {
+			return m.beginEpic(epics.Create, 0, value)
+		}
+		if m.state == EpicUpdateState {
+			return m.beginEpic(epics.Edit, m.epicList.Detail.ID, value)
+		}
 		if m.state == ChangeCreateState {
 			return m.saveChangeCreateValue(value)
 		}
@@ -490,9 +525,10 @@ func (m Model) submitFindValue(value string) (tea.Model, tea.Cmd) {
 	query := strings.TrimSpace(value)
 	m = m.setPromptValue("")
 	if query == "" {
-		m.state = m.previousState
+		next, cmd := m.arrive(m.previousState, m.status)
+		m = next.(Model)
 		m.err = "find text is required"
-		return m, nil
+		return m, cmd
 	}
 	if m.previousState == ChangesListState {
 		m.changesFilters.find = query
@@ -526,6 +562,7 @@ func (m Model) handlePromptCancel() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) requestQuit() (tea.Model, tea.Cmd) {
+	m.epicList = m.epicList.Invalidate()
 	if m.configSaveInFlight {
 		m.quitRequested = true
 		m.status = "saving project selection before exit"
@@ -567,6 +604,8 @@ func (m Model) handleEsc() (tea.Model, tea.Cmd) {
 
 func (m Model) handleListSelection() (tea.Model, tea.Cmd) {
 	switch m.state {
+	case EpicDetailsState:
+		return m.epicForm(true)
 	case ChangesListState:
 		next, selected, ok := m.changeList.SelectDetail(m.changeFilters())
 		m.changeList = next
@@ -613,7 +652,14 @@ func (m Model) handleListSelection() (tea.Model, tea.Cmd) {
 		}
 		m.status = "selected " + row.Label
 	case EpicsListState:
-		m.err = "epic browsing is not available yet"
+		next, selected, ok := m.epicList.SelectDetail()
+		m.epicList = next
+		if !ok {
+			m.err = epics.NoSelectableError
+			return m, nil
+		}
+		m.state = EpicDetailsState
+		return m.beginEpic(epics.Details, selected.ID, "")
 	case ProjectsListState:
 		next, selected, ok := m.projectList.SelectDetail()
 		m.projectList = next
@@ -652,7 +698,7 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 	case "/changes":
 		return m.arrive(ChangesListState, string(ChangesListState))
 	case "/epics":
-		m.state = EpicsListState
+		return m.arrive(EpicsListState, string(EpicsListState))
 	case "/projects":
 		return m.arrive(ProjectsListState, string(ProjectsListState))
 	case "/select-project":
@@ -660,6 +706,12 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 	case "/project-config":
 		return m.beginProject(projects.Config, m.projectList.Detail.ID, "")
 	case "/retry":
+		if source == EpicsListState {
+			return m.beginEpic(epics.List, 0, "")
+		}
+		if source == EpicDetailsState {
+			return m.beginEpic(epics.Details, m.epicList.Detail.ID, "")
+		}
 		if source == ProjectsListState {
 			return m.beginProject(projects.List, 0, "")
 		}
@@ -670,8 +722,10 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 	case "/config":
 		return m.arrive(ConfigState, string(ConfigState))
 	case "/help":
+		m.epicList = m.epicList.Invalidate()
 		m.state = helpStateFor(source)
 	case "/find":
+		m.epicList = m.epicList.Invalidate()
 		m.previousState = source
 		m.state = FindInputState
 		m = m.setPromptValue("")
@@ -687,6 +741,9 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 	case "/return":
 		return m.arrive(navigation.ReturnTargets()[source], "return")
 	case "/new-change", "/new-testcase", "/new-test-case", "/new-epic", "/new-project":
+		if command == "/new-epic" {
+			return m.epicForm(false)
+		}
 		if command == "/new-change" {
 			if _, err := currentProjectNumericID(m.currentProject.ID); err != nil {
 				m.err = err.Error()
@@ -714,6 +771,9 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 			m.input.Placeholder = defaultInputPlaceholder
 		}
 	case "/edit", "/edit-spec":
+		if source == EpicDetailsState {
+			return m.epicForm(true)
+		}
 		if command == "/edit" && source == ChangeDetailsState {
 			m.err = "/edit is not available from ChangeDetailsState; use /edit-spec"
 			return m, nil
@@ -737,6 +797,12 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		}
 		m.input.Placeholder = defaultInputPlaceholder
 	case "/save":
+		if source == EpicCreateState {
+			return m.beginEpic(epics.Create, 0, m.promptValue())
+		}
+		if source == EpicUpdateState {
+			return m.beginEpic(epics.Edit, m.epicList.Detail.ID, m.promptValue())
+		}
 		if source == ChangeCreateState {
 			return m.saveChangeCreate()
 		}
@@ -768,6 +834,9 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		}
 		return m.arrive(navigation.CancelTarget(source), "cancel")
 	case "/delete":
+		if source == EpicDetailsState {
+			m.epicList = m.epicList.Invalidate()
+		}
 		m.openConfirmation(navigation.DeleteConfirmationState(source), source, navigation.DeleteReturnState(source))
 	case "/phase":
 		if source == ChangeDetailsState {
@@ -799,6 +868,10 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 }
 
 func (m Model) arrive(state State, status string) (tea.Model, tea.Cmd) {
+	m.epicList = m.epicList.Invalidate()
+	if m.state == EpicCreateState || m.state == EpicUpdateState {
+		m = m.setPromptValue("")
+	}
 	m.projectList = m.projectList.Invalidate()
 	m.state = state
 	m.status = status
@@ -807,6 +880,10 @@ func (m Model) arrive(state State, status string) (tea.Model, tea.Cmd) {
 		m.input.Placeholder = defaultInputPlaceholder
 	}
 	switch state {
+	case EpicsListState:
+		return m.beginEpic(epics.List, 0, "")
+	case EpicDetailsState:
+		return m.beginEpic(epics.Details, m.epicList.Detail.ID, "")
 	case ChangesListState:
 		m.changeList = changes.StartLoading()
 		return m, changeListCommand(m.client, m.currentProject.ID)
@@ -844,6 +921,7 @@ func (m Model) beginSelector(state State) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) beginFilter(label string, source selectorSource, field filterField) (tea.Model, tea.Cmd) {
+	m.selectorGeneration++
 	m.openFilterDropdown(label, source, field)
 	return m, m.selectorCommand(source)
 }
@@ -906,6 +984,7 @@ func (m Model) beginDetailFieldSelector(field detailEditField) (tea.Model, tea.C
 		m.err = "unsupported editable detail field"
 		return m, nil
 	}
+	m.selectorGeneration++
 	m.dropdown.editField = field
 	if field == detailEditTypes {
 		m.dropdown.pendingTypes = normalizeTypeSet(m.changeList.Detail.ChangeTypes)

@@ -16,8 +16,35 @@ import (
 
 // View renders the root application shell and active screen.
 func (m Model) View() string {
+	lines, epicIndex := m.viewLines()
+	width := terminalWidth(m.width)
+	if epicIndex != 0 {
+		height := m.epicViewportHeight(lines)
+		if m.state == EpicDetailsState {
+			lines[epicIndex] = epics.DetailsViewport(m.epicList, width, height)
+		} else {
+			lines[epicIndex] = epics.TableView(m.epicList, width, height)
+		}
+	}
+	return styles.Default.Surface.Width(width).Render(strings.Join(lines, "\n"))
+}
+
+// viewLines reserves one placeholder line for the active epic viewport.
+func (m Model) viewLines() ([]string, int) {
 	width := terminalWidth(m.width)
 	lines := []string{m.headerLine(width)}
+	epicIndex := 0
+	if m.state == EpicsHelpState {
+		lines = append(lines, epics.HelpView())
+	}
+	if m.state == EpicsListState && !m.hasDropdown() {
+		lines = append(lines, "", "")
+		epicIndex = len(lines) - 1
+	}
+	if m.state == EpicDetailsState {
+		lines = append(lines, "", "")
+		epicIndex = len(lines) - 1
+	}
 	if m.state == ProjectsListState && !m.hasDropdown() {
 		lines = append(lines, "")
 		lines = append(lines, projects.TableView(m.projectList, width))
@@ -73,7 +100,13 @@ func (m Model) View() string {
 	if m.quitting {
 		lines = append(lines, styles.Default.Success.Render("done"))
 	}
-	return styles.Default.Surface.Width(width).Render(strings.Join(lines, "\n"))
+	return lines, epicIndex
+}
+
+func (m Model) epicViewportHeight(lines []string) int {
+	// Include wrapped feedback and footer, excluding the placeholder line.
+	shellHeight := lipgloss.Height(styles.Default.Surface.Width(terminalWidth(m.width)).Render(strings.Join(lines, "\n"))) - 1
+	return max(0, m.height-shellHeight)
 }
 
 func (m Model) headerLine(width int) string {
@@ -146,7 +179,9 @@ func (m Model) helpText() string {
 		return "/return  |  <esc> or <ctrl+c> return"
 	case ProjectsListState, EpicsListState:
 		return "<return> view  |  </> command"
-	case ProjectDetailsState, EpicDetailsState, TestCaseDetailsState:
+	case EpicDetailsState:
+		return "<up/down> scroll  |  <pgup/pgdown> page  |  <return> edit  |  </> command"
+	case ProjectDetailsState, TestCaseDetailsState:
 		return "<return> edit  |  </> command"
 	default:
 		return "</> command  |  <esc> cancel"

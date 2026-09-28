@@ -1,8 +1,15 @@
 package epics
 
-import "cli/internal/dto"
+import (
+	"cli/internal/dto"
+	"context"
+)
 
-// API defines backend operations needed by epic screens.
+// API is the epic capability injected by the shell.
 type API interface {
-    ListEpics(projectID string) ([]dto.Option, error)
+	ListEpics(context.Context, int) ([]dto.Epic, error)
+	GetEpic(context.Context, int) (dto.Epic, error)
+	CreateEpic(context.Context, int, string) (int, error)
+	UpdateEpic(context.Context, int, string) error
+	DeleteEpic(context.Context, int) error
 }

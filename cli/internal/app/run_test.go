@@ -325,19 +325,24 @@ func (f *fakeClient) DeleteChange(id int) error {
 	return nil
 }
 
-func (f *fakeClient) ListEpics(projectID string) ([]dto.Option, error) {
+func (f *fakeClient) ListEpics(_ context.Context, projectID int) ([]dto.Epic, error) {
 	f.epicCalls++
-	f.projectID = projectID
+	f.projectID = strconv.Itoa(projectID)
 	if f.epicErr != nil {
 		return nil, f.epicErr
 	}
 	if f.err != nil {
 		return nil, f.err
 	}
-	if projectID == "" {
+	if projectID <= 0 {
 		return nil, errors.New("current project is required")
 	}
-	return f.epics, nil
+	rows := make([]dto.Epic, 0, len(f.epics))
+	for _, o := range f.epics {
+		id, _ := strconv.Atoi(o.ID)
+		rows = append(rows, dto.Epic{ID: id, ProjectID: projectID, Name: o.Label})
+	}
+	return rows, nil
 }
 
 func (f *fakeClient) ListPhases() ([]dto.Option, error) {
@@ -2884,21 +2889,21 @@ func TestChangeDetailsTableTruncatesLongSpecAndPullRequestRows(t *testing.T) {
 	assert.Contains(t, backView, "Ref │ 000003")
 }
 
-func TestUnavailableEpicActionsNeverClaimSuccess(t *testing.T) {
+func TestP302EpicActionsRequireRealSelection(t *testing.T) {
 	m := NewModel()
 	m.state = EpicsListState
 
 	next, cmd := sendKey(m, tea.KeyEnter)
 	require.Nil(t, cmd)
 	assert.Equal(t, EpicsListState, next.state)
-	assert.Contains(t, next.err, "not available")
+	assert.Contains(t, next.err, "no epics selectable")
 	for _, state := range []State{EpicCreateState, EpicUpdateState} {
 		next, cmd := m.executeCommandFrom(state, "/save")
 		require.Nil(t, cmd)
 		assert.NotEqual(t, "save", next.(Model).status)
 		assert.NotEmpty(t, next.(Model).err)
 	}
-	assert.NotContains(t, commandsByState[EpicsListState], "/new-epic")
+	assert.Contains(t, commandsByState[EpicsListState], "/new-epic")
 	assert.Contains(t, commandsByState[ProjectDetailsState], "/delete")
 }
 
@@ -3177,12 +3182,12 @@ func TestSelectorFailureAndEscapePreservePreviousState(t *testing.T) {
 func TestFilterSelectorsReturnToChangesList(t *testing.T) {
 	client := &fakeClient{
 		phases: []dto.Option{{ID: "done", Label: "done"}},
-		epics:  []dto.Option{{ID: "epic-1", Label: "Epic One"}},
+		epics:  []dto.Option{{ID: "1", Label: "Epic One"}},
 		types:  []dto.Option{{ID: "test", Label: "test"}},
 	}
 	m := newModelWithOptionCatalog(client)
 	m.state = ChangesListState
-	m.currentProject = dto.Option{ID: "project-1", Label: "Project One"}
+	m.currentProject = dto.Option{ID: "7", Label: "Project One"}
 
 	got, cmd := sendCommand(m, "/phase-filter")
 	require.NotNil(t, cmd)
@@ -3205,7 +3210,7 @@ func TestFilterSelectorsReturnToChangesList(t *testing.T) {
 	got = applyMsg(got, cmd())
 	got, _ = sendKey(got, tea.KeyEnter)
 	assert.Equal(t, ChangesListState, got.state)
-	assert.Equal(t, "epic-1", got.changesFilters.epic.ID)
+	assert.Equal(t, "1", got.changesFilters.epic.ID)
 
 	got, cmd = sendCommand(got, "/type-filter")
 	require.NotNil(t, cmd)
@@ -3223,7 +3228,7 @@ func TestFilterSelectorsReturnToChangesList(t *testing.T) {
 	got, _ = sendKey(got, tea.KeyEnter)
 	assert.Equal(t, ChangesListState, got.state)
 	assert.Empty(t, got.changesFilters.phase.ID)
-	assert.Equal(t, "epic-1", got.changesFilters.epic.ID)
+	assert.Equal(t, "1", got.changesFilters.epic.ID)
 	assert.Equal(t, "test", got.changesFilters.typ.ID)
 
 	got, _ = sendCommand(got, "/find-filter")
@@ -3679,3 +3684,13 @@ func (f *fakeClient) GetProjectConfig(context.Context, int) (dto.ProjectConfig, 
 	}
 	return cfg, f.err
 }
+
+func (f *fakeClient) GetEpic(_ context.Context, id int) (dto.Epic, error) {
+	return dto.Epic{ID: id, ProjectID: 7, Name: "Epic"}, f.getErr
+}
+
+func (f *fakeClient) CreateEpic(_ context.Context, _ int, _ string) (int, error) {
+	return 3, f.createErr
+}
+func (f *fakeClient) UpdateEpic(_ context.Context, _ int, _ string) error { return f.updateErr }
+func (f *fakeClient) DeleteEpic(_ context.Context, _ int) error           { return f.err }

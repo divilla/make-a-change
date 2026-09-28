@@ -2,6 +2,7 @@ package client
 
 import (
 	"cli/internal/dto"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -18,12 +19,13 @@ func TestHTTPClientPostsToSelectorEndpoints(t *testing.T) {
 		var payload map[string]any
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
 		assert.Equal(t, map[string]any{"project_id": float64(7)}, payload)
-		writeJSON(t, w, map[string]any{"epics": []map[string]any{{"id": 3, "title": "Epic Three"}}})
+		writeJSON(t, w, []any{epicFixture()})
 	}))
 	defer server.Close()
-	epics, err := NewHTTPClient(server.URL).ListEpics("7")
+	epics, err := NewHTTPClient(server.URL).ListEpics(context.Background(), 7)
 	require.NoError(t, err)
-	assert.Equal(t, []dto.Option{{ID: "3", Label: "Epic Three"}}, epics)
+	assert.Equal(t, 3, epics[0].ID)
+	assert.Equal(t, "Epic Three", epics[0].Name)
 }
 
 func TestHTTPClientChangeListCreateUpdateAndGetPayloads(t *testing.T) {
@@ -254,10 +256,10 @@ func TestHTTPClientChangeListCreateUpdateAndGetPayloads(t *testing.T) {
 func TestListEpicsRequiresCurrentProject(t *testing.T) {
 	client := NewHTTPClient("http://example.invalid")
 
-	_, err := client.ListEpics("")
+	_, err := client.ListEpics(context.Background(), 0)
 	require.Error(t, err)
 
-	_, err = client.ListEpics("not-a-number")
+	_, err = client.ListEpics(context.Background(), -1)
 	require.Error(t, err)
 }
 

@@ -181,7 +181,8 @@ class CoverageTest(unittest.TestCase):
             'TestCLIProgramStartupNavigationAndSelection', 'TestCLIProgramEditorSaveAndFailure',
             'TestCLIProgramOrdinaryDocumentEditor', 'TestCLIStartupWithoutFlowResources',
             'TestCLIProgramProjectCRUDAndPartialSuccess', 'TestCLIProgramProjectSwitchWithPendingConfig',
-            'TestCLIProgramShutdownCancelsProjectHTTP', 'TestCLIProgramProjectReloadBlocksCachedSelection'})
+            'TestCLIProgramShutdownCancelsProjectHTTP', 'TestCLIProgramProjectReloadBlocksCachedSelection',
+            'TestCLIProgramEpicCRUDAndPartialSuccess', 'TestCLIProgramEpicDelayedScopeAndShutdown', 'TestCLIProgramEpicReloadBlocksCachedRows'})
         available='\n'.join(n for suite in manifest.values() for n in suite['tests'])
         with patch.object(coverage,'command',return_value=subprocess.CompletedProcess([],0,available)):
             self.assertEqual(coverage.scenarios(),manifest)

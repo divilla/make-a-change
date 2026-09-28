@@ -3,6 +3,7 @@ package app
 import (
 	"cli/internal/changes"
 	"cli/internal/dto"
+	"cli/internal/epics"
 	"cli/internal/projects"
 	"context"
 	"fmt"
@@ -182,7 +183,14 @@ func selectorCommand(ctx context.Context, client appClient, source selectorSourc
 			rows, err = client.ListProjectRows(ctx)
 			options = projects.Options(rows)
 		case selectorEpics:
-			options, err = client.ListEpics(projectID)
+			id, parseErr := currentProjectNumericID(projectID)
+			if parseErr != nil {
+				err = parseErr
+				break
+			}
+			var rows []dto.Epic
+			rows, err = client.ListEpics(ctx, id)
+			options = epics.Options(rows)
 		}
 		return selectorLoadedMsg{source: source, options: options, err: err}
 	}
