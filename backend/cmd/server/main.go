@@ -1,3 +1,4 @@
+// Command server runs the backend HTTP API.
 package main
 
 import (
@@ -143,7 +144,7 @@ func start(ctx context.Context, cfg *config.Config) (application, error) {
 	epic.NewAPI(e, epicService)
 
 	changeRepository := change.NewRepo(pool)
-	changeService := change.NewService(changeRepository, changeRenderer)
+	changeService := change.NewService(changeRepository, changeRenderer, projectService)
 	change.NewAPI(e, changeService)
 
 	testCaseRepository := testcase.NewRepo(pool)

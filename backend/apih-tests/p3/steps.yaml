@@ -1,0 +1,1471 @@
+app: apihydra
+kind: steps
+metadata:
+  name: p3-change-documents
+spec:
+  defaults:
+    retries: -1
+    headers:
+      Content-Type: application/json
+  steps:
+    - request:
+        method: POST
+        path: /api/v1/change/list
+        body: '{"project_id":2001}'
+      response:
+        expected_status: 200
+        expected_body: '[{"id":2201,"project_id":2001,"done_tc":0,"total_tc":0,"completed":0},{"id":2204,"project_id":2001,"done_tc":0,"total_tc":0,"completed":0},{"id":2205,"project_id":2001,"done_tc":0,"total_tc":0,"completed":0},{"id":2206,"project_id":2001,"done_tc":40000,"total_tc":50000,"completed":80},{"id":2207,"project_id":2001,"done_tc":0,"total_tc":0,"completed":0}]'
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2206}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":2206,"done_tc":40000,"total_tc":50000,"completed":80}'
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":1202}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":1202,"ref":null,"slug":null,"epic_id":1102,"epic_name":"Half complete","change_phase":"discover","done_tc":1,"total_tc":2,"completed":50}'
+    - request:
+        method: POST
+        path: /api/v1/change/list
+        body: '{"project_id":2147483647}'
+      response:
+        expected_status: 200
+        expected_body: '[]'
+    - request:
+        method: POST
+        path: /api/v1/change/list
+        body: '{"project_id":1002}'
+      response:
+        expected_status: 200
+        expected_body: '[]'
+    - request:
+        method: POST
+        path: /api/v1/change/documents
+        body: '{"id":2205}'
+      response:
+        expected_status: 200
+        expected_body: '[]'
+    - request:
+        method: POST
+        path: /api/v1/change/rendered-artifacts
+        body: '{"ids":[2207,999999,2205,2207]}'
+      response:
+        expected_status: 200
+        expected_body: '{"artifacts":[{"id":2207,"spec_html":"<p>Latest duplicate</p>\n","pr_html":""},{"id":2205,"spec_html":"","pr_html":""}]}'
+    - request:
+        method: POST
+        path: /api/v1/change/rendered-artifacts
+        body: '{"ids":[]}'
+      response:
+        expected_status: 200
+        expected_body: '{"artifacts":[]}'
+    - request:
+        method: POST
+        path: /api/v1/change/create
+        body: '{"project_id":1002,"title":" Generated ","brief":" Initial brief "}'
+      response:
+        expected_status: 201
+        expected_types:
+          .id: [number]
+        capture:
+          p3_id: .id
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":${p3_id}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p3_id},"project_id":1002,"title":"Generated","change_phase":"backlog","change_types":[],"ref":null,"slug":null,"epic_id":null,"open":true,"done_tc":0,"total_tc":0,"completed":0}'
+        capture:
+          p3_uuid: .ref_uuid
+    - request:
+        method: POST
+        path: /api/v1/change/documents
+        body: '{"id":${p3_id}}'
+      response:
+        expected_status: 200
+        expected_body: '[{"doc_type":"brief","body":"Initial brief","agent_edit":false,"html":"<p>Initial brief</p>\n"}]'
+    - request:
+        method: POST
+        path: /api/v1/change/create
+        body: '{"project_id":2001,"title":"Supplied","brief":"UUID brief","ref_uuid":"550e8400-e29b-41d4-a716-446655440000"}'
+      response:
+        expected_status: 201
+        capture:
+          p3_supplied: .id
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":${p3_supplied}}'
+      response:
+        expected_status: 200
+        expected_body: '{"ref_uuid":"550e8400-e29b-41d4-a716-446655440000","title":"Supplied"}'
+    - request:
+        method: POST
+        path: /api/v1/change/create
+        body: '{"project_id":2001,"title":"Duplicate","brief":"Brief","ref_uuid":"550e8400-e29b-41d4-a716-446655440000"}'
+      response:
+        expected_status: 409
+        expected_body: '{"message":"change reference UUID already exists"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-title
+        body: '{"id":2201,"title":" New\t  title\n "}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2201}'
+      response:
+        expected_status: 200
+        expected_body: '{"title":"New title"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-phase
+        body: '{"id":2201,"change_phase":" in-review "}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2201}'
+      response:
+        expected_status: 200
+        expected_body: '{"change_phase":"in-review"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-open
+        body: '{"id":2201,"open":false}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2201}'
+      response:
+        expected_status: 200
+        expected_body: '{"open":false}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-open
+        body: '{"id":2201,"open":false}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2201}'
+      response:
+        expected_status: 200
+        expected_body: '{"open":false}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-open
+        body: '{"id":2201,"open":true}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2201}'
+      response:
+        expected_status: 200
+        expected_body: '{"open":true}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr-url
+        body: '{"id":2201,"pr_url":" https://example.test/pull/1 "}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2201}'
+      response:
+        expected_status: 200
+        expected_body: '{"pr_url":"https://example.test/pull/1"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr-url
+        body: '{"id":2201,"pr_url":"https://example.test/pull/1"}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2201}'
+      response:
+        expected_status: 200
+        expected_body: '{"pr_url":"https://example.test/pull/1"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-epic
+        body: '{"id":2201,"epic_id":2101}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2201}'
+      response:
+        expected_status: 200
+        expected_body: '{"epic_id":2101,"epic_name":"P3 matching epic"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-epic
+        body: '{"id":2201,"epic_id":null}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2201}'
+      response:
+        expected_status: 200
+        expected_body: '{"epic_id":null,"epic_name":null}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-change-types
+        body: '{"id":2201,"change_types":[" fix ","unknown","feature","fix",""]}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2201}'
+      response:
+        expected_status: 200
+        expected_body: '{"change_types":["fix","feature"]}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-change-types
+        body: '{"id":2201,"change_types":["unknown"]}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2201}'
+      response:
+        expected_status: 200
+        expected_body: '{"change_types":[]}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-change-types
+        body: '{"id":2201,"change_types":null}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2201}'
+      response:
+        expected_status: 200
+        expected_body: '{"change_types":[]}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-change-types
+        body: '{"id":2201,"change_types":[]}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2201}'
+      response:
+        expected_status: 200
+        expected_body: '{"change_types":[]}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-change-types
+        body: '{"id":2202,"change_types":["fix"," experiment ","maintenance","experiment"]}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2202}'
+      response:
+        expected_status: 200
+        expected_body: '{"change_types":["experiment","maintenance"]}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-phase
+        body: '{"id":2202,"change_phase":"ship"}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2202}'
+      response:
+        expected_status: 200
+        expected_body: '{"change_phase":"ship"}'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"id":2202,"doc_type":" analysis ","body":" Custom analysis ","agent_edit":true}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/documents
+        body: '{"id":2202}'
+      response:
+        expected_status: 200
+        expected_body: '[{"doc_type":"analysis","body":"Custom analysis","agent_edit":true,"html":"<p>Custom analysis</p>\n"}]'
+    - request:
+        method: POST
+        path: /api/v1/change/update-brief
+        body: '{"id":2201,"agent_edit":false,"brief":"Updated brief"}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/documents
+        body: '{"id":2201}'
+      response:
+        expected_status: 200
+        expected_body: '[{"doc_type":"brief","body":"Updated brief","agent_edit":false,"html":"<p>Updated brief</p>\n"}]'
+    - request:
+        method: POST
+        path: /api/v1/change/update-spec
+        body: '{"id":2201,"agent_edit":true,"spec":"**safe** <script>alert(1)</script> [bad](javascript:alert(1))"}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/documents
+        body: '{"id":2201}'
+      response:
+        expected_status: 200
+        expected_body: '[{"doc_type":"brief","body":"Updated brief","agent_edit":false,"html":"<p>Updated brief</p>\n"},{"doc_type":"spec","body":"**safe** <script>alert(1)</script> [bad](javascript:alert(1))","agent_edit":true,"html":"<p><strong>safe</strong>  bad</p>\n"}]'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr
+        body: '{"id":2201,"agent_edit":false,"pr":"# PR"}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/documents
+        body: '{"id":2201}'
+      response:
+        expected_status: 200
+        expected_body: '[{"doc_type":"brief","body":"Updated brief","agent_edit":false,"html":"<p>Updated brief</p>\n"},{"doc_type":"pr","body":"# PR","agent_edit":false,"html":"<h1>PR</h1>\n"},{"doc_type":"spec","body":"**safe** <script>alert(1)</script> [bad](javascript:alert(1))","agent_edit":true,"html":"<p><strong>safe</strong>  bad</p>\n"}]'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"id":2201,"agent_edit":true,"doc_type":"plan","body":"Plan"}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/documents
+        body: '{"id":2201}'
+      response:
+        expected_status: 200
+        expected_body: '[{"doc_type":"brief","body":"Updated brief","agent_edit":false,"html":"<p>Updated brief</p>\n"},{"doc_type":"plan","body":"Plan","agent_edit":true,"html":"<p>Plan</p>\n"},{"doc_type":"pr","body":"# PR","agent_edit":false,"html":"<h1>PR</h1>\n"},{"doc_type":"spec","body":"**safe** <script>alert(1)</script> [bad](javascript:alert(1))","agent_edit":true,"html":"<p><strong>safe</strong>  bad</p>\n"}]'
+    - request:
+        method: POST
+        path: /api/v1/change/update-spec
+        body: '{"id":2201,"agent_edit":true,"spec":"**safe** <script>alert(1)</script> [bad](javascript:alert(1))"}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/documents
+        body: '{"id":2201}'
+      response:
+        expected_status: 200
+        expected_body: '[{"doc_type":"brief","body":"Updated brief","agent_edit":false,"html":"<p>Updated brief</p>\n"},{"doc_type":"plan","body":"Plan","agent_edit":true,"html":"<p>Plan</p>\n"},{"doc_type":"pr","body":"# PR","agent_edit":false,"html":"<h1>PR</h1>\n"},{"doc_type":"spec","body":"**safe** <script>alert(1)</script> [bad](javascript:alert(1))","agent_edit":true,"html":"<p><strong>safe</strong>  bad</p>\n"}]'
+    - request:
+        method: POST
+        path: /api/v1/change/rendered-artifacts
+        body: '{"ids":[2201,999999,2205,2201]}'
+      response:
+        expected_status: 200
+        expected_body: '{"artifacts":[{"id":2201,"spec_html":"<p><strong>safe</strong>  bad</p>\n","pr_html":"<h1>PR</h1>\n"},{"id":2205,"spec_html":"","pr_html":""}]}'
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2203}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":2203,"project_id":2003}'
+    - request:
+        method: POST
+        path: /api/v1/change/list
+        body: '{"project_id":2003}'
+      response:
+        expected_status: 200
+        expected_body: '[{"id":2203}]'
+    - request:
+        method: POST
+        path: /api/v1/change/documents
+        body: '{"id":2203}'
+      response:
+        expected_status: 200
+        expected_body: '[{"doc_type":"spec","body":"**No config needed**","html":"<p><strong>No config needed</strong></p>\n"}]'
+    - request:
+        method: POST
+        path: /api/v1/change/rendered-artifacts
+        body: '{"ids":[2203]}'
+      response:
+        expected_status: 200
+        expected_body: '{"artifacts":[{"id":2203,"spec_html":"<p><strong>No config needed</strong></p>\n","pr_html":""}]}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-title
+        body: '{"title":"No config","id":2203}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2203}'
+      response:
+        expected_status: 200
+        expected_body: '{"title":"No config"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-open
+        body: '{"open":false,"id":2203}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2203}'
+      response:
+        expected_status: 200
+        expected_body: '{"open":false}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr-url
+        body: '{"pr_url":"http://example.test","id":2203}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2203}'
+      response:
+        expected_status: 200
+        expected_body: '{"pr_url":"http://example.test"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-epic
+        body: '{"epic_id":null,"id":2203}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2203}'
+      response:
+        expected_status: 200
+        expected_body: '{"epic_id":null}'
+    - request:
+        method: POST
+        path: /api/v1/change/create
+        body: '{"project_id":1001,"title":"Title","brief":"Brief"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change reference"}'
+    - request:
+        method: POST
+        path: /api/v1/change/create
+        body: '{"project_id":2002,"title":"Title","brief":"Brief"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change reference"}'
+    - request:
+        method: POST
+        path: /api/v1/change/create
+        body: '{"project_id":2003,"title":"Title","brief":"Brief"}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"project configuration not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/create
+        body: '{"project_id":999999,"title":"Title","brief":"Brief"}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"project configuration not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-phase
+        body: '{"change_phase":"todo","id":2203}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"project configuration not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-change-types
+        body: '{"change_types":[],"id":2203}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"project configuration not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"doc_type":"spec","body":"Raw","agent_edit":false,"id":2203}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"project configuration not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-phase
+        body: '{"id":2201,"change_phase":"ship"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change reference"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-phase
+        body: '{"id":2202,"change_phase":"backlog"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change reference"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-epic
+        body: '{"id":2201,"epic_id":2102}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change reference"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-epic
+        body: '{"id":2201,"epic_id":999999}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change reference"}'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"id":2201,"doc_type":"analysis","body":"Raw","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change reference"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-spec
+        body: '{"id":2202,"spec":"Raw","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change reference"}'
+    - request:
+        method: POST
+        path: /api/v1/change/list
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change list payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/list
+        body: '{"project_id":-1}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/list
+        body: '{"project_id":"wrong type"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change list payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change get payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":-1}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":"wrong type"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change get payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":999999}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/documents
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change documents payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/documents
+        body: '{"id":-1}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/documents
+        body: '{"id":"wrong type"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change documents payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/documents
+        body: '{"id":999999}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/rendered-artifacts
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change rendered artifacts payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/rendered-artifacts
+        body: '{"ids":[0]}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/rendered-artifacts
+        body: '{"ids":"wrong type"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change rendered artifacts payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/create
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change create payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/create
+        body: '{"project_id":-1,"title":"Title","brief":"Brief"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/create
+        body: '{"project_id":"wrong type","title":"Title","brief":"Brief"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change create payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-title
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change title payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-title
+        body: '{"id":-1,"title":"Title"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-title
+        body: '{"id":"wrong type","title":"Title"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change title payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-title
+        body: '{"id":999999,"title":"Title"}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-phase
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change phase payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-phase
+        body: '{"id":-1,"change_phase":"backlog"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-phase
+        body: '{"id":"wrong type","change_phase":"backlog"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change phase payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-phase
+        body: '{"id":999999,"change_phase":"backlog"}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-open
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change open payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-open
+        body: '{"id":-1,"open":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-open
+        body: '{"id":"wrong type","open":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change open payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-open
+        body: '{"id":999999,"open":false}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-change-types
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change types payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-change-types
+        body: '{"id":-1,"change_types":["fix"]}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-change-types
+        body: '{"id":"wrong type","change_types":["fix"]}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change types payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-change-types
+        body: '{"id":999999,"change_types":["fix"]}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-epic
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change epic payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-epic
+        body: '{"id":-1,"epic_id":null}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-epic
+        body: '{"id":"wrong type","epic_id":null}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change epic payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-epic
+        body: '{"id":999999,"epic_id":null}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr-url
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change pr url payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr-url
+        body: '{"id":-1,"pr_url":"https://pr"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr-url
+        body: '{"id":"wrong type","pr_url":"https://pr"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change pr url payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr-url
+        body: '{"id":999999,"pr_url":"https://pr"}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-brief
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change brief payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-brief
+        body: '{"id":-1,"brief":"Raw","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-brief
+        body: '{"id":"wrong type","brief":"Raw","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change brief payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-brief
+        body: '{"id":999999,"brief":"Raw","agent_edit":false}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-spec
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change spec payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-spec
+        body: '{"id":-1,"spec":"Raw","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-spec
+        body: '{"id":"wrong type","spec":"Raw","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change spec payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-spec
+        body: '{"id":999999,"spec":"Raw","agent_edit":false}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change pr payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr
+        body: '{"id":-1,"pr":"Raw","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr
+        body: '{"id":"wrong type","pr":"Raw","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change pr payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr
+        body: '{"id":999999,"pr":"Raw","agent_edit":false}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change document payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"id":-1,"doc_type":"spec","body":"Raw","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"id":"wrong type","doc_type":"spec","body":"Raw","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change document payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"id":999999,"doc_type":"spec","body":"Raw","agent_edit":false}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/delete
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change delete payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/delete
+        body: '{"id":-1}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/delete
+        body: '{"id":"wrong type"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change delete payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/delete
+        body: '{"id":999999}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-open
+        body: '{"id":2201,"open":null}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-open
+        body: '{"id":2201,"open":"false"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change open payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-open
+        body: '{"id":2201}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-brief
+        body: '{"id":2201,"brief":"Raw","agent_edit":null}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-brief
+        body: '{"id":2201,"brief":"Raw","agent_edit":"false"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change brief payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-brief
+        body: '{"id":2201,"brief":"Raw"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-spec
+        body: '{"id":2201,"spec":"Raw","agent_edit":null}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-spec
+        body: '{"id":2201,"spec":"Raw","agent_edit":"false"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change spec payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-spec
+        body: '{"id":2201,"spec":"Raw"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr
+        body: '{"id":2201,"pr":"Raw","agent_edit":null}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr
+        body: '{"id":2201,"pr":"Raw","agent_edit":"false"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change pr payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr
+        body: '{"id":2201,"pr":"Raw"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"id":2201,"doc_type":"spec","body":"Raw","agent_edit":null}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"id":2201,"doc_type":"spec","body":"Raw","agent_edit":"false"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change document payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"id":2201,"doc_type":"spec","body":"Raw"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/create
+        body: '{"project_id":2001,"title":null,"brief":"Brief"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/create
+        body: '{"project_id":2001,"title":"","brief":"Brief"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/create
+        body: '{"project_id":2001,"title":"   ","brief":"Brief"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/create
+        body: '{"project_id":2001,"title":"Title","brief":null}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/create
+        body: '{"project_id":2001,"title":"Title","brief":""}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/create
+        body: '{"project_id":2001,"title":"Title","brief":"   "}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-title
+        body: '{"id":2201,"title":null}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-title
+        body: '{"id":2201,"title":""}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-title
+        body: '{"id":2201,"title":"   "}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-phase
+        body: '{"id":2201,"change_phase":null}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-phase
+        body: '{"id":2201,"change_phase":""}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-phase
+        body: '{"id":2201,"change_phase":"   "}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-brief
+        body: '{"id":2201,"brief":null,"agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-brief
+        body: '{"id":2201,"brief":"","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-brief
+        body: '{"id":2201,"brief":"   ","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-spec
+        body: '{"id":2201,"spec":null,"agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-spec
+        body: '{"id":2201,"spec":"","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-spec
+        body: '{"id":2201,"spec":"   ","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr
+        body: '{"id":2201,"pr":null,"agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr
+        body: '{"id":2201,"pr":"","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr
+        body: '{"id":2201,"pr":"   ","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"id":2201,"doc_type":null,"body":"Raw","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"id":2201,"doc_type":"","body":"Raw","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"id":2201,"doc_type":"   ","body":"Raw","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"id":2201,"doc_type":"spec","body":null,"agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"id":2201,"doc_type":"spec","body":"","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"id":2201,"doc_type":"spec","body":"   ","agent_edit":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr-url
+        body: '{"id":2201,"pr_url":null}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr-url
+        body: '{"id":2201,"pr_url":""}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr-url
+        body: '{"id":2201,"pr_url":"   "}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr-url
+        body: '{"id":2201,"pr_url":"javascript:alert(1)"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr-url
+        body: '{"id":2201,"pr_url":"https:///missing"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr-url
+        body: '{"id":2201,"pr_url":"ftp://host"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-pr-url
+        body: '{"id":2201,"pr_url":"%"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/update-epic
+        body: '{"id":2201,"epic_id":0}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/create
+        body: '{"project_id":2001,"title":"Title","brief":"Brief","ref_uuid":"invalid"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid change create payload"}'
+    - request:
+        method: POST
+        path: /api/v1/change/delete
+        body: '{"id":2206}'
+      response:
+        expected_status: 409
+        expected_body: '{"message":"change has testcases and cannot be deleted"}'
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2206}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":2206,"done_tc":40000,"total_tc":50000}'
+    - request:
+        method: POST
+        path: /api/v1/change/delete
+        body: '{"id":2204}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2204}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/documents
+        body: '{"id":2204}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"id":2204,"doc_type":"brief","body":"No resurrection","agent_edit":false}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/rendered-artifacts
+        body: '{"ids":[2204]}'
+      response:
+        expected_status: 200
+        expected_body: '{"artifacts":[]}'
+    - request:
+        method: POST
+        path: /api/v1/change/delete
+        body: '{"id":2204}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/delete
+        body: '{"id":2203}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":2203}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/documents
+        body: '{"id":2203}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"id":2203,"doc_type":"brief","body":"No resurrection","agent_edit":false}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/rendered-artifacts
+        body: '{"ids":[2203]}'
+      response:
+        expected_status: 200
+        expected_body: '{"artifacts":[]}'
+    - request:
+        method: POST
+        path: /api/v1/change/delete
+        body: '{"id":2203}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/delete
+        body: '{"id":${p3_id}}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":${p3_id}}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/delete
+        body: '{"id":${p3_supplied}}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":${p3_supplied}}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'

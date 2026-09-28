@@ -16,7 +16,7 @@ func NewRenderer(parser markdown.Parser, sanitizer markdown.Sanitizer) Renderer 
 	return Renderer{parser: parser, sanitizer: sanitizer}
 }
 
-// RenderChange executes RenderChange behavior.
+// RenderChange is the P4 compatibility adapter consumed by testcase mutation rendering.
 func (r Renderer) RenderChange(change domain.Change) domain.Change {
 	if r.parser == nil || r.sanitizer == nil {
 		return change
@@ -30,8 +30,16 @@ func (r Renderer) RenderChange(change domain.Change) domain.Change {
 	return change
 }
 
-// RenderMutation executes RenderMutation behavior.
+// RenderMutation preserves the unmigrated testcase response until P4.
 func (r Renderer) RenderMutation(mutation domain.TestCaseMutationResponse) domain.TestCaseMutationResponse {
 	mutation.Change = r.RenderChange(mutation.Change)
 	return mutation
+}
+
+// Render returns sanitized HTML without modifying its raw source.
+func (r Renderer) Render(source string) string {
+	if source == "" || r.parser == nil || r.sanitizer == nil {
+		return ""
+	}
+	return r.sanitizer.Parse(r.parser.Parse(source))
 }

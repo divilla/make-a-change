@@ -1,95 +1,103 @@
-# APIHydra P2 measurement
+# APIHydra P3 measurement
 
-Measured 2026-09-28 on `change/007-backend-project-epic-alignment`, working-tree
-P2 implementation over `131e075`. The complete suite passes **100 requests**:
-91 in `p2-steps.yaml`, 7 retained errors, 2 health aliases. APIHydra and the owned
-instrumented server exit 0. The private PostgreSQL cluster loads unchanged
-`db/init.sql`, `db/seed.sql`, then `apih-tests/fixtures.sql`, each with
-ON_ERROR_STOP. It is stopped and removed after the run. No external database is
-reset. Runner unit tests prove fixture ordering and abort-before-server behavior
-when fixture SQL fails.
+Measured 2026-09-28 on `change/008-backend-change-doc-alignment`, working-tree
+implementation over `8722e1d`. **All 312 requests pass**: 212 P3 requests in
+[p3/steps.yaml](p3/steps.yaml), 91 retained P2, 7 errors and 2 health aliases.
+P3 is a child stage so P2 completes before P3 mutates its independent fixtures.
+APIHydra and the owned instrumented server exit 0. The isolated runner loads
+unchanged root init/seed followed by [fixtures.sql](fixtures.sql), all with
+ON_ERROR_STOP, then stops/removes its own private PostgreSQL cluster and server.
+No external database is reset.
 
 `make -C backend api-test` exits **2** (coverage recipe **1**): valid
-**414/1164 = 35.5670%** production statement coverage, below the final >=90%
-target. Unit coverage independently measures **853/1164 = 73.2818%**, below
-strict >95%. Project and epic each have 100% unit coverage; their real server
-coverage is 110/117 and 107/115 respectively. No unit or legacy counters are
-merged. Structural metadata keeps unlinked pkg/db's 4 statements at zero;
-internal/domain has no executable statements. Source/block audits pass.
-The [checkpoint](../agents/backend-refactor-checkpoint.md) gives every package's
-actual numerator/denominator, command exits and remaining failures.
+**766/1021 = 75.0245%** production statement coverage, below the final >=90%
+target. Independent unit coverage is **933/1021 = 91.3810%**, below strict >95%.
+Change has 405/405 unit statements and 376/405 APIHydra statements. Neither unit
+nor legacy profiles are merged into integration. Unlinked pkg/db's 4 statements
+remain structural zero; domain has zero executable statements. The
+[checkpoint](../agents/backend-refactor-checkpoint.md) lists every package,
+command exit, source gaps and named criterion evidence.
 
-Operation diagnostics are separate: **15/32** registered method/path pairs are
-reached. **13/32 = 40.625%** have passing successful contracts: all 6 project,
-all 5 epic, both health operations. Change get and testcase list are reached only
-for errors. The [ledger](../agents/backend-contracts.md) includes all 32 routes;
-P3/P4 successes remain untested or blocked by their old SQL. Removed options and
-unknown routes prove 404 without adding to the registered-route denominator.
+## Operation inventory and scenarios
 
-## Contracts exercised
+The [ledger](../agents/backend-contracts.md) retains all **34 method/path pairs**.
+**29/34 = 85.2941%** have passing successful contracts: all 16 change routes,
+6 project, 5 epic, 2 health. **30/34** are reached including testcase list's
+error-only scenario. Five testcase successful operations remain blocked by old
+SQL pending P4 and stay in the denominator. Removed options/unknown routes are
+404 checks, not additional registered operations. Operation coverage is a
+separate diagnostic and never substitutes for statement coverage.
 
-The P2 serial workflow creates a project, captures its ID, independently gets,
-updates and gets it, then does the same for a captured epic. Same-name updates
-also succeed. Project delete returns 409 while the epic exists; explicit epic
-delete returns 204 followed by get 404, then project delete 204/get 404. Bodies
-interpolate captured IDs; no generated identity ID is assumed. Exact response
-statuses and substantive read/error expectations are declared throughout.
+Every retained change operation and the two explicit document operations have
+successful contracts with substantive reads. Each successful mutation is followed
+by a separate read. The campaign covers generated and supplied v4 UUIDs,
+duplicate UUID409, trimmed create, ID-only create status, title procedure
+whitespace normalization, phase/epic/open/types/pr-url updates, same-value direct
+updates, ordered type filtering/clearing, specialized brief/spec/pr and generic
+configured documents, repeated same-body writes, raw+sanitized reads, bulk
+artifacts in input order, empty/missing reads, and direct deletion/FK409.
+Malformed JSON, wrong field types, negative/zero IDs, absent targets, empty/null
+content, omitted/null/wrong-type booleans, invalid URLs, cross-project/missing
+epics, unknown phases/kinds and missing selected configuration are exercised.
 
-Reserved SQL fixture IDs >=1000 cannot collide with the small dynamically
-created identities in this bounded campaign. Custom config has all six arrays
-different from default, including ordered custom phases/colors. Projects 1001,
-1002 and 1003 select custom/default/absent slugs; default remains present during
-the absent-slug 404. Details expose the stored selection and last_ref 42. Empty
-project 1004 deletes; 1005 conflicts with empty epic 1101, then deletes after its
-epic; 1006 conflicts with change 1201. Epic 1102 has linked change 1202 and two
-testcases (one done), proving 1/2 counters and completed 50; 1103 proves zero
-completion. Tied timestamps prove explicit list tie-breaking. Empty scoped
-lists include an absent project. Conflict-survivor reads verify unchanged counts.
-Malformed JSON, wrong field types, invalid IDs, missing IDs/parents and whitespace
-names assert their 400/404 envelopes. Both former options routes assert 404.
+P2's six original fixture projects, config arrays and relationships remain
+unchanged. The exact initial global list expectation is extended with the three
+P3 fixture projects, retaining all original entries and assertions. P3 projects
+2001/2002/2003 select default/custom/missing config. Their independent changes
+2201–2207 support writes, no-config reads/writes, deletion, empty docs, wide
+counts, and malformed duplicate-current artifacts. Epic2101 matches project2001;
+2102 intentionally belongs to2002. Testcase IDs230001–280000 give change2206
+40000 done/50000 total and completed80, with actual FK conflict on deletion.
+Docs2401–2407 cover retained history, missing-config rendering, duplicate current
+spec rows, a wrong ref_table PR and a noncurrent PR. Dynamic identities remain
+small and are captured; no generated ID is assumed.
 
-No P2 fixture calls the still-broken P3 mutation API. P1's broken project/epic
-500-create fixtures were removed. Unknown-error masking remains unit-tested.
-Project/epic delete-conflict, missing details and selected-config errors now run
-against real current SQL. No new project/epic document endpoint was invented.
-The separate retained HTTP/SQL `TestDeletionRetainsAppendOnlyDocuments` verifies
-historic/current records survive deletion; it contributes no APIHydra coverage.
+Current doc ordering is doc_type,id. Historical records are absent from current
+reads; bulk artifacts select latest current rows deterministically if duplicate
+current data exists. Sanitization leaves raw bodies intact. After deleting a
+parent, get/documents/set return404 and bulk artifacts omit it. Missing selected
+configuration blocks config-dependent writes/create but not plain reads or
+unrelated title/open/pr-url/epic/delete operations. No fallback is credited.
 
-## Tool capabilities and assertion limits
+## Separate SQL/HTTP evidence and tool limits
+
+`TestChangeDeletionRetainsAppendOnlyDocuments` uses a separate owned campaign
+and proves identical writes create three distinct IDs, two historic/one current;
+a testcase FK prevents deletion without removing the testcase; after explicit
+child deletion, change deletion retains every doc ID/body/current flag. A public
+set on the removed parent cannot resurrect documents. The separate
+`TestChangeIdentityOrderingAndSameValueTimestamps` proves generated UUIDv7,
+modified ordering and same-value title/open/types/pr-url timestamp advancement.
+These checks and retained project/epic HTTP/SQL tests pass but contribute **zero**
+APIHydra coverage. The seven-test campaign lives in `.coverage/legacy-p3/`.
+Obsolete change version/history/inline-testcase assertions were replaced only
+after the corresponding retained contracts passed APIHydra. Testcase's own
+legacy tests are deferred to P4 and were not claimed passing.
 
 Installed `/home/vito/go/bin/apih` is module
-`v0.1.1-0.20260907061551-c3947513e2a4`, build revision
-`c3947513e2a4b948ce732dec60e090a5e83be744`, confirmed with `go version -m`.
-Its exact-revision manual was read using `git show`; the local checkout HEAD is
-newer and is not assumed to describe installed capabilities. `apih --help`
-confirms serial invocation: `apih --parallelism 0 <private-complete-suite-copy>`.
-The runner's XDG cache lives in the owned artifact directory. No Debug directive,
-selection, credential, secret file or profile mixing is used. The API has no
-authentication middleware.
+`v0.1.1-0.20260907061551-c3947513e2a4`, revision
+`c3947513e2a4b948ce732dec60e090a5e83be744`. `apih --help` and that exact revision's
+manual were inspected locally with git show; the newer checkout is not authority
+for syntax. Serial invocation is `apih --parallelism 0 <private-suite-copy>`.
+Mutations/errors use `retries: -1` to omit retries; zero inherits retry defaults.
+There are no credentials/auth middleware, Debug breakpoints or partial selections.
 
-Mutation/error files use `retries: -1`; zero inherits retries in this installed
-version, whereas a negative value omits curl's retry option. Captures work in
-request/expected bodies, so POST IDs need no path interpolation.
+APIHydra's subset comparison ignores extra object keys; an empty expected body
+skips comparison. Thus it cannot prove exact {id} or truly empty204 bodies.
+`TestChangeAPIContracts` and `TestDocumentAPIShapeAndExplicitBooleans` pin exact
+keys/nulls/empty bodies. Tests separately preserve bind/validation/PG causes.
+Captured IDs and explicit expected_status/body/types use supported syntax.
 
-APIHydra's JSON subset matcher ignores extra object keys. Empty expected bodies
-skip comparison. Thus API unit tests (`TestAPIRegisteredContracts`) independently
-prove exact create key set {id}, exact read/config JSON keys, absence of obsolete
-epic version, and genuinely zero-length 204 bodies. Handler/central tests prove
-exact error envelopes and causes. Retained Go HTTP CRUD separately proves that
-same-name updates advance modified; this is not claimed from subset comparisons.
+## Remaining gaps and rerun
 
-## Remaining gaps and artifacts
+Query/scan/iteration failures, entropy failure, concurrent FK/parent failures,
+legacy adapter rendering, degraded health and startup/config/Markdown error
+branches have no fabricated HTTP trigger. Most deferred testcase behavior remains
+unexecuted. Procedure preflight/CALL and epic association checks are not atomic;
+see the ledger for exact races. Both final coverage goals remain unmet.
 
-Real query/scan/iteration failures and concurrent epic-create FK failure have
-unit evidence, without artificial outage endpoints. Health degraded 503, startup
-failures and several connector/Markdown branches remain outside this campaign.
-Most change/testcase success behavior awaits P3/P4; both global coverage goals
-remain unmet. No failing/blocked case was credited as a success. Full legacy
-change/testcase, Docker and benchmark campaigns were not run.
-
-Fresh ignored artifacts live under `../.coverage/api/`: runner/server/PostgreSQL
-logs, source/block inventories, provenance, counters, coverage.out, report.txt
-and result.json. Legacy P2 checks live separately under `.coverage/legacy-p2/`.
-Run the authoritative full isolated suite from repository root with
-`make -C backend api-test`; its strict coverage gate intentionally remains red
-until the final target is attained.
+Fresh ignored profiles, provenance, source/block inventories, result.json and
+runner/server/PostgreSQL logs live under `backend/.coverage/api/`; unit and
+legacy evidence remain in separate directories. Rerun from repository root:
+`make -C backend api-test`. Its strict gate remains a failure until >=90% is
+actually measured. No failing/blocked scenario receives successful coverage credit.

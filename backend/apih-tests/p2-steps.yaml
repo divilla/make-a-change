@@ -15,7 +15,7 @@ spec:
         body: '{}'
       response:
         expected_status: 200
-        expected_body: '[{"id":1006,"config":"default","last_ref":1,"change_count":1},{"id":1005,"config":"default","last_ref":0,"change_count":0},{"id":1004,"config":"default","last_ref":0,"change_count":0},{"id":1003,"config":"p2-absent","last_ref":0,"change_count":0},{"id":1002,"config":"default","last_ref":0,"change_count":0},{"id":1001,"config":"p2-custom","last_ref":42,"change_count":1}]'
+        expected_body: '[{"id":1006,"config":"default","last_ref":1,"change_count":1},{"id":1005,"config":"default","last_ref":0,"change_count":0},{"id":1004,"config":"default","last_ref":0,"change_count":0},{"id":1003,"config":"p2-absent","last_ref":0,"change_count":0},{"id":1002,"config":"default","last_ref":0,"change_count":0},{"id":1001,"config":"p2-custom","last_ref":42,"change_count":1},{"id":2003,"config":"p3-absent","last_ref":0,"change_count":1},{"id":2002,"config":"p2-custom","last_ref":0,"change_count":1},{"id":2001,"config":"default","last_ref":0,"change_count":5}]'
     - request:
         method: POST
         path: /api/v1/project/get

@@ -1,3 +1,4 @@
+// Package domain defines business models and requests shared across backend layers.
 package domain
 
 import (
@@ -7,7 +8,7 @@ import (
 )
 
 type (
-	// Change defines Change values.
+	// Change is the legacy testcase mutation DTO. Remove with the P4 testcase migration.
 	Change struct {
 		ID          int       `json:"id"`
 		Version     int16     `json:"version"`
@@ -48,9 +49,9 @@ type (
 		EpicName    *string   `json:"epic_name"`
 		Title       string    `json:"title"`
 		Open        bool      `json:"open"`
-		DoneTC      int16     `json:"done_tc"`
-		TotalTC     int16     `json:"total_tc"`
-		Completed   int16     `json:"completed"`
+		DoneTC      int64     `json:"done_tc"`
+		TotalTC     int64     `json:"total_tc"`
+		Completed   int64     `json:"completed"`
 		Modified    time.Time `json:"modified"`
 	}
 
@@ -80,17 +81,17 @@ type (
 
 	// ChangeListRequest defines ChangeListRequest values.
 	ChangeListRequest struct {
-		ProjectID int `json:"project_id"`
+		ProjectID int `json:"project_id" validate:"required|min:1"`
 	}
 
 	// ChangeIDRequest defines ChangeIDRequest values.
 	ChangeIDRequest struct {
-		ID int `json:"id"`
+		ID int `json:"id" validate:"required|min:1"`
 	}
 
 	// ChangeCreateRequest defines ChangeCreateRequest values.
 	ChangeCreateRequest struct {
-		ProjectID int        `json:"project_id"`
+		ProjectID int        `json:"project_id" validate:"required|min:1"`
 		RefUUID   *uuid.UUID `json:"ref_uuid"`
 		Title     string     `json:"title"`
 		Brief     string     `json:"brief"`
@@ -98,57 +99,82 @@ type (
 
 	// ChangeUpdatePhaseRequest defines ChangeUpdatePhaseRequest values.
 	ChangeUpdatePhaseRequest struct {
-		ID          int    `json:"id"`
+		ID          int    `json:"id" validate:"required|min:1"`
 		ChangePhase string `json:"change_phase"`
 	}
 
 	// ChangeUpdateChangeTypesRequest defines ChangeUpdateChangeTypesRequest values.
 	ChangeUpdateChangeTypesRequest struct {
-		ID          int      `json:"id"`
+		ID          int      `json:"id" validate:"required|min:1"`
 		ChangeTypes []string `json:"change_types"`
 	}
 
 	// ChangeUpdateEpicRequest defines ChangeUpdateEpicRequest values.
 	ChangeUpdateEpicRequest struct {
-		ID     int  `json:"id"`
+		ID     int  `json:"id" validate:"required|min:1"`
 		EpicID *int `json:"epic_id"`
 	}
 
 	// ChangeUpdateTitleRequest defines ChangeUpdateTitleRequest values.
 	ChangeUpdateTitleRequest struct {
-		ID    int    `json:"id"`
+		ID    int    `json:"id" validate:"required|min:1"`
 		Title string `json:"title"`
 	}
 
 	// ChangeUpdateBriefRequest defines ChangeUpdateBriefRequest values.
 	ChangeUpdateBriefRequest struct {
-		ID        int    `json:"id"`
+		ID        int    `json:"id" validate:"required|min:1"`
 		Brief     string `json:"brief"`
 		AgentEdit *bool  `json:"agent_edit"`
 	}
 
 	// ChangeUpdateSpecRequest defines ChangeUpdateSpecRequest values.
 	ChangeUpdateSpecRequest struct {
-		ID        int    `json:"id"`
+		ID        int    `json:"id" validate:"required|min:1"`
 		Spec      string `json:"spec"`
 		AgentEdit *bool  `json:"agent_edit"`
 	}
 
 	// ChangeUpdatePRRequest defines ChangeUpdatePRRequest values.
 	ChangeUpdatePRRequest struct {
-		ID        int    `json:"id"`
+		ID        int    `json:"id" validate:"required|min:1"`
 		PR        string `json:"pr"`
 		AgentEdit *bool  `json:"agent_edit"`
 	}
 
 	// ChangeUpdatePRUrlRequest defines ChangeUpdatePRUrlRequest values.
 	ChangeUpdatePRUrlRequest struct {
-		ID    int    `json:"id"`
+		ID    int    `json:"id" validate:"required|min:1"`
 		PRUrl string `json:"pr_url"`
 	}
 	// ChangeUpdateOpenRequest defines ChangeUpdateOpenRequest values.
 	ChangeUpdateOpenRequest struct {
-		ID   int   `json:"id"`
+		ID   int   `json:"id" validate:"required|min:1"`
 		Open *bool `json:"open"`
 	}
 )
+
+// ChangeDocumentSetRequest writes one configured document kind.
+type ChangeDocumentSetRequest struct {
+	ID        int    `json:"id" validate:"required|min:1"`
+	DocType   string `json:"doc_type" validate:"required"`
+	Body      string `json:"body" validate:"required"`
+	AgentEdit *bool  `json:"agent_edit"`
+}
+
+// ChangeDocument is a current stored document and its safe rendered representation.
+type ChangeDocument struct {
+	ID        int       `json:"id"`
+	DocType   string    `json:"doc_type"`
+	Body      string    `json:"body"`
+	AgentEdit bool      `json:"agent_edit"`
+	Created   time.Time `json:"created"`
+	HTML      string    `json:"html"`
+}
+
+// ChangeArtifactSource contains only the raw documents needed by the bulk read.
+type ChangeArtifactSource struct {
+	ID   int
+	Spec string
+	PR   string
+}

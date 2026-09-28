@@ -3,6 +3,7 @@ package change
 import (
 	"encoding/json"
 	"errors"
+	"mch_api/internal/domain"
 	apperror "mch_api/internal/error"
 	"net/http"
 	"net/http/httptest"
@@ -17,75 +18,119 @@ import (
 func TestRemovedChangeRoutes(t *testing.T) {
 	e := echo.New()
 	NewAPI(e, nil)
-	for _, path := range []string{"assign-flow", "start-run", "update-run", "reset-claim", "update-def"} {
-		t.Run(path, func(t *testing.T) {
-			rec := httptest.NewRecorder()
-			e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/change/"+path, strings.NewReader(`{}`)))
-			assert.Equal(t, http.StatusNotFound, rec.Code)
-		})
+	for _, path := range []string{"assign-flow", "start-run", "update-run", "reset-claim", "update-def", "update-agent-edit", "update-def-agent-edit"} {
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, httptest.NewRequest("POST", "/api/v1/change/"+path, strings.NewReader(`{}`)))
+		require.Equal(t, 404, rec.Code)
 	}
 }
 
 func TestChangeAPIContracts(t *testing.T) {
 	cases := []struct {
-		path   string
-		body   string
-		status int
+		path, body string
+		status     int
 	}{
-		{"list", `{"project_id":1}`, http.StatusOK},
-		{"get", `{"id":2}`, http.StatusOK},
-		{"rendered-artifacts", `{"ids":[2]}`, http.StatusOK},
-		{"create", `{"project_id":1,"title":"Title","brief":"Brief"}`, http.StatusCreated},
-		{"update-epic", `{"id":2,"epic_id":3}`, http.StatusOK},
-		{"update-phase", `{"id":2,"change_phase":"review"}`, http.StatusOK},
-		{"update-open", `{"id":2,"open":false}`, http.StatusOK},
-		{"update-change-types", `{"id":2,"change_types":["fix"]}`, http.StatusNoContent},
-		{"update-title", `{"id":2,"title":"Title"}`, http.StatusOK},
-		{"update-brief", `{"id":2,"brief":" Brief ","agent_edit":true}`, http.StatusOK},
-		{"update-spec", `{"id":2,"spec":"Spec","agent_edit":false}`, http.StatusOK},
-		{"update-pr", `{"id":2,"pr":"PR","agent_edit":false}`, http.StatusOK},
-		{"update-pr-url", `{"id":2,"pr_url":"https://example.test/pr"}`, http.StatusOK},
-		{"delete", `{"id":2}`, http.StatusNoContent},
+		{"list", `{"project_id":9}`, 200},
+		{"get", `{"id":7}`, 200},
+		{"documents", `{"id":7}`, 200},
+		{"rendered-artifacts", `{"ids":[7]}`, 200},
+		{"create", `{"project_id":9,"title":"Title","brief":"Brief"}`, 201},
+		{"update-epic", `{"id":7,"epic_id":4}`, 204},
+		{"update-phase", `{"id":7,"change_phase":"review"}`, 204},
+		{"update-open", `{"id":7,"open":false}`, 204},
+		{"update-change-types", `{"id":7,"change_types":["fix"]}`, 204},
+		{"update-title", `{"id":7,"title":"Title"}`, 204},
+		{"update-brief", `{"id":7,"brief":"Brief","agent_edit":false}`, 204},
+		{"update-spec", `{"id":7,"spec":"Spec","agent_edit":true}`, 204},
+		{"update-pr", `{"id":7,"pr":"PR","agent_edit":false}`, 204},
+		{"update-pr-url", `{"id":7,"pr_url":"https://pr"}`, 204},
+		{"set-document", `{"id":7,"doc_type":"plan","body":"Raw","agent_edit":false}`, 204},
+		{"delete", `{"id":7}`, 204},
 	}
 	for _, tc := range cases {
 		t.Run(tc.path, func(t *testing.T) {
-			for _, input := range []struct {
-				name   string
-				body   string
-				err    error
-				status int
-			}{
-				{"success", tc.body, nil, tc.status},
-				{"invalid JSON", `{`, nil, http.StatusBadRequest},
-				{"repository error", tc.body, apperror.ErrChangeNotFound, http.StatusNotFound},
-			} {
+			inputs := []struct {
+				name, body string
+				err        error
+				status     int
+			}{{"success", tc.body, nil, tc.status}, {"malformed", "{", nil, 400}, {"wrong type", `{"id":[],"project_id":[],"ids":"bad"}`, nil, 400}, {"invalid", `{"id":-1,"project_id":-1,"ids":[0]}`, nil, 400}, {"missing", tc.body, apperror.ErrChangeNotFound, 404}, {"failure", tc.body, errors.New("private details"), 500}}
+			for _, input := range inputs {
 				t.Run(input.name, func(t *testing.T) {
-					repo := &fakeChangeRepository{err: input.err, availableTypes: []string{"fix"}}
+					repo := &fakeChangeRepository{projectID: 9, epicProjectID: 9, err: input.err, details: domain.ChangeDetails{ChangeListItem: domain.ChangeListItem{ID: 7, ChangeTypes: []string{}}}}
 					e := echo.New()
-					NewAPI(e, NewService(repo, Renderer{}))
-					req := httptest.NewRequest(http.MethodPost, "/api/v1/change/"+tc.path, strings.NewReader(input.body))
-					req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+					NewAPI(e, NewService(repo, Renderer{}, defaultConfig()))
+					req := httptest.NewRequest("POST", "/api/v1/change/"+tc.path, strings.NewReader(input.body))
+					req.Header.Set("Content-Type", "application/json")
 					rec := httptest.NewRecorder()
 					e.ServeHTTP(rec, req)
 					require.Equal(t, input.status, rec.Code, rec.Body.String())
-					if input.status == http.StatusNoContent {
-						assert.Empty(t, rec.Body.String())
+					if input.status == 204 {
+						require.Zero(t, rec.Body.Len())
 					}
-					if tc.path == "update-brief" && input.err == nil && input.status == http.StatusOK {
-						assert.Equal(t, "Brief", repo.updateBriefReq.Brief)
-						require.NotNil(t, repo.updateBriefReq.AgentEdit)
-						assert.True(t, *repo.updateBriefReq.AgentEdit)
-						var body map[string]any
-						require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-						assert.Equal(t, "Brief", body["brief"])
-						for _, removed := range []string{"def", "agent_edit", "flow_stages", "flow_stage_modes", "run_claim_id", "run_flow_stage", "run_task_step", "run_task_status", "run_error", "run_is_completed", "run_started_at", "run_updated_at"} {
-							assert.NotContains(t, body, removed)
+					if input.name == "success" {
+						switch tc.path {
+						case "create":
+							require.JSONEq(t, `{"id":2}`, rec.Body.String())
+						case "get":
+							var body map[string]any
+							require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+							keys := []string{}
+							for k := range body {
+								keys = append(keys, k)
+							}
+							require.ElementsMatch(t, []string{"id", "ref_uuid", "ref", "slug", "project_id", "change_phase", "change_types", "epic_id", "epic_name", "title", "open", "done_tc", "total_tc", "completed", "modified", "pr_url", "created"}, keys)
+							for _, k := range []string{"ref", "slug", "epic_id", "epic_name"} {
+								require.Nil(t, body[k])
+							}
+						case "list", "documents":
+							require.JSONEq(t, `[]`, rec.Body.String())
+						case "rendered-artifacts":
+							require.JSONEq(t, `{"artifacts":[]}`, rec.Body.String())
 						}
+					}
+					if input.status == 500 {
+						require.JSONEq(t, `{"message":"Internal Server Error"}`, rec.Body.String())
 					}
 				})
 			}
 		})
 	}
+}
+
+func TestDocumentAPIShapeAndExplicitBooleans(t *testing.T) {
+	e := echo.New()
+	NewAPI(e, NewService(&fakeChangeRepository{docs: []domain.ChangeDocument{{ID: 8, DocType: "spec", Body: "raw", AgentEdit: false}}}, Renderer{}, defaultConfig()))
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/v1/change/documents", strings.NewReader(`{"id":7}`))
+	req.Header.Set("Content-Type", "application/json")
+	e.ServeHTTP(rec, req)
+	require.Equal(t, 200, rec.Code)
+	var docs []map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &docs))
+	require.Len(t, docs, 1)
+	keys := []string{}
+	for k := range docs[0] {
+		keys = append(keys, k)
+	}
+	require.ElementsMatch(t, []string{"id", "doc_type", "body", "agent_edit", "created", "html"}, keys)
+	for _, path := range []string{"update-open", "update-brief", "update-spec", "update-pr", "set-document"} {
+		for _, value := range []string{"null", `"false"`} {
+			body := `{"id":7,"open":` + value + `,"agent_edit":` + value + `,"brief":"Raw","spec":"Raw","pr":"Raw","doc_type":"spec","body":"Raw"}`
+			req := httptest.NewRequest("POST", "/api/v1/change/"+path, strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			require.Equal(t, 400, rec.Code)
+		}
+	}
+	// validate failures retain their validation cause, just as binding failures do.
+	a := NewAPI(e, nil)
+	req = httptest.NewRequest("POST", "/", strings.NewReader(`{"id":0}`))
+	req.Header.Set("Content-Type", "application/json")
+	err := a.getChange(e.NewContext(req, httptest.NewRecorder()))
+	var he *echo.HTTPError
+	require.ErrorAs(t, err, &he)
+	require.NotNil(t, errors.Unwrap(he))
 }
 
 func TestChangeError(t *testing.T) {
@@ -115,7 +160,7 @@ func TestChangeHandlerReturnCauses(t *testing.T) {
 		{apperror.ErrChangeInvalidReference, 400, "invalid change reference"},
 	} {
 		e := echo.New()
-		a := NewAPI(e, NewService(&fakeChangeRepository{err: tc.err}, Renderer{}))
+		a := NewAPI(e, NewService(&fakeChangeRepository{err: tc.err}, Renderer{}, nil))
 		req := httptest.NewRequest("POST", "/", strings.NewReader(`{"id":7}`))
 		req.Header.Set("Content-Type", "application/json")
 		err := a.getChange(e.NewContext(req, httptest.NewRecorder()))

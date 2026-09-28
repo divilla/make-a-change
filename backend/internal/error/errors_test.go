@@ -131,3 +131,36 @@ func TestInvalidPayload(t *testing.T) {
 		}
 	}
 }
+
+func TestChangeDatabaseContracts(t *testing.T) {
+	for _, tc := range []struct {
+		cause   *pgconn.PgError
+		want    error
+		status  int
+		message string
+	}{
+		{&pgconn.PgError{Code: "23505", ConstraintName: "change_ref_uuid_idx"}, ErrChangeDuplicateUUID, 409, "change reference UUID already exists"},
+		{&pgconn.PgError{Code: "23505", ConstraintName: "other"}, nil, 500, "Internal Server Error"},
+		{&pgconn.PgError{Code: "23502", TableName: "change", ColumnName: "project_id"}, ErrProjectNotFound, 404, "project not found"},
+		{&pgconn.PgError{Code: "23502", TableName: "change", ColumnName: "title"}, nil, 500, "Internal Server Error"},
+		{&pgconn.PgError{Code: "23503"}, ErrProjectNotFound, 404, "project not found"},
+	} {
+		cause := Wrap(tc.cause, "nested")
+		err := ChangeCreate(cause)
+		require.ErrorIs(t, err, cause)
+		require.ErrorIs(t, err, tc.cause)
+		if tc.want != nil {
+			require.ErrorIs(t, err, tc.want)
+		}
+		code, msg := Interpret(err)
+		require.Equal(t, tc.status, code)
+		require.Equal(t, tc.message, msg)
+	}
+	require.NoError(t, ChangeCreate(nil))
+	cause := &pgconn.PgError{Code: "23503"}
+	err := Database(cause, nil, ErrChangeHasTestCases)
+	require.ErrorIs(t, err, cause)
+	code, msg := Interpret(err)
+	require.Equal(t, 409, code)
+	require.Equal(t, "change has testcases and cannot be deleted", msg)
+}

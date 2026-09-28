@@ -22,6 +22,8 @@ var (
 	ErrEpicHasChanges         = errors.New("epic has changes")
 	ErrChangeInvalidInput     = errors.New("invalid change input")
 	ErrChangeInvalidReference = errors.New("invalid change reference")
+	ErrChangeHasTestCases     = errors.New("change has testcases")
+	ErrChangeDuplicateUUID    = errors.New("change reference UUID already exists")
 	ErrChangeNotFound         = errors.New("change not found")
 	ErrTestCaseInvalidInput   = errors.New("invalid test case input")
 	ErrTestCaseNotFound       = errors.New("test case not found")
@@ -80,6 +82,8 @@ func Interpret(err error) (int, string) {
 		{ErrEpicHasChanges, 409, "epic has changes and cannot be deleted"},
 		{ErrChangeInvalidInput, 400, "invalid change payload"},
 		{ErrChangeInvalidReference, 400, "invalid change reference"},
+		{ErrChangeHasTestCases, 409, "change has testcases and cannot be deleted"},
+		{ErrChangeDuplicateUUID, 409, "change reference UUID already exists"},
 		{ErrChangeNotFound, 404, "change not found"},
 		{ErrTestCaseInvalidInput, 400, "invalid test case payload"},
 		{ErrTestCaseNotFound, 404, "test case not found"},
@@ -118,4 +122,19 @@ func ServerShutdown(err error) error {
 		return nil
 	}
 	return Wrap(err, "serve")
+}
+
+// ChangeCreate interprets only the known change UUID uniqueness and parent failures.
+func ChangeCreate(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		if pgErr.Code == "23505" && pgErr.ConstraintName == "change_ref_uuid_idx" {
+			return fmt.Errorf("%w: %w", ErrChangeDuplicateUUID, err)
+		}
+		// fn_change_insert uses a project subquery, so a disappearing parent gives NULL.
+		if pgErr.Code == "23502" && pgErr.TableName == "change" && pgErr.ColumnName == "project_id" {
+			return fmt.Errorf("%w: %w", ErrProjectNotFound, err)
+		}
+	}
+	return Database(err, nil, ErrProjectNotFound)
 }

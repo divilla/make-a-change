@@ -16,7 +16,7 @@ class ContractsTest(unittest.TestCase):
                 routes.add((method,(prefix if receiver=='a.g' else '')+path))
         ledger=(BACKEND/'agents/backend-contracts.md').read_text()
         documented=set(re.findall(r'^\| (GET|POST) \| (\S+) \|',ledger,re.M))
-        self.assertEqual(len(routes),32)
+        self.assertEqual(len(routes),34)
         self.assertEqual(routes,documented)
 
     def test_health_suite_has_explicit_contracts_for_both_aliases(self):

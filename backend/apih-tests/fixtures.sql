@@ -19,3 +19,29 @@ INSERT INTO public.change(id,project_id,epic_id,title,change_phase) VALUES
  (1202,1001,1102,'Epic dependency','discover');
 INSERT INTO public.testcase(id,change_id,scenario,done) VALUES
  (1301,1202,'Done case',true),(1302,1202,'Pending case',false);
+
+-- P3 isolated fixtures. P2 rows and relationships remain unchanged.
+INSERT INTO public.project(id,name,config,created,modified) VALUES
+ (2001,'P3 default','default','2025-01-01','2025-01-01'),
+ (2002,'P3 custom','p2-custom','2025-01-01','2025-01-01'),
+ (2003,'P3 missing config','p3-absent','2025-01-01','2025-01-01');
+INSERT INTO public.epic(id,project_id,name) VALUES
+ (2101,2001,'P3 matching epic'),(2102,2002,'P3 foreign epic');
+INSERT INTO public.change(id,project_id,title,change_phase,created,modified) VALUES
+ (2201,2001,'P3 default change','backlog','2025-01-01','2025-01-01'),
+ (2202,2002,'P3 custom change','discover','2025-01-01','2025-01-01'),
+ (2203,2003,'P3 missing config change','backlog','2025-01-01','2025-01-01'),
+ (2204,2001,'P3 deletable change','backlog','2025-01-01','2025-01-01'),
+ (2205,2001,'P3 no documents','backlog','2025-01-01','2025-01-01'),
+ (2206,2001,'P3 wide counts','backlog','2025-01-01','2025-01-01'),
+ (2207,2001,'P3 duplicate current artifacts','backlog','2025-01-01','2025-01-01');
+INSERT INTO public.testcase(id,change_id,scenario,done)
+ SELECT 230000+n,2206,'Wide count case '||n,n<=40000 FROM generate_series(1,50000) AS n;
+INSERT INTO public.doc(id,ref_id,ref_table,doc_type,body,current) VALUES
+ (2401,2204,'change','brief','Historic',false),
+ (2402,2204,'change','brief','Current',true),
+ (2403,2203,'change','spec','**No config needed**',true),
+ (2404,2207,'change','spec','Old duplicate',true),
+ (2405,2207,'change','spec','Latest duplicate',true),
+ (2406,2207,'project','pr','Wrong table',true),
+ (2407,2207,'change','pr','Historical PR',false);

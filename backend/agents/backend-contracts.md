@@ -1,12 +1,11 @@
-# P2 route, schema and error ledger
+# P3 route, schema and error ledger
 
 Authority: read-only `../../docs/backend-architecture.md`, `../../db/init.sql`
-and `../../db/seed.sql`. The inventory is **32 registered method/path pairs**:
-33 after P1, plus project/config, minus two options routes. APIHydra includes all
-11 P2 operations and both health aliases. Remaining change/testcase successes
-await P3/P4; those operations stay in the denominator. There is no authentication
-middleware or invented authentication contract. See the checkpoint for actual
-campaign exits and measurements.
+and `../../db/seed.sql`. The inventory is **34 registered method/path pairs**:
+32 after P2 plus documents and set-document. APIHydra exercises all 16 change,
+11 project/epic and two health operations successfully. Five testcase routes
+remain in the denominator pending P4; testcase list has only error evidence.
+No authentication middleware or invented authentication contract exists.
 
 | Method | Path | Current behavior / database source | Target and deferred pass | APIHydra |
 | --- | --- | --- | --- | --- |
@@ -23,20 +22,22 @@ campaign exits and measurements.
 | POST | /api/v1/epic/create | 201 {id}; one INSERT returning ID | P2 aligned | pass (p2-steps.yaml) |
 | POST | /api/v1/epic/update | 204 empty; one name/modified UPDATE, including same name | P2 aligned | pass (p2-steps.yaml) |
 | POST | /api/v1/epic/delete | 204 empty; one DELETE, FK conflict 409, missing 404 | P2 aligned | pass (p2-steps.yaml) |
-| POST | /api/v1/change/list | 200 list from vw_change_list; P0 fixed total_tc scan and derived completion | P3: review count widths/domain; preserve ordering/nullability | untested |
-| POST | /api/v1/change/get | P0: 200 flat ChangeDetails from vw_change_details; missing row maps to 404 | P3: separate document and testcase reads | 400/404 pass; success untested |
-| POST | /api/v1/change/rendered-artifacts | Reads obsolete change.brief/spec/pr and renders | P3: explicit reads of current doc rows, safe rendering | blocked |
-| POST | /api/v1/change/create | Calls fn_change_insert then obsolete full-entity scan | P3: fn_change_insert returns ID; 201 ID only | blocked |
-| POST | /api/v1/change/update-epic | Old state/transaction/recalculation path; intended 200 entity | P3: current epic_id + sp_change_epic_update; validate project relation; 204 | blocked |
-| POST | /api/v1/change/update-phase | Removed lookup/reference/state paths; intended 200 entity | P3: project config + sp_change_phase_update; 204 | blocked |
-| POST | /api/v1/change/update-open | Old state/transaction path; intended 200 entity | P3: change.open and modified; 204 | blocked |
-| POST | /api/v1/change/update-change-types | P0: error-only direct update, 204 empty, 404 missing; service still reads removed change_type | P3: project-selected config validation; retain normalization | blocked |
-| POST | /api/v1/change/update-title | Old state/transaction path around sp_change_title_update | P3: use existing procedure; 204, no reload | blocked |
-| POST | /api/v1/change/update-brief | Calls removed sp_change_brief_update; old state/transaction | P3: sp_change_doc_set with brief; 204 | blocked |
-| POST | /api/v1/change/update-spec | Calls removed sp_change_spec_update; old state/transaction | P3: sp_change_doc_set with spec; 204 | blocked |
-| POST | /api/v1/change/update-pr | Calls removed sp_change_pr_update; old state/transaction | P3: sp_change_doc_set with pr; 204 | blocked |
-| POST | /api/v1/change/update-pr-url | Old state/transaction path before pr_url update | P3: change.pr_url and modified; 204 | blocked |
-| POST | /api/v1/change/delete | Old test_case/procedure/recalculation path | P3/P4: explicit deletion respecting testcase FK and doc ownership; 204 | blocked |
+| POST | /api/v1/change/list | 200 current vw_change_list columns; service int64 completion; modified DESC,id; [] for absent project | P3 aligned | pass (p3/steps.yaml) |
+| POST | /api/v1/change/get | 200 current vw_change_details; flat fields, nullable references, no inline docs/version/testcases; 404 missing | P3 aligned | pass (p3/steps.yaml) |
+| POST | /api/v1/change/rendered-artifacts | 200 artifacts wrapper; ordered deduplicated IDs; live-parent current doc spec/pr, sanitized HTML; absent IDs omitted | P3 aligned | pass (p3/steps.yaml) |
+| POST | /api/v1/change/create | 201 exact {id}; selected config must support backlog/brief; UUIDv7 default or preserved caller UUID; fn_change_insert only | P3 aligned | pass (p3/steps.yaml) |
+| POST | /api/v1/change/update-epic | 204; targeted parent/epic project preflight, sp_change_epic_update; nil detaches; no config | P3 aligned | pass (p3/steps.yaml) |
+| POST | /api/v1/change/update-phase | 204; selected-config phase validation then sp_change_phase_update | P3 aligned | pass (p3/steps.yaml) |
+| POST | /api/v1/change/update-open | 204; explicit bool; direct UPDATE open/modified; affected-row 404 | P3 aligned | pass (p3/steps.yaml) |
+| POST | /api/v1/change/update-change-types | 204; ordered trim/dedup/filter using selected config; direct UPDATE types/modified, including clears | P3 aligned | pass (p3/steps.yaml) |
+| POST | /api/v1/change/update-title | 204; existence preflight then sp_change_title_update; DB whitespace normalization; no config | P3 aligned | pass (p3/steps.yaml) |
+| POST | /api/v1/change/update-brief | 204; service maps brief to ChangeDocumentSetRequest; sp_change_doc_set appends | P3 aligned | pass (p3/steps.yaml) |
+| POST | /api/v1/change/update-spec | 204; service maps spec to ChangeDocumentSetRequest; sp_change_doc_set appends | P3 aligned | pass (p3/steps.yaml) |
+| POST | /api/v1/change/update-pr | 204; service maps pr to ChangeDocumentSetRequest; sp_change_doc_set appends | P3 aligned | pass (p3/steps.yaml) |
+| POST | /api/v1/change/update-pr-url | 204; nonblank http(s) URL; direct UPDATE pr_url/modified; affected-row 404; no config | P3 aligned | pass (p3/steps.yaml) |
+| POST | /api/v1/change/delete | 204; direct DELETE; actual testcase FK 409; missing 404; docs retained; no config | P3 aligned | pass (p3/steps.yaml) |
+| POST | /api/v1/change/documents | 200 current docs ordered doc_type,id with raw body and sanitized html; [] if none; live-parent preflight; no config | P3 aligned | pass (p3/steps.yaml) |
+| POST | /api/v1/change/set-document | 204; explicit agent_edit, nonblank kind/body, selected-config validation; sp_change_doc_set appends even identical body | P3 aligned | pass (p3/steps.yaml) |
 | POST | /api/v1/test-case/list | Uses public.test_case (absent); intended 200 list | P4: public.testcase, retained fields | 404 pass; success blocked |
 | POST | /api/v1/test-case/create | Removed fn_test_case_insert; composite mutation response | P4: testcase insert; 201 ID only | blocked |
 | POST | /api/v1/test-case/update | Removed sp_test_case_update and old state | P4: testcase.scenario; 204 | blocked |
@@ -44,30 +45,60 @@ campaign exits and measurements.
 | POST | /api/v1/test-case/delete | Removed sp_test_case_delete; composite response | P4: testcase delete; 204, independent reads | blocked |
 
 
-## Limited P0 field correction
+## P3 change/document contracts and concurrency limits
 
-`ChangeDetails` now embeds `ChangeListItem` and adds `pr_url` and `created`.
-It has no `change`/`test_cases` envelope, obsolete `version`, or fabricated
-empty document/rendered fields. The old interface's wrapper could not be
-implemented by the old repository slice and required unrelated convenience
-reads. The authorized minimal correction exposes only this view's data.
-`completed` remains a real database-backed derivation:
-`coalesce(100 * done_tc / nullif(total_tc, 0), 0)`; it is not a compatibility zero.
-Null ref/slug/epic fields remain nullable. `modified` and `created` come from
-the views. Current int16 counter widths remain a P3 follow-up.
+Current reads explicitly scan the two change views. done_tc/total_tc/completed
+are int64; completion is service-derived integer 100*done/total (zero for zero
+total), matching P2. No details envelope, inline docs, version or testcase list
+remains. Configuration-independent reads do not consult project configuration.
 
-`Change` itself and old mutation scans remain for P3/P4. The legacy
-`TestScanChangeCurrentSchema`/`TestGetStateCurrentSchema` names describe old
-mock layouts, not evidence that those queries match today's database. Their
-success must not be cited as SQL compatibility. P0 adds distinct current-view
-query/scan tests and changes the old service rendering assertion to current
-flat details. Explicit document rendering still has its separate tests.
+All mutations use domain requests and return only error, except creation's
+existing ChangeIDRequest ID DTO. Config-dependent operations call project.Service.Config
+using the actual parent ID: its stored slug determines all types/phases/docs.
+Absent project or config on create uses the established unavailable-config 404;
+unsupported function defaults are invalid-reference 400. UUID uniqueness is 409;
+function parent-disappearance errors preserve PG causes through central APIs.
+Title/open/pr-url/epic/delete need no configuration. Type filtering retains its
+ordered intersection and clearing semantics; phases and document kinds reject
+unknown values. No global lookup, fallback or additional dependencies exist.
 
-Configuration maps project.config to config.slug, with no default fallback;
-project_docs, epic_docs, change_docs, change_phases, change_colors and change_types
-all come from config. Documents map ref_id/ref_table/doc_type/body/current/
-agent_edit/created to public.doc and the sp_*_doc_set procedures. No new schema,
-Go transaction, authentication behavior, or dependency is introduced.
+Documents map public.doc ref_table='change', ref_id, doc_type, body, agent_edit,
+current and created into domain.ChangeDocument (plus service-rendered html).
+Specialized brief/spec/pr writes map to the same domain.ChangeDocumentSetRequest
+used by set-document. Repeated identical writes append; no revision/version
+compatibility is invented. Raw bodies are preserved while rendered HTML is
+sanitized. Bulk artifacts pick the latest ID per current spec/pr kind if malformed
+data contains duplicate current rows, preserving requested order and omitting
+absent parents. Documents returns all current rows deterministically by doc_type,id.
+
+Procedure preflights return 404 for already-missing parents. The preflight and
+CALL are separate statements: **concurrent parent deletion may yield a successful
+no-op**. Same-project epic validation can race with **concurrent changes to the
+epic's project** because the database deliberately has no composite FK. A
+concurrently deleted epic is still classified through its ordinary FK failure.
+Document reads use preflight plus a live-parent join: deletion between those
+statements can yield [] rather than 404, but cannot expose retained orphan docs.
+No Go transaction or anonymous SQL workaround pretends to make these atomic.
+Direct UPDATE/DELETE affected-row semantics hold at each statement boundary.
+
+Deletion executes only DELETE public.change. Real testcase FK conflicts map to
+409 `change has testcases and cannot be deleted`, preserving the PG cause.
+No testcase cascade, recalculation or history procedure runs. public.doc is
+append-only with polymorphic, non-FK references: historical AND current doc rows
+survive parent deletion. Reads/set after an already absent parent return 404;
+bulk artifacts omit that parent. No new purge or document blocker is invented.
+
+P4 boundary: legacy domain.Change remains only because internal/testcase/repo.go
+getChange/scanChange and domain.TestCaseMutationResponse still use it.
+internal/testcase/service.go renderMutation calls change.Renderer.RenderMutation,
+which calls RenderChange. Keep these adapters until P4 replaces the testcase
+composite response, then delete the legacy DTO and both rendering adapters.
+P3 change service/repository use none of them. Testcase's old SQL/history/Go
+transactions are deliberately deferred; compilation is preserved, not claimed
+as schema compatibility. The obsolete change transaction/state/full-entity scan,
+finishMutation, recalculation and testcase cascade paths and their compatibility
+assertions are removed. Current-schema unit tests and APIHydra replace retained
+behavior; separate HTTP/SQL checks prove timestamp advancement and doc retention.
 
 ## P1 centralized error contract
 
@@ -140,5 +171,5 @@ Configuration/db panic values remain errors with inspectable underlying causes.
 
 See [checkpoint](backend-refactor-checkpoint.md) for criterion/test mapping and
 actual verification, and [API coverage](../apih-tests/coverage.md) for assertions
-and tool limitations. Error-only change/testcase scenarios remain diagnostic;
+and tool limitations. Error-only testcase scenarios remain diagnostic;
 they are not successful operation coverage.
