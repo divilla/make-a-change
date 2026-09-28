@@ -335,5 +335,13 @@ func programProject(id int, name string) map[string]any {
 }
 
 func programProjectConfig() map[string]any {
-	return map[string]any{"slug": "program", "project_docs": []string{"readme"}, "epic_docs": []string{"brief"}, "change_docs": []string{"brief", "spec"}, "change_phases": []string{"backlog"}, "change_colors": []string{"12"}, "change_types": []string{"feature"}}
+	return map[string]any{"slug": "program", "project_docs": []string{"readme"}, "epic_docs": []string{"brief"}, "change_docs": []string{"brief", "spec", "pr"}, "change_phases": []string{"backlog"}, "change_colors": []string{"12"}, "change_types": []string{"feature"}}
+}
+
+func programChange(id int, title string) map[string]any {
+	return map[string]any{"id": id, "project_id": 7, "ref_uuid": "0198a86f-9b8a-7d89-ae5b-6f25b528b04c", "ref": nil, "slug": nil, "epic_id": nil, "epic_name": nil, "change_phase": "backlog", "change_types": []string{}, "title": title, "open": true, "done_tc": int64(2), "total_tc": int64(9), "completed": int64(73), "updated_at": "2026-09-28T11:00:00Z", "after_change_id": nil, "pr_url": "", "created_at": "2026-09-28T10:00:00Z"}
+}
+
+func programDocument(kind, body string) map[string]any {
+	return map[string]any{"id": 91, "ref_id": 12, "ref_table": "change", "doc_type": kind, "body": body, "agent_edit": false, "current": true, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T10:00:00Z", "html": ""}
 }

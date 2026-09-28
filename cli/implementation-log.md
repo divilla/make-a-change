@@ -27,3 +27,9 @@
 +135 -75 code - +168 -2 tests --- review fixes 02
 +44 -32 code - +84 -4 tests --- review fixes 03
 
+2026-28-09 14:31 023-cli-change-management
++1538 -801 code - +1693 -560 tests --- spec
++62 -7 code - +107 -0 tests --- review fixes 01
++105 -14 code - +117 -5 tests --- review fixes 02
++61 -5 code - +53 -3 tests --- review fixes 03
+

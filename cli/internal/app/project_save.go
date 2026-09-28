@@ -62,7 +62,7 @@ func (m Model) applyProjectResult(r projects.Result) (tea.Model, tea.Cmd) {
 				// navigation can cancel or invalidate the manual read at any time.
 				m.catalogGeneration++
 				phases, types := projects.CatalogOptions(r.Config)
-				m.optionCatalog = optionCatalog{phases: phases, types: types, loaded: true}
+				m.optionCatalog = optionCatalog{config: r.Config, phases: phases, types: types, loaded: true}
 			}
 		case projects.Create, projects.Edit:
 			m.state = ProjectDetailsState

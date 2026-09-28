@@ -70,6 +70,7 @@ func TestP303EpicEditorRawDraftRetryCancelAndNoOp(t *testing.T) {
 				f := &epicAppClient{fakeClient: fakeClient{createErr: errors.New("offline"), updateErr: errors.New("offline")}, detail: dto.Epic{ID: 3, ProjectID: 7, Name: "before"}}
 				m := epicApp(f)
 				m.state = state
+				m.changeDetailLoaded = true
 				next, cmd := m.Update(editorFinishedMsg{source: state, content: raw})
 				m = applyCommand(next.(Model), cmd)
 				assert.Equal(t, "save failed", m.status)
@@ -281,7 +282,8 @@ func TestP304EpicSelectorReopenRejectsOlderSameProjectResult(t *testing.T) {
 				m := NewModelWithClient(f)
 				m.currentProject = dto.Option{ID: "7"}
 				m.state = state
-				m.changeList.Detail = dto.Change{ID: "12"}
+				m.changeDetailLoaded = true
+				m.changeList.Detail = dto.ChangeView{ID: "12"}
 				command := "/epic-filter"
 				if state == ChangeDetailsState {
 					command = "/epic"

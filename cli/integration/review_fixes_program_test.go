@@ -27,7 +27,7 @@ func testProgramTestCaseRetry(t *testing.T, scenario string, useEditor bool) {
 		mu.Lock()
 		defer mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
-		change := map[string]any{"id": 12, "project_id": 7, "title": "Existing"}
+		change := programChange(12, "Existing")
 		switch r.URL.Path {
 		case "/api/v1/project/config":
 			writeProgramJSON(w, programProjectConfig())
@@ -35,8 +35,10 @@ func testProgramTestCaseRetry(t *testing.T, scenario string, useEditor bool) {
 			writeProgramJSON(w, programProject(7, "Program Project"))
 		case "/api/v1/change/list":
 			writeProgramJSON(w, []any{change})
-		case "/api/v1/change/get":
+		case "/api/v1/change/details":
 			writeProgramJSON(w, change)
+		case "/api/v1/doc/current", "/api/v1/test-case/list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/test-case/create":
 			var body struct {
 				ChangeID int    `json:"change_id"`

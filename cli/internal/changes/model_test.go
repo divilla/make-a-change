@@ -30,29 +30,29 @@ func TestParseSpecStructureTracksOptionalTypesMetadata(t *testing.T) {
 	}
 }
 
-func TestParseDefStructureTracksOptionalTypesMetadata(t *testing.T) {
-	parsed, err := ParseDefStructure("# Change\n\nBody")
+func TestParseBriefStructureTracksOptionalTypesMetadata(t *testing.T) {
+	parsed, err := ParseBriefStructure("# Change\n\nBody")
 	require.NoError(t, err)
 	assert.False(t, parsed.ChangeTypesPresent)
 
-	parsed, err = ParseDefStructure("# Change\n\nTypes:\n\nBody")
+	parsed, err = ParseBriefStructure("# Change\n\nTypes:\n\nBody")
 	require.NoError(t, err)
 	assert.True(t, parsed.ChangeTypesPresent)
 	assert.Empty(t, parsed.ChangeTypes)
 
-	parsed, err = ParseDefStructure("# Change\nTypes: fix|feature\n\nBody")
+	parsed, err = ParseBriefStructure("# Change\nTypes: fix|feature\n\nBody")
 	require.NoError(t, err)
 	assert.True(t, parsed.ChangeTypesPresent)
 	assert.Equal(t, []string{"fix", "feature"}, parsed.ChangeTypes)
 }
 
-func TestParseDefStructureRequiresNonMetadataBody(t *testing.T) {
-	for _, def := range []string{
+func TestParseBriefStructureRequiresNonMetadataBody(t *testing.T) {
+	for _, brief := range []string{
 		"# Change\n\n",
 		"# Change\n\nTypes:",
 		"# Change\n\nTypes: feature",
 	} {
-		_, err := ParseDefStructure(def)
-		require.EqualError(t, err, "definition body is required")
+		_, err := ParseBriefStructure(brief)
+		require.EqualError(t, err, "brief body is required")
 	}
 }

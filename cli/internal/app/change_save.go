@@ -2,7 +2,9 @@ package app
 
 import (
 	"cli/internal/changes"
+	"cli/internal/documents"
 	"cli/internal/dto"
+	"context"
 	"fmt"
 	"sort"
 	"strconv"
@@ -10,36 +12,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 )
-
-func (m Model) saveChangeCreate() (tea.Model, tea.Cmd) {
-	return m.saveChangeCreateValue(m.input.Value())
-}
-
-func (m Model) saveChangeCreateValue(def string) (tea.Model, tea.Cmd) {
-	projectID, err := currentProjectNumericID(m.currentProject.ID)
-	if err != nil {
-		m.err = err.Error()
-		m.status = "validation failed"
-		return m, nil
-	}
-	m.status = "saving"
-	return m, changeCreateCommand(m.client, projectID, def)
-}
-
-func (m Model) saveChangeUpdate() (tea.Model, tea.Cmd) {
-	return m.saveChangeUpdateValue(m.input.Value())
-}
-
-func (m Model) saveChangeUpdateValue(spec string) (tea.Model, tea.Cmd) {
-	id, err := changeNumericID(m.changeList.Detail)
-	if err != nil {
-		m.err = err.Error()
-		m.status = "validation failed"
-		return m, nil
-	}
-	m.status = "saving"
-	return m, changeUpdateCommand(m.client, id, m.changeList.Detail, spec)
-}
 
 func (m Model) saveTestCaseCreateValue(scenario string) (tea.Model, tea.Cmd) {
 	changeID, err := changeNumericID(m.changeList.Detail)
@@ -73,76 +45,6 @@ func (m Model) saveTestCaseUpdateValue(scenario string) (tea.Model, tea.Cmd) {
 	return m, testCaseUpdateCommand(m.client, testCaseID, scenario)
 }
 
-func changeCreateCommand(client appClient, projectID int, def string) tea.Cmd {
-	return func() tea.Msg {
-		parsed, err := changes.ParseDefStructure(def)
-		if err != nil {
-			return changeSavedMsg{source: ChangeCreateState, err: err}
-		}
-		created, err := client.CreateChange(dto.ChangeCreateInput{
-			ProjectID: projectID,
-			Title:     parsed.Title,
-			Def:       parsed.Def,
-		})
-		if err != nil {
-			return changeSavedMsg{source: ChangeCreateState, err: err}
-		}
-		id, err := changeNumericID(created)
-		if err != nil {
-			return changeSavedMsg{source: ChangeCreateState, err: err}
-		}
-		if err := updateArtifactTypes(client, id, parsed.ChangeTypes, parsed.ChangeTypesPresent); err != nil {
-			return changeSavedMsg{source: ChangeCreateState, change: created, reloadErr: fmt.Errorf("change created; type update failed: %w", err)}
-		}
-		change, err := client.GetChange(id)
-		if err != nil {
-			return changeSavedMsg{source: ChangeCreateState, change: created, reloadErr: err}
-		}
-		return changeSavedMsg{source: ChangeCreateState, change: change}
-	}
-}
-
-func changeUpdateCommand(client appClient, id int, original dto.Change, spec string) tea.Cmd {
-	return func() tea.Msg {
-		parsed, err := parseChangeArtifact(spec)
-		if err != nil {
-			return changeSavedMsg{source: ChangeUpdateState, err: err}
-		}
-		if parsed.Title != original.Title {
-			if _, err := client.UpdateChangeTitle(id, parsed.Title); err != nil {
-				return changeSavedMsg{source: ChangeUpdateState, err: err}
-			}
-		}
-		if parsed.Spec != original.Spec {
-			if _, err := client.UpdateChangeSpec(id, parsed.Spec, false); err != nil {
-				return changeSavedMsg{source: ChangeUpdateState, err: err}
-			}
-		}
-		if err := updateArtifactTypes(client, id, parsed.ChangeTypes, parsed.ChangeTypesPresent); err != nil {
-			return changeSavedMsg{source: ChangeUpdateState, err: err}
-		}
-		change, err := client.GetChange(id)
-		return changeSavedMsg{source: ChangeUpdateState, change: change, err: err}
-	}
-}
-
-func changeGetCommand(client appClient, id int) tea.Cmd {
-	return func() tea.Msg {
-		change, err := client.GetChange(id)
-		return changeLoadedMsg{id: id, change: change, err: err}
-	}
-}
-
-func changeDeleteCommand(client appClient, change dto.Change, target State) tea.Cmd {
-	return func() tea.Msg {
-		id, err := changeNumericID(change)
-		if err != nil {
-			return changeDeletedMsg{target: target, err: err}
-		}
-		return changeDeletedMsg{target: target, err: client.DeleteChange(id)}
-	}
-}
-
 func testCaseCreateCommand(client appClient, changeID int, scenario string) tea.Cmd {
 	return func() tea.Msg {
 		change, err := client.CreateTestCase(changeID, scenario)
@@ -168,67 +70,7 @@ func testCaseDeleteCommand(client appClient, testCase dto.TestCase) tea.Cmd {
 	}
 }
 
-func changeDetailFieldUpdateCommand(client appClient, change dto.Change, field detailEditField, selected dto.Option) tea.Cmd {
-	return func() tea.Msg {
-		id, err := changeNumericID(change)
-		if err != nil {
-			return changeSavedMsg{source: ChangeDetailsState, err: err}
-		}
-		switch field {
-		case detailEditPhase:
-			if _, err := client.UpdateChangePhase(id, selected.ID); err != nil {
-				return changeSavedMsg{source: ChangeDetailsState, err: err}
-			}
-		case detailEditTypes:
-			changeTypes := toggleChangeType(change.ChangeTypes, selected)
-			if _, err := client.UpdateChangeTypes(id, changeTypes); err != nil {
-				return changeSavedMsg{source: ChangeDetailsState, err: err}
-			}
-		case detailEditEpic:
-			epicID, err := selectedEpicID(selected)
-			if err != nil {
-				return changeSavedMsg{source: ChangeDetailsState, err: err}
-			}
-			if _, err := client.UpdateChangeEpic(id, epicID); err != nil {
-				return changeSavedMsg{source: ChangeDetailsState, err: err}
-			}
-		default:
-			return changeSavedMsg{source: ChangeDetailsState, err: fmt.Errorf("unsupported change detail field: %s", field)}
-		}
-		change, err := client.GetChange(id)
-		return changeSavedMsg{source: ChangeDetailsState, change: change, err: err}
-	}
-}
-
-func changeDetailTypesUpdateCommand(client appClient, change dto.Change, changeTypes []string) tea.Cmd {
-	return func() tea.Msg {
-		id, err := changeNumericID(change)
-		if err != nil {
-			return changeSavedMsg{source: ChangeDetailsState, err: err}
-		}
-		if _, err := client.UpdateChangeTypes(id, normalizeTypeSet(changeTypes)); err != nil {
-			return changeSavedMsg{source: ChangeDetailsState, err: err}
-		}
-		change, err := client.GetChange(id)
-		return changeSavedMsg{source: ChangeDetailsState, change: change, err: err}
-	}
-}
-
-func changeDetailOpenUpdateCommand(client appClient, change dto.Change) tea.Cmd {
-	return func() tea.Msg {
-		id, err := changeNumericID(change)
-		if err != nil {
-			return changeSavedMsg{source: ChangeDetailsState, err: err}
-		}
-		if _, err := client.UpdateChangeOpen(id, !change.Open); err != nil {
-			return changeSavedMsg{source: ChangeDetailsState, err: err}
-		}
-		change, err := client.GetChange(id)
-		return changeSavedMsg{source: ChangeDetailsState, change: change, err: err}
-	}
-}
-
-func changeDetailTestCaseDoneUpdateCommand(client appClient, change dto.Change, row changes.DetailRow) tea.Cmd {
+func changeDetailTestCaseDoneUpdateCommand(client appClient, change dto.ChangeView, row changes.DetailRow) tea.Cmd {
 	return func() tea.Msg {
 		changeID, err := changeNumericID(change)
 		if err != nil {
@@ -241,84 +83,16 @@ func changeDetailTestCaseDoneUpdateCommand(client appClient, change dto.Change, 
 		if _, err := client.UpdateTestCaseDone(testCaseID, !row.TestCaseDone); err != nil {
 			return changeSavedMsg{source: ChangeDetailsState, err: err}
 		}
-		change, err := client.GetChange(changeID)
+		wire, err := client.GetChange(context.Background(), changeID)
+		change := changes.Present(wire)
+		if err == nil {
+			change.TestCases, err = client.ListTestCases(context.Background(), changeID)
+		}
 		return changeSavedMsg{source: ChangeDetailsState, change: change, err: err}
 	}
 }
 
-func changeDetailTextUpdateCommand(client appClient, source State, change dto.Change, field detailEditField, value string) tea.Cmd {
-	return func() tea.Msg {
-		id, err := changeNumericID(change)
-		if err != nil {
-			return changeSavedMsg{source: source, err: err}
-		}
-		artifactTypes := []string(nil)
-		artifactTypesPresent := false
-		switch field {
-		case detailEditTitle:
-			if _, err := client.UpdateChangeTitle(id, value); err != nil {
-				return changeSavedMsg{source: source, err: err}
-			}
-			change.Title = value
-		case detailEditSpec:
-			if strings.TrimSpace(value) == "" {
-				return changeSavedMsg{source: source, err: fmt.Errorf("spec is required")}
-			}
-			if _, err := client.UpdateChangeSpec(id, value, false); err != nil {
-				return changeSavedMsg{source: source, err: err}
-			}
-			change.Spec = value
-			artifactTypes, artifactTypesPresent = changes.ParseArtifactTypes(value)
-		case detailEditDef:
-			if _, err := client.UpdateChangeDef(id, value, false); err != nil {
-				return changeSavedMsg{source: source, err: err}
-			}
-			change.Def = value
-			artifactTypes, artifactTypesPresent = changes.ParseArtifactTypes(value)
-		case detailEditPullRequest:
-			if strings.TrimSpace(value) == "" {
-				return changeSavedMsg{source: source, err: fmt.Errorf("PR is required")}
-			}
-			if _, err := client.UpdateChangePR(id, value, false); err != nil {
-				return changeSavedMsg{source: source, err: err}
-			}
-			change.PR = value
-			artifactTypes, artifactTypesPresent = changes.ParseArtifactTypes(value)
-		case detailEditPRUrl:
-			if strings.TrimSpace(value) == "" {
-				return changeSavedMsg{source: source, err: fmt.Errorf("PR URL is required")}
-			}
-			if _, err := client.UpdateChangePRUrl(id, value); err != nil {
-				return changeSavedMsg{source: source, err: err}
-			}
-			change.PRUrl = value
-		default:
-			return changeSavedMsg{source: source, err: fmt.Errorf("unsupported change detail text field: %s", field)}
-		}
-		if err := updateArtifactTypes(client, id, artifactTypes, artifactTypesPresent); err != nil {
-			return changeSavedMsg{source: source, change: change, reloadErr: fmt.Errorf("document saved; type update failed: %w", err)}
-		}
-		refreshed, err := client.GetChange(id)
-		if err != nil {
-			return changeSavedMsg{source: source, change: change, reloadErr: fmt.Errorf("saved; refresh failed: %w", err)}
-		}
-		return changeSavedMsg{source: source, change: refreshed}
-	}
-}
-
-func parseChangeArtifact(spec string) (changes.ParsedSpec, error) {
-	return changes.ParseSpecStructure(spec)
-}
-
-func updateArtifactTypes(client appClient, id int, changeTypes []string, present bool) error {
-	if !present {
-		return nil
-	}
-	_, err := client.UpdateChangeTypes(id, changeTypes)
-	return err
-}
-
-func changeNumericID(change dto.Change) (int, error) {
+func changeNumericID(change dto.ChangeView) (int, error) {
 	id, err := strconv.Atoi(strings.TrimSpace(change.ID))
 	if err != nil || id <= 0 {
 		return 0, fmt.Errorf("change ID must be a valid positive number")
@@ -390,4 +164,141 @@ func selectedEpicID(selected dto.Option) (*int, error) {
 		return nil, fmt.Errorf("epic ID must be numeric")
 	}
 	return &epicID, nil
+}
+
+func (m Model) beginChange(op changes.Operation, id int, in changes.Input) (tea.Model, tea.Cmd) {
+	project, _ := strconv.Atoi(m.currentProject.ID)
+	var cmd tea.Cmd
+	m.changeList, cmd = m.changeList.Begin(m.ctx, m.client, documents.Access{API: m.client, Types: m.optionCatalog.config.ChangeDocs}, op, project, id, in, m.optionCatalog.config)
+	if op == changes.Details && cmd != nil {
+		m.changeDetailLoaded = false
+	}
+	m.status = m.changeList.Status
+	m.err = ""
+	if m.changeList.Err != nil {
+		m.err = m.changeList.Err.Error()
+	}
+	if cmd == nil && m.status == "unchanged" {
+		m.state = ChangeDetailsState
+		m.detailEditField = ""
+		m = m.setPromptValue("")
+	}
+	return m, cmd
+}
+
+func (m Model) applyChangeResult(r changes.Result) (tea.Model, tea.Cmd) {
+	if strconv.Itoa(r.ProjectID) != m.currentProject.ID {
+		return m, nil
+	}
+	next, ok := m.changeList.Apply(r)
+	if !ok {
+		return m, nil
+	}
+	selected, offset := m.changeList.DetailSelected, m.changeList.DetailOffset
+	m.changeList = next
+	m.changeDetailLoaded = next.DetailLoaded
+	if r.Operation != changes.Create && r.Operation != changes.Details && r.Operation != changes.List && r.Operation != changes.Delete {
+		m.changeList.DetailSelected = selected
+		m.changeList.DetailOffset = offset
+	}
+	m.status = next.Status
+	m.err = ""
+	if next.Err != nil {
+		m.err = next.Err.Error()
+	}
+	if r.Err == nil && r.Operation != changes.List && r.Operation != changes.Details {
+		m.state = ChangeDetailsState
+		if r.Operation == changes.Delete {
+			m.state = ChangesListState
+		}
+		m.detailEditField = ""
+		m = m.setPromptValue("")
+	}
+	return m, nil
+}
+
+func (m Model) saveChangeCreate() (tea.Model, tea.Cmd) {
+	return m.saveChangeCreateValue(m.promptValue())
+}
+
+func (m Model) saveChangeCreateValue(brief string) (tea.Model, tea.Cmd) {
+	m.changeList = m.changeList.PrepareCreate(brief)
+	in := m.changeList.Draft
+	return m.beginChange(changes.Create, 0, in)
+}
+
+func (m Model) saveChangeUpdate() (tea.Model, tea.Cmd) {
+	return m.saveChangeUpdateValue(m.promptValue())
+}
+
+func (m Model) saveChangeUpdateValue(value string) (tea.Model, tea.Cmd) {
+	if m.detailEditField == "" {
+		m.detailEditField = detailEditSpec
+	}
+	return m.saveChangeDetailTextValue(value)
+}
+
+func (m Model) saveChangeDetailTextValue(value string) (tea.Model, tea.Cmd) {
+	id, _ := changeNumericID(m.changeList.Detail)
+	in := changes.Input{Value: value}
+	op := changes.Document
+	switch m.detailEditField {
+	case detailEditTitle:
+		op = changes.Title
+	case detailEditPRUrl:
+		op = changes.PRURL
+	case detailEditAfterChange:
+		op = changes.AfterChange
+		var err error
+		in.Association, err = changes.AssociationInput(value)
+		if err != nil {
+			m.err = err.Error()
+			return m, nil
+		}
+	case detailEditDocument:
+		in.DocumentType = m.changeList.Draft.DocumentType
+	case detailEditBrief:
+		in.DocumentType = "brief"
+	case detailEditSpec:
+		in.DocumentType = "spec"
+	case detailEditPullRequest:
+		in.DocumentType = "pr"
+	case detailCreateTitle:
+		m.changeList.Draft.Title = value
+		m.detailEditField = ""
+		m = m.setPromptValue(m.changeList.Draft.Value)
+		raw := m.changeList.Draft.Value
+		m.editorDraft = &raw
+		return m, nil
+	case detailCreateUUID:
+		m.changeList.Draft.UUID = value
+		m.detailEditField = ""
+		m = m.setPromptValue(m.changeList.Draft.Value)
+		raw := m.changeList.Draft.Value
+		m.editorDraft = &raw
+		return m, nil
+	}
+	return m.beginChange(op, id, in)
+}
+
+func (m Model) beginChangeField(field detailEditField) (tea.Model, tea.Cmd) {
+	if !m.changeDetailLoaded {
+		m.err = "load change details with /retry before editing"
+		return m, nil
+	}
+	m.changeList = m.changeList.Invalidate()
+	m.previousState = ChangeDetailsState
+	m.state = ChangeUpdateState
+	m.detailEditField = field
+	value := m.changeList.Detail.Title
+	switch field {
+	case detailEditAfterChange:
+		value = m.changeList.Detail.AfterChangeID
+	case detailEditPRUrl:
+		value = m.changeList.Detail.PRUrl
+	}
+	m = m.setPromptValue(value)
+	m.editorDraft = &value
+	m.input.Placeholder = "Enter value (Ctrl+C clears, Esc cancels)"
+	return m, nil
 }

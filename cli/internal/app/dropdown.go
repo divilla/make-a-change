@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cli/internal/changes"
 	"cli/internal/dto"
 	"cli/internal/epics"
 	"cli/internal/projects"
@@ -142,7 +143,8 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 			if previous == ChangeDetailsState && target == ChangesListState {
 				m.state = ChangeDetailsState
 				m.status = "deleting change"
-				return m, changeDeleteCommand(m.client, m.changeList.Detail, target)
+				id, _ := changeNumericID(m.changeList.Detail)
+				return m.beginChange(changes.Delete, id, changes.Input{})
 			}
 			if previous == ChangeDetailsState && target == ChangeDetailsState {
 				m.state = ChangeDetailsState
@@ -171,6 +173,12 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 		m.err = "no matching option"
 		return m, nil
 	}
+	if m.dropdown.editField == detailEditDocument {
+		m.changeList.Draft.DocumentType = selected.ID
+		m.state = ChangeDetailsState
+		m.dropdown = dropdownModel{}
+		return m.beginDetailTextEditor(detailEditDocument)
+	}
 	if m.dropdown.editField == detailEditTypes {
 		change := m.changeList.Detail
 		m.state = m.dropdown.onSelect
@@ -181,7 +189,8 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 		}
 		pending := append([]string(nil), m.dropdown.pendingTypes...)
 		m.dropdown = dropdownModel{}
-		return m, changeDetailTypesUpdateCommand(m.client, change, pending)
+		id, _ := changeNumericID(change)
+		return m.beginChange(changes.Types, id, changes.Input{Types: pending})
 	}
 	if m.dropdown.editField != "" {
 		field := m.dropdown.editField
@@ -189,7 +198,19 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 		m.state = m.dropdown.onSelect
 		m.status = "saving " + string(field)
 		m.dropdown = dropdownModel{}
-		return m, changeDetailFieldUpdateCommand(m.client, change, field, selected)
+		id, _ := changeNumericID(change)
+		in := changes.Input{Value: selected.ID}
+		op := changes.Phase
+		if field == detailEditEpic {
+			op = changes.Epic
+			var err error
+			in.Association, err = selectedEpicID(selected)
+			if err != nil {
+				m.err = err.Error()
+				return m, nil
+			}
+		}
+		return m.beginChange(op, id, in)
 	}
 	if m.dropdown.filterField != "" {
 		if selected.ID == "/clear" {
@@ -217,6 +238,7 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 		m.catalogGeneration++
 		m.optionCatalog = optionCatalog{}
 		m.changesFilters = changesFilters{}
+		m.changeList = m.changeList.Scope(id)
 		m, save := m.persistCurrentProject()
 		return m, tea.Batch(save, optionCatalogCommand(m.ctx, m.client, id, m.catalogGeneration), currentProjectCommand(m.ctx, m.client, id, m.selectionGeneration))
 	}

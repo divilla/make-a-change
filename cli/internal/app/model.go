@@ -2,6 +2,7 @@ package app
 
 import (
 	"cli/internal/changes"
+	"cli/internal/documents"
 	"cli/internal/dto"
 	"cli/internal/epics"
 	"cli/internal/projects"
@@ -35,10 +36,11 @@ const (
 type selectorSource string
 
 const (
-	selectorProjects selectorSource = "projects"
-	selectorPhases   selectorSource = "phases"
-	selectorEpics    selectorSource = "epics"
-	selectorTypes    selectorSource = "types"
+	selectorProjects  selectorSource = "projects"
+	selectorPhases    selectorSource = "phases"
+	selectorEpics     selectorSource = "epics"
+	selectorTypes     selectorSource = "types"
+	selectorDocuments selectorSource = "documents"
 )
 
 type filterField string
@@ -53,10 +55,14 @@ type detailEditField string
 
 const (
 	detailEditTitle       detailEditField = "title"
+	detailEditDocument    detailEditField = "document"
+	detailEditAfterChange detailEditField = "after-change"
+	detailCreateTitle     detailEditField = "create-title"
+	detailCreateUUID      detailEditField = "create-uuid"
 	detailEditPhase       detailEditField = "phase"
 	detailEditEpic        detailEditField = "epic"
 	detailEditTypes       detailEditField = "types"
-	detailEditDef         detailEditField = "def"
+	detailEditBrief       detailEditField = "brief"
 	detailEditSpec        detailEditField = "spec"
 	detailEditPullRequest detailEditField = "pull request"
 	detailEditPRUrl       detailEditField = "pr url"
@@ -71,6 +77,7 @@ type changesFilters struct {
 }
 
 type optionCatalog struct {
+	config dto.ProjectConfig
 	phases []dto.Option
 	types  []dto.Option
 	loaded bool
@@ -102,27 +109,11 @@ type selectorLoadedMsg struct {
 	err        error
 }
 
-type changeListLoadedMsg struct {
-	changes []dto.Change
-	err     error
-}
-
-type changeLoadedMsg struct {
-	id     int
-	change dto.Change
-	err    error
-}
-
 type changeSavedMsg struct {
 	source    State
-	change    dto.Change
+	change    dto.ChangeView
 	err       error
 	reloadErr error
-}
-
-type changeDeletedMsg struct {
-	target State
-	err    error
 }
 
 type optionCatalogLoadedMsg struct {
@@ -154,6 +145,11 @@ type appClient interface {
 	projects.API
 	changes.API
 	epics.API
+	documents.API
+	CreateTestCase(int, string) (dto.ChangeView, error)
+	UpdateTestCase(int, string) (dto.ChangeView, error)
+	UpdateTestCaseDone(int, bool) (dto.ChangeView, error)
+	DeleteTestCase(int) (dto.ChangeView, error)
 }
 
 // Model is the root Bubble Tea model for the mch application shell.

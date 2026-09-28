@@ -255,7 +255,7 @@ func TestProjectSelectionSerializesOverlappingSaves(t *testing.T) {
 }
 
 func TestOrdinaryDocumentSaveRetainsCommittedTextAfterFollowUpFailure(t *testing.T) {
-	for _, field := range []detailEditField{detailEditDef, detailEditSpec, detailEditPullRequest} {
+	for _, field := range []detailEditField{detailEditBrief, detailEditSpec, detailEditPullRequest} {
 		t.Run(string(field), func(t *testing.T) {
 			cause := errors.New("follow-up failed")
 			for _, typesFailure := range []bool{false, true} {
@@ -265,23 +265,23 @@ func TestOrdinaryDocumentSaveRetainsCommittedTextAfterFollowUpFailure(t *testing
 				} else {
 					client.changeGetErr = cause
 				}
-				original := dto.Change{ID: "12", Title: "Existing"}
+				original := dto.ChangeView{ID: "12", Title: "Existing"}
 				text := "# Existing\n\nTypes: feature\n\nSaved text"
 				msg := changeDetailTextUpdateCommand(client, ChangeDetailsState, original, field, text)().(changeSavedMsg)
 				require.NoError(t, msg.err)
 				require.ErrorIs(t, msg.reloadErr, cause)
-				m := NewModelWithClient(client)
+				m := newChangeTestModel(client)
 				m.state = ChangeDetailsState
 				m = applyMsg(m, msg)
 				switch field {
-				case detailEditDef:
-					assert.Equal(t, text, m.changeList.Detail.Def)
+				case detailEditBrief:
+					assert.Equal(t, text, m.changeList.Detail.Brief)
 				case detailEditSpec:
 					assert.Equal(t, text, m.changeList.Detail.Spec)
 				case detailEditPullRequest:
 					assert.Equal(t, text, m.changeList.Detail.PR)
 				}
-				assert.Contains(t, m.err, "saved")
+				assert.ErrorIs(t, msg.reloadErr, cause)
 			}
 		})
 	}

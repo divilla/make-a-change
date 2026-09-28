@@ -12,7 +12,11 @@
       "TestCLIProgramProjectReloadBlocksCachedSelection",
       "TestCLIProgramEpicCRUDAndPartialSuccess",
       "TestCLIProgramEpicDelayedScopeAndShutdown",
-      "TestCLIProgramEpicReloadBlocksCachedRows"
+      "TestCLIProgramEpicReloadBlocksCachedRows",
+      "TestCLIProgramChangeCRUDAndPartialSuccess",
+      "TestCLIProgramChangeDelayedScopeAndShutdown",
+      "TestCLIProgramChangeReloadBlocksCachedRows",
+      "TestCLIProgramChangeMalformedReadRecovery"
     ]
   },
   "pty": {

@@ -54,6 +54,7 @@ if [[ ${1-} == exec && ${2-} == review && ${3-} == --json ]]; then
 	shift 3
 	base=
 	output=
+	model=
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
 		--base)
@@ -63,6 +64,10 @@ if [[ ${1-} == exec && ${2-} == review && ${3-} == --json ]]; then
 		--base=*)
 			base=${1#--base=}
 			shift
+			;;
+		--model)
+			model=${2-}
+			shift 2
 			;;
 		-o)
 			output=${2-}
@@ -75,6 +80,7 @@ if [[ ${1-} == exec && ${2-} == review && ${3-} == --json ]]; then
 		esac
 	done
 	[[ "$base" == "$CODEX_TEST_EXPECTED_BASE" ]]
+	[[ "$model" == gpt-6-sol ]]
 	[[ -n "$output" ]]
 	if [[ ${CODEX_TEST_FAIL_REVIEW-} == 1 ]]; then
 		printf '%s\n' 'simulated Codex review failure' >&2
@@ -124,9 +130,14 @@ fi
 if [[ ${1-} == exec && ${2-} == --json ]]; then
 	shift 2
 	output=
+	model=
 	prompt=
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
+		--model)
+			model=${2-}
+			shift 2
+			;;
 		-o)
 			output=${2-}
 			shift 2
@@ -138,6 +149,7 @@ if [[ ${1-} == exec && ${2-} == --json ]]; then
 			;;
 		esac
 	done
+	[[ "$model" == gpt-6-sol ]]
 	[[ -n "$output" ]]
 	[[ "$prompt" == "$CODEX_TEST_EXPECTED_FIX_PROMPT" ]]
 	fix_review=$(cat)
@@ -194,7 +206,7 @@ grep -Fxq 'Branch: master' "$output"
 grep -Fxq 'Base: origin/master' "$output"
 grep -Fxq "Pinned base: $pinned_base" "$output"
 grep -Fxq "Specification: $specification" "$output"
-grep -Fxq "Review options: --base $pinned_base" "$output"
+grep -Fxq "Review options: --base $pinned_base --model gpt-6-sol" "$output"
 grep -Fxq "Findings: $findings_file" "$output"
 awk -v repo="$repo" -v base="$pinned_base" -v findings="$findings_file" '
 $0 == "Repository: " repo {
@@ -202,7 +214,7 @@ $0 == "Repository: " repo {
 	if ((getline line) <= 0 || line != "Branch: master") exit 1
 	if ((getline line) <= 0 || line != "Base: origin/master") exit 1
 	if ((getline line) <= 0 || line != "Pinned base: " base) exit 1
-	if ((getline line) <= 0 || line != "Review options: --base " base) exit 1
+	if ((getline line) <= 0 || line != "Review options: --base " base " --model gpt-6-sol") exit 1
 	if ((getline line) <= 0 || line != "Findings: " findings) exit 1
 	if ((getline line) <= 0 || line != "") exit 1
 	if ((getline line) <= 0 || line != "=== Review pass 01 ===") exit 1
@@ -231,18 +243,19 @@ awk '
 END { if (commands != 3 || inputs != 1) exit 1 }
 ' "$output"
 printf -v expected_review_command \
-	'codex exec review --json --base %q -o %q' \
+	'codex exec review --json --base %q --model gpt-6-sol -o %q' \
 	"$pinned_base" "$findings_file"
 grep -Fxq "$expected_review_command" "$output"
 fix_result_file="$findings_dir/fix-result.md"
-expected_fix_command="codex exec --json -o $fix_result_file '$expected_fix_prompt'"
+expected_fix_command="codex exec --json --model gpt-6-sol -o $fix_result_file '$expected_fix_prompt'"
 expected_fix_input="< $findings_file"
 grep -Fxq "$expected_fix_command" "$output"
 grep -Fxq "$expected_fix_input" "$output"
 printed_fix_command=$(grep -Fx "$expected_fix_command" "$output")
 eval "set -- $printed_fix_command"
-[[ $# -eq 6 && $1 == codex && $2 == exec && $3 == --json && $4 == -o &&
-	$5 == "$fix_result_file" && $6 == "$expected_fix_prompt" ]]
+[[ $# -eq 8 && $1 == codex && $2 == exec && $3 == --json &&
+	$4 == --model && $5 == gpt-6-sol && $6 == -o &&
+	$7 == "$fix_result_file" && $8 == "$expected_fix_prompt" ]]
 [[ $(grep -Ec '^\[✅\] [0-9]+:[0-9]{2} •+$' "$output") -eq 3 ]]
 grep -Eq '^\[✅\] 00:0[2-9] ••$' "$output"
 grep -Eq '^\[✅\] [0-9]+:[0-9]{2} •$' "$output"
@@ -298,9 +311,9 @@ explicit_findings_dir=${explicit_findings_file%/*}
 
 grep -Fxq 'Base: develop' "$explicit_base_output"
 grep -Fxq "Pinned base: $develop_base" "$explicit_base_output"
-grep -Fxq "Review options: --base $develop_base" "$explicit_base_output"
+grep -Fxq "Review options: --base $develop_base --model gpt-6-sol" "$explicit_base_output"
 printf -v expected_review_command \
-	'codex exec review --json --base %q -o %q' \
+	'codex exec review --json --base %q --model gpt-6-sol -o %q' \
 	"$develop_base" "$explicit_findings_file"
 grep -Fxq "$expected_review_command" "$explicit_base_output"
 [[ $(<"$review_count") == 3 ]]
@@ -394,7 +407,7 @@ grep -Fxq '  (none)' "$no_fix_output"
 grep -Fxq 'Cannot modify the protected skeleton without explicit user direction.' "$no_fix_output"
 grep -Fxq 'codex-review-loop: codex made no repository changes; see the fix result above' "$no_fix_error"
 no_fix_findings_file=$(sed -n 's/^Findings: //p' "$no_fix_output" | head -n 1)
-grep -Fxq "codex exec --json -o ${no_fix_findings_file%/*}/fix-result.md '$expected_fix_prompt'" "$no_fix_output"
+grep -Fxq "codex exec --json --model gpt-6-sol -o ${no_fix_findings_file%/*}/fix-result.md '$expected_fix_prompt'" "$no_fix_output"
 grep -Fxq "< $no_fix_findings_file" "$no_fix_output"
 [[ ! -e "${no_fix_findings_file%/*}" ]]
 [[ -z $(git -C "$repo" status --short) ]]

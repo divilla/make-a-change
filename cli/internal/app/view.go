@@ -20,9 +20,14 @@ func (m Model) View() string {
 	width := terminalWidth(m.width)
 	if epicIndex != 0 {
 		height := m.epicViewportHeight(lines)
-		if m.state == EpicDetailsState {
+		switch m.state {
+		case ChangesListState:
+			lines[epicIndex] = changes.TableViewport(m.changeList, m.changeFilters(), width, height, phaseColorMap(m.optionCatalog.phases))
+		case ChangeDetailsState:
+			lines[epicIndex] = changes.DetailsViewport(m.changeList, width, height, phaseColorMap(m.optionCatalog.phases))
+		case EpicDetailsState:
 			lines[epicIndex] = epics.DetailsViewport(m.epicList, width, height)
-		} else {
+		default:
 			lines[epicIndex] = epics.TableView(m.epicList, width, height)
 		}
 	}
@@ -34,6 +39,12 @@ func (m Model) viewLines() ([]string, int) {
 	width := terminalWidth(m.width)
 	lines := []string{m.headerLine(width)}
 	epicIndex := 0
+	if m.state == ChangesHelpState {
+		lines = append(lines, changes.HelpView())
+	}
+	if m.state == ChangeCreateState {
+		lines = append(lines, "Title: "+m.changeList.Draft.Title, "Optional UUID: "+m.changeList.Draft.UUID)
+	}
 	if m.state == EpicsHelpState {
 		lines = append(lines, epics.HelpView())
 	}
@@ -49,18 +60,13 @@ func (m Model) viewLines() ([]string, int) {
 		lines = append(lines, "")
 		lines = append(lines, projects.TableView(m.projectList, width))
 	}
-	if m.state == ChangesListState {
-		if !m.hasDropdown() {
-			table := changes.TableView(m.changeList, m.changeFilters(), width, m.changeTableRows(), phaseColorMap(m.optionCatalog.phases))
-			lines = append(lines, m.changeFiltersLine(table), table)
-		}
+	if m.state == ChangesListState && !m.hasDropdown() {
+		lines = append(lines, m.changeFiltersLine(""), "")
+		epicIndex = len(lines) - 1
 	}
 	if m.state == ChangeDetailsState {
-		details := changes.DetailsView(m.changeList, width, m.changeTableRows(), phaseColorMap(m.optionCatalog.phases))
-		if details != "" {
-			lines = append(lines, "")
-			lines = append(lines, details)
-		}
+		lines = append(lines, "", "")
+		epicIndex = len(lines) - 1
 	}
 	if m.state == ProjectDetailsState {
 		details := projects.DetailsView(m.projectList.Detail, width)
@@ -171,7 +177,9 @@ func (m Model) helpText() string {
 		return "<ctrl+n> new testcase  |  <return> edit  |  <space> toggle  |  <del> delete  |  <ctrl+ins> copy  |  </> command"
 	case TestCaseCreateState, TestCaseUpdateState:
 		return "<return> save  |  <ctrl+c> delete prompt  |  <esc> cancel"
-	case ChangeCreateState, ChangeUpdateState, EpicCreateState, EpicUpdateState, ProjectCreateState, ProjectUpdateState:
+	case ChangeCreateState:
+		return "<ctrl+t> title | <ctrl+u> optional UUID | <ctrl+e> brief editor | <return> save | <ctrl+c> cancel"
+	case ChangeUpdateState, EpicCreateState, EpicUpdateState, ProjectCreateState, ProjectUpdateState:
 		return "<return> save  |  <ctrl+c> delete prompt  |  <esc> cancel"
 	case FindInputState:
 		return "<return> search  |  <ctrl+c> delete prompt  |  <esc> cancel"
@@ -340,10 +348,10 @@ func terminalWidth(width int) int {
 }
 
 func (m Model) changeTableRows() int {
-	const reservedRows = 12
-	available := m.height - reservedRows
-	if available < 3 {
-		return 3
+	lines, _ := m.viewLines()
+	extra := 4
+	if m.state == ChangeDetailsState {
+		extra = 2
 	}
-	return available
+	return max(1, m.epicViewportHeight(lines)-extra)
 }

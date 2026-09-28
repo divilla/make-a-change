@@ -312,6 +312,7 @@ sub parse_review_options {
 	my (@arguments) = @_;
 	my $review_base = '';
 	my @review_arguments;
+	my $has_model = 0;
 	my %options_with_values = map { $_ => 1 } qw(
 		-c --config
 		--disable --enable
@@ -320,6 +321,7 @@ sub parse_review_options {
 	);
 	while (@arguments) {
 		my $argument = shift @arguments;
+		$has_model = 1 if $argument =~ /\A(?:--model(?:=|\z)|-m)/;
 		if ($argument eq '--') {
 			fail('custom review instructions cannot be combined with --base');
 		} elsif ($argument eq '-o' || $argument =~ /\A-o.+/ || $argument eq '--output-last-message' || $argument =~ /\A--output-last-message=/) {
@@ -348,6 +350,7 @@ sub parse_review_options {
 			push @review_arguments, $argument;
 		}
 	}
+	unshift @review_arguments, '--model', 'gpt-6-sol' unless $has_model;
 	return ($review_base, @review_arguments);
 }
 
@@ -436,7 +439,7 @@ sub main {
 		$before_fix =~ s/\s+\z//;
 		unlink $fix_result_file;
 		printf "=== Fix findings %02d ===\n", $fix_number;
-		$status = run_codex($findings_file, 'codex', 'exec', '--json', '-o', $fix_result_file, $fix_prompt);
+		$status = run_codex($findings_file, 'codex', 'exec', '--json', '--model', 'gpt-6-sol', '-o', $fix_result_file, $fix_prompt);
 		exit $status if $status != 0;
 		my ($after_fix, $after_status) = capture_command(0, 'git', 'rev-parse', 'HEAD');
 		$after_status == 0 or exit $after_status;

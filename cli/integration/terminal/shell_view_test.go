@@ -38,7 +38,7 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 
 	stubDir := filepath.Join(testRoot, "bin")
 	require.NoError(t, os.MkdirAll(stubDir, 0o755))
-	writeTerminalFile(t, filepath.Join(stubDir, "editor"), "#!/bin/sh\nprintf '# PTY Change\\n\\nInitial definition\\n' > \"$1\"\n", 0o755)
+	writeTerminalFile(t, filepath.Join(stubDir, "editor"), "#!/bin/sh\nprintf '# PTY Change\\n\\nInitial brief\\n' > \"$1\"\n", 0o755)
 
 	childPIDPath := filepath.Join(testRoot, "mch.pid")
 	childExitPath := filepath.Join(testRoot, "mch.exit")
@@ -103,12 +103,18 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 	send("New PTY epic\r", "saved epic")
 	send("/return\r", "loaded epics")
 	send("/return\r", "MainScreen")
-	send("/changes\r", "Rows 1-8 of 30")
+	send("/changes\r", "Rows 1-7 of 30")
 	assert.Contains(t, capture.after(0), "\x1b[", "terminal output retains styles")
-	send("\x1b[6~", "Rows 2-9 of 30")
-	send("\x1b[5~", "Rows 1-8 of 30")
+	send("\x1b[6~", "Rows 2-8 of 30")
+	send("\x1b[5~", "Rows 1-7 of 30")
 	send("/", "Commands")
 	send("\x1b", "Type / for commands")
+	send("\r", "loaded change")
+	send("/title\r", "ChangeUpdateScreen")
+	send("\x05", "saved title")
+	send(strings.Repeat("\x1b[6~", 5), "Complete")
+	assert.Contains(t, capture.after(0), "73%")
+	send("/return\r", "Rows")
 	send("/return\r", "MainScreen")
 	assert.NoDirExists(t, filepath.Join(repoRoot, ".mch/tmp"))
 	_, err = io.WriteString(stdin, "/quit\r")
@@ -129,6 +135,7 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 	t.Helper()
 	var mu sync.Mutex
 	epicName := "PTY Epic"
+	changeTitle := "PTY Change"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -137,7 +144,7 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 		var value any
 		switch r.URL.Path {
 		case "/api/v1/project/config":
-			value = map[string]any{"slug": "pty", "project_docs": []string{}, "epic_docs": []string{}, "change_docs": []string{}, "change_phases": []string{"backlog"}, "change_colors": []string{"12"}, "change_types": []string{}}
+			value = map[string]any{"slug": "pty", "project_docs": []string{}, "epic_docs": []string{}, "change_docs": []string{"brief", "spec"}, "change_phases": []string{"backlog"}, "change_colors": []string{"12"}, "change_types": []string{}}
 		case "/api/v1/project/create":
 			w.WriteHeader(201)
 			value = map[string]any{"id": 7}
@@ -165,9 +172,27 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 		case "/api/v1/change/list":
 			rows := []map[string]any{}
 			for i := 1; i <= 30; i++ {
-				rows = append(rows, map[string]any{"id": i, "title": fmt.Sprintf("Row %02d", i), "change_phase": "backlog"})
+				rows = append(rows, terminalChange(i, fmt.Sprintf("Row %02d", i)))
 			}
 			value = rows
+		case "/api/v1/change/details":
+			var body struct {
+				ID int `json:"id"`
+			}
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			value = terminalChange(body.ID, changeTitle)
+		case "/api/v1/doc/current", "/api/v1/test-case/list":
+			value = []any{}
+		case "/api/v1/change/update-title":
+			var body struct {
+				ID    int    `json:"id"`
+				Title string `json:"title"`
+			}
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			assert.Equal(t, "# PTY Change\n\nInitial brief\n", body.Title)
+			changeTitle = body.Title
+			w.WriteHeader(204)
+			return
 		default:
 			t.Errorf("unexpected path %s", r.URL.Path)
 			http.NotFound(w, r)
@@ -254,4 +279,8 @@ func terminalProject() map[string]any {
 
 func terminalEpic(name string) map[string]any {
 	return map[string]any{"id": 3, "project_id": 7, "name": name, "done_tc": 2, "total_tc": 8, "completed": 63, "change_count": 4, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z"}
+}
+
+func terminalChange(id int, title string) map[string]any {
+	return map[string]any{"id": id, "project_id": 7, "ref_uuid": "0198a86f-9b8a-7d89-ae5b-6f25b528b04c", "ref": nil, "slug": nil, "epic_id": nil, "epic_name": nil, "change_phase": "backlog", "change_types": []string{}, "title": title, "open": true, "done_tc": 2, "total_tc": 9, "completed": 73, "updated_at": "2026-09-28T11:00:00Z", "after_change_id": nil, "pr_url": "", "created_at": "2026-09-28T10:00:00Z"}
 }

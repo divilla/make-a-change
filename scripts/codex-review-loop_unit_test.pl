@@ -61,6 +61,20 @@ assert_equal(
 );
 
 assert_equal(
+	join("\0", parse_review_options('--base', 'develop')),
+	join("\0", 'develop', '--model', 'gpt-6-sol'),
+	'reviews default to GPT-6 Sol',
+);
+
+for my $model_options (['--model=gpt-6-astra'], ['-m', 'gpt-6-astra'], ['-mgpt-6-astra']) {
+	assert_equal(
+		join("\0", parse_review_options(@$model_options)),
+		join("\0", '', @$model_options),
+		'explicit model options override the default without duplicate flags',
+	);
+}
+
+assert_equal(
 	join("\0", parse_review_options('--model', 'gpt-5', '--title', 'Review title', '--base', 'develop')),
 	join("\0", 'develop', '--model', 'gpt-5', '--title', 'Review title'),
 	'option values remain distinct from positional review prompts',

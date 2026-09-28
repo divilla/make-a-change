@@ -35,7 +35,7 @@ func TestFixedPromptInventoryAndResponsibilities(t *testing.T) {
 		for _, marker := range []string{"input", "context paths", "output path", "distinct", "Preserve original inputs", "Ask material questions", "Do not implement code", "no branch changes, commits, pushes"} {
 			assert.Contains(t, flat, marker, name)
 		}
-		for _, obsolete := range []string{"/stg-tmp-dir", "/def-dir", "MCH_", "session-id", "change-types.md", "flow.yaml"} {
+		for _, obsolete := range []string{"/stg-tmp-dir", "/brief-dir", "MCH_", "session-id", "change-types.md", "flow.yaml"} {
 			assert.NotContains(t, body, obsolete, name)
 		}
 	}
@@ -55,7 +55,7 @@ func TestFixedPromptInventoryAndResponsibilities(t *testing.T) {
 func TestRemovedCommandsCannotDispatchProcesses(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	for state := range commandsByState {
-		for _, command := range []string{"/def-write", "/def-review", "/spec-write", "/spec-review", "/spec-review-chat", "/pr-write", "/artifact-chat", "/chat", "/resume", "/reference"} {
+		for _, command := range []string{"/brief-write", "/brief-review", "/spec-write", "/spec-review", "/spec-review-chat", "/pr-write", "/artifact-chat", "/chat", "/resume", "/reference"} {
 			m := NewModelWithClient(&fakeClient{})
 			m.state = state
 			next, cmd := m.executeCommand(command)

@@ -26,139 +26,10 @@ func NewHTTPClient(baseURL string) HTTPClient {
 	}
 }
 
-// ListChangeRows loads changes for a project.
-func (c HTTPClient) ListChangeRows(projectID string) ([]dto.Change, error) {
-	numericProjectID, err := numericCurrentProjectID(projectID)
-	if err != nil {
-		return nil, err
-	}
-	return c.postChanges("/api/v1/change/list", map[string]any{"project_id": numericProjectID}, "changes")
-}
-
-// GetChange loads a single change by numeric ID.
-func (c HTTPClient) GetChange(id int) (dto.Change, error) {
-	if id <= 0 {
-		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
-	}
-	return c.postChange("/api/v1/change/get", map[string]any{"id": id})
-}
-
-// CreateChange creates a change.
-func (c HTTPClient) CreateChange(input dto.ChangeCreateInput) (dto.Change, error) {
-	if input.ProjectID <= 0 {
-		return dto.Change{}, fmt.Errorf("project ID must be a valid positive number")
-	}
-	payload := map[string]any{
-		"project_id": input.ProjectID,
-		"title":      input.Title,
-		"def":        input.Def,
-	}
-	if strings.TrimSpace(input.RefUUID) != "" {
-		payload["ref_uuid"] = input.RefUUID
-	}
-	return c.postChange("/api/v1/change/create", payload)
-}
-
-// UpdateChangeTitle updates a change title.
-func (c HTTPClient) UpdateChangeTitle(id int, title string) (dto.Change, error) {
-	if id <= 0 {
-		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
-	}
-	return c.postChange("/api/v1/change/update-title", map[string]any{"id": id, "title": title})
-}
-
-// UpdateChangeDef updates a change definition.
-func (c HTTPClient) UpdateChangeDef(id int, def string, agentEdit bool) (dto.Change, error) {
-	if id <= 0 {
-		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
-	}
-	return c.postChange("/api/v1/change/update-def", map[string]any{
-		"id":         id,
-		"def":        def,
-		"agent_edit": agentEdit,
-	})
-}
-
-// UpdateChangeSpec updates a change spec.
-func (c HTTPClient) UpdateChangeSpec(id int, spec string, agentEdit bool) (dto.Change, error) {
-	if id <= 0 {
-		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
-	}
-	return c.postChange("/api/v1/change/update-spec", map[string]any{
-		"id":         id,
-		"spec":       spec,
-		"agent_edit": agentEdit,
-	})
-}
-
-// UpdateChangePR updates a change pull request body.
-func (c HTTPClient) UpdateChangePR(id int, pr string, agentEdit bool) (dto.Change, error) {
-	if id <= 0 {
-		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
-	}
-	return c.postChange("/api/v1/change/update-pr", map[string]any{
-		"id":         id,
-		"pr":         pr,
-		"agent_edit": agentEdit,
-	})
-}
-
-// UpdateChangePRUrl updates a change pull request URL.
-func (c HTTPClient) UpdateChangePRUrl(id int, prURL string) (dto.Change, error) {
-	if id <= 0 {
-		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
-	}
-	return c.postChange("/api/v1/change/update-pr-url", map[string]any{
-		"id":     id,
-		"pr_url": prURL,
-	})
-}
-
-// UpdateChangeTypes updates change type slugs.
-func (c HTTPClient) UpdateChangeTypes(id int, changeTypes []string) (dto.Change, error) {
-	if id <= 0 {
-		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
-	}
-	return c.postChange("/api/v1/change/update-change-types", map[string]any{
-		"id":           id,
-		"change_types": changeTypes,
-	})
-}
-
-// UpdateChangePhase updates the change phase slug.
-func (c HTTPClient) UpdateChangePhase(id int, changePhase string) (dto.Change, error) {
-	if id <= 0 {
-		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
-	}
-	return c.postChange("/api/v1/change/update-phase", map[string]any{
-		"id":           id,
-		"change_phase": changePhase,
-	})
-}
-
-// UpdateChangeOpen updates the change open flag.
-func (c HTTPClient) UpdateChangeOpen(id int, open bool) (dto.Change, error) {
-	if id <= 0 {
-		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
-	}
-	return c.postChange("/api/v1/change/update-open", map[string]any{
-		"id":   id,
-		"open": open,
-	})
-}
-
-// UpdateChangeEpic updates or clears the change epic.
-func (c HTTPClient) UpdateChangeEpic(id int, epicID *int) (dto.Change, error) {
-	if id <= 0 {
-		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
-	}
-	return c.postChange("/api/v1/change/update-epic", map[string]any{"id": id, "epic_id": epicID})
-}
-
 // CreateTestCase creates a test case for a change and returns refreshed change data.
-func (c HTTPClient) CreateTestCase(changeID int, scenario string) (dto.Change, error) {
+func (c HTTPClient) CreateTestCase(changeID int, scenario string) (dto.ChangeView, error) {
 	if changeID <= 0 {
-		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
+		return dto.ChangeView{}, fmt.Errorf("change ID must be a valid positive number")
 	}
 	return c.postChange("/api/v1/test-case/create", map[string]any{
 		"change_id": changeID,
@@ -167,9 +38,9 @@ func (c HTTPClient) CreateTestCase(changeID int, scenario string) (dto.Change, e
 }
 
 // UpdateTestCase updates a test case scenario and returns refreshed change data.
-func (c HTTPClient) UpdateTestCase(id int, scenario string) (dto.Change, error) {
+func (c HTTPClient) UpdateTestCase(id int, scenario string) (dto.ChangeView, error) {
 	if id <= 0 {
-		return dto.Change{}, fmt.Errorf("test case ID must be a valid positive number")
+		return dto.ChangeView{}, fmt.Errorf("test case ID must be a valid positive number")
 	}
 	return c.postChange("/api/v1/test-case/update", map[string]any{
 		"id":       id,
@@ -178,9 +49,9 @@ func (c HTTPClient) UpdateTestCase(id int, scenario string) (dto.Change, error) 
 }
 
 // UpdateTestCaseDone updates the test case done flag and returns refreshed change data.
-func (c HTTPClient) UpdateTestCaseDone(id int, done bool) (dto.Change, error) {
+func (c HTTPClient) UpdateTestCaseDone(id int, done bool) (dto.ChangeView, error) {
 	if id <= 0 {
-		return dto.Change{}, fmt.Errorf("test case ID must be a valid positive number")
+		return dto.ChangeView{}, fmt.Errorf("test case ID must be a valid positive number")
 	}
 	return c.postChange("/api/v1/test-case/update-done", map[string]any{
 		"id":   id,
@@ -189,44 +60,23 @@ func (c HTTPClient) UpdateTestCaseDone(id int, done bool) (dto.Change, error) {
 }
 
 // DeleteTestCase deletes a test case and returns refreshed change data.
-func (c HTTPClient) DeleteTestCase(id int) (dto.Change, error) {
+func (c HTTPClient) DeleteTestCase(id int) (dto.ChangeView, error) {
 	if id <= 0 {
-		return dto.Change{}, fmt.Errorf("test case ID must be a valid positive number")
+		return dto.ChangeView{}, fmt.Errorf("test case ID must be a valid positive number")
 	}
 	return c.postChange("/api/v1/test-case/delete", map[string]any{"id": id})
 }
 
-// DeleteChange deletes a change by numeric ID.
-func (c HTTPClient) DeleteChange(id int) error {
-	if id <= 0 {
-		return fmt.Errorf("change ID must be a valid positive number")
-	}
-	return c.postNoContent("/api/v1/change/delete", map[string]any{"id": id})
-}
-
-func (c HTTPClient) postChanges(path string, payload any, group string) ([]dto.Change, error) {
+func (c HTTPClient) postChange(path string, payload any) (dto.ChangeView, error) {
 	data, err := c.postJSON(path, payload)
 	if err != nil {
-		return nil, err
-	}
-	return findChanges(data, group), nil
-}
-
-func (c HTTPClient) postChange(path string, payload any) (dto.Change, error) {
-	data, err := c.postJSON(path, payload)
-	if err != nil {
-		return dto.Change{}, err
+		return dto.ChangeView{}, err
 	}
 	change, ok := findChange(data)
 	if !ok {
-		return dto.Change{}, fmt.Errorf("change response missing change")
+		return dto.ChangeView{}, fmt.Errorf("change response missing change")
 	}
 	return change, nil
-}
-
-func (c HTTPClient) postNoContent(path string, payload any) error {
-	_, err := c.postJSON(path, payload)
-	return err
 }
 
 func (c HTTPClient) postJSON(path string, payload any) (any, error) {
@@ -269,28 +119,7 @@ func (c HTTPClient) postJSON(path string, payload any) (any, error) {
 	return data, nil
 }
 
-func findChanges(value any, group string) []dto.Change {
-	switch typed := value.(type) {
-	case []any:
-		return changesFromArray(typed)
-	case map[string]any:
-		for key, candidate := range typed {
-			if key == group {
-				if list, ok := candidate.([]any); ok {
-					return changesFromArray(list)
-				}
-			}
-		}
-		for _, candidate := range typed {
-			if nested := findChanges(candidate, group); len(nested) > 0 {
-				return nested
-			}
-		}
-	}
-	return nil
-}
-
-func findChange(value any) (dto.Change, bool) {
+func findChange(value any) (dto.ChangeView, bool) {
 	switch typed := value.(type) {
 	case []any:
 		changes := changesFromArray(typed)
@@ -321,7 +150,7 @@ func findChange(value any) (dto.Change, bool) {
 			}
 		}
 	}
-	return dto.Change{}, false
+	return dto.ChangeView{}, false
 }
 
 func findTestCases(value any) []dto.TestCase {
@@ -340,8 +169,8 @@ func findTestCases(value any) []dto.TestCase {
 	return nil
 }
 
-func changesFromArray(values []any) []dto.Change {
-	changes := make([]dto.Change, 0, len(values))
+func changesFromArray(values []any) []dto.ChangeView {
+	changes := make([]dto.ChangeView, 0, len(values))
 	for _, value := range values {
 		typed, ok := value.(map[string]any)
 		if !ok {
@@ -377,8 +206,8 @@ func testCasesFromArray(values []any) []dto.TestCase {
 	return testCases
 }
 
-func changeFromMap(values map[string]any) dto.Change {
-	return dto.Change{
+func changeFromMap(values map[string]any) dto.ChangeView {
+	return dto.ChangeView{
 		ID:          firstString(values, "id", "change_id"),
 		RefUUID:     firstString(values, "ref_uuid"),
 		Ref:         firstString(values, "ref"),
@@ -389,30 +218,18 @@ func changeFromMap(values map[string]any) dto.Change {
 		ChangePhase: firstString(values, "change_phase", "phase"),
 		ChangeTypes: firstStringSlice(values, "change_types", "types"),
 		Title:       firstString(values, "title", "name"),
-		Def:         firstString(values, "def"),
+		Brief:       firstString(values, "brief"),
 		Spec:        firstString(values, "spec"),
 		PR:          firstString(values, "pr"),
 		PRUrl:       firstString(values, "pr_url"),
-		AgentEdit:   firstBool(values, "agent_edit"),
-		Open:        firstBool(values, "open"),
-		Done:        firstInt(values, "done_tc", "done"),
-		Total:       firstInt(values, "total_tc", "total"),
-		Completed:   firstInt(values, "completed", "completed_pct"),
-		Created:     firstString(values, "created", "created_at"),
-		Modified:    firstString(values, "modified", "updated", "updated_at"),
-	}
-}
 
-func numericCurrentProjectID(projectID string) (int, error) {
-	projectID = strings.TrimSpace(projectID)
-	if projectID == "" {
-		return 0, fmt.Errorf("current project is required")
+		Open:      firstBool(values, "open"),
+		Done:      int64(firstInt(values, "done_tc", "done")),
+		Total:     int64(firstInt(values, "total_tc", "total")),
+		Completed: int64(firstInt(values, "completed", "completed_pct")),
+		Created:   firstString(values, "created", "created_at"),
+		Modified:  firstString(values, "modified", "updated", "updated_at"),
 	}
-	numericProjectID, err := strconv.Atoi(projectID)
-	if err != nil || numericProjectID <= 0 {
-		return 0, fmt.Errorf("current project must be numeric")
-	}
-	return numericProjectID, nil
 }
 
 func firstString(values map[string]any, keys ...string) string {

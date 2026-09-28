@@ -28,7 +28,7 @@ func (m Model) dropdownCurrentValueIndex(options []dto.Option) int {
 		case detailEditPhase:
 			return optionIndex(options, m.changeList.Detail.ChangePhase, m.changeList.Detail.ChangePhase)
 		case detailEditEpic:
-			if m.changeList.Detail.EpicID == "" && m.changeList.Detail.EpicName == "" {
+			if (m.changeList.Detail.EpicID == "" && m.changeList.Detail.EpicName == "") || m.changeList.Detail.EpicID == "null" {
 				return optionIndex(options, "@none", "@none")
 			}
 			return optionIndex(options, m.changeList.Detail.EpicID, m.changeList.Detail.EpicName)
@@ -144,6 +144,14 @@ func optionCatalogCommand(ctx context.Context, client appClient, id int, generat
 }
 
 func (m Model) selectorCommand(source selectorSource) tea.Cmd {
+	if source == selectorDocuments {
+		options := []dto.Option{}
+		for _, kind := range m.optionCatalog.config.ChangeDocs {
+			options = append(options, dto.Option{ID: kind, Label: kind})
+		}
+		generation := m.selectorGeneration
+		return func() tea.Msg { return selectorLoadedMsg{source: source, generation: generation, options: options} }
+	}
 	var cmd tea.Cmd
 	switch source {
 	case selectorPhases:
@@ -193,13 +201,6 @@ func selectorCommand(ctx context.Context, client appClient, source selectorSourc
 			options = epics.Options(rows)
 		}
 		return selectorLoadedMsg{source: source, options: options, err: err}
-	}
-}
-
-func changeListCommand(client appClient, projectID string) tea.Cmd {
-	return func() tea.Msg {
-		changes, err := client.ListChangeRows(projectID)
-		return changeListLoadedMsg{changes: changes, err: err}
 	}
 }
 

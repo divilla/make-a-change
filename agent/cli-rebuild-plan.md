@@ -1,15 +1,21 @@
 # CLI rebuild plan
 
-Status: authorized execution, 2026-09-28. P0/spec019 merged as `e46bf64`,
-P1/spec020 as `6a3d5bb`, P2/spec021 as actual dev `1658624`. P3/spec022 is
-published through `c8ba036`, with native review pass04 clean against P2 dev.
-Final unit coverage is2723/3201 (85.0672%), terminal2028/3201 (63.3552%);
-strict gates fail honestly. Unit/race/program/PTY/architecture/tooling/dependency
-checks pass. Remaining four untouched format files and baseline package comments
-are tracked in the [compact checkpoint](../cli/agents/cli-rebuild-checkpoint.md),
-with exact command results and source evidence. Next run the dev merge helper,
-verify its actual squash SHA, then P4 changes. No future SHA is asserted.
-The sequential factory remains authorized; no stage or production promotion.
+Status: authorized execution. P0–P3 merged; latest actual dev is P3
+`80c67871aaa29ed92a967aa70b449b29bd88c406`. P4/spec023 implementation resumed
+from snapshot `3ad7aa7`; acceptance inspection and the implementation log are
+finished. Fresh unit/race/program/PTY/architecture/tooling/dependency scenarios
+pass. P4 review fixes01 clear canceled create subfields and bound mutation feedback;
+review fixes02 return edited briefs to the create form before saving and let
+identity rows scroll in short detail panes. Review fixes03 preserve the edited
+field when Ctrl+C clears an update prompt, preventing accidental spec insertion.
+Fresh unit3028/3530 (85.7790%) and terminal2550/3530 (72.2380%) measurements
+still fail strict gates, alongside the tracked static baseline. P4 awaits
+caller-owned publication, further native review and dev merge. See the
+[checkpoint](../cli/agents/cli-rebuild-checkpoint.md) for exact evidence/continuation.
+Supporting document current/insert and testcase reads moved into P4 as required
+to preserve editors while removing embedded change fields; full P5/P6 scope
+remains. Continue the authorized factory through all remaining passes; no
+stage or production promotion.
 
 Reference: [backend refactor plan](backend-refactor-plan.md), especially its
 six-step specification → branch → implementation → verification/review → dev

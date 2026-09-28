@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // ListTitle returns the changes list screen title.
@@ -57,9 +58,9 @@ func TableView(m Model, filters Filters, width int, pageSize int, phaseColors ..
 			strings.Join(change.ChangeTypes, "|"),
 			epicLabel(change),
 			change.Title,
-			strconv.Itoa(change.Done),
-			strconv.Itoa(change.Total),
-			strconv.Itoa(change.Completed),
+			strconv.FormatInt(change.Done, 10),
+			strconv.FormatInt(change.Total, 10),
+			strconv.FormatInt(change.Completed, 10),
 			formatListTimestamp(change.Modified),
 			typesWidth,
 			epicWidth,
@@ -219,7 +220,7 @@ func DetailsView(m Model, width int, pageSize int, phaseColors ...PhaseColors) s
 		pageSize = 1
 	}
 	m = m.ClampDetailSelection(pageSize, width)
-	rows := DetailRows(m.Detail)
+	rows, prefix := detailViewportRows(m.Detail, pageSize, width)
 	if len(rows) == 0 {
 		return ""
 	}
@@ -229,13 +230,16 @@ func DetailsView(m Model, width int, pageSize int, phaseColors ...PhaseColors) s
 
 	allLines := make([]string, 0, len(rows))
 	for rowIndex, row := range rows {
-		allLines = append(allLines, detailTableRowLines(row, labelWidth, textWidth, rowIndex == m.DetailSelected, colors)...)
+		allLines = append(allLines, detailTableRowLines(row, labelWidth, textWidth, rowIndex-prefix == m.DetailSelected, colors)...)
 		if detailDividerAfter(row) {
 			allLines = append(allLines, detailDividerLine(labelWidth, textWidth))
 		}
 	}
 	fixedLines := make([]string, 0, len(fixedDetailRows(m.Detail)))
 	fixedRows := fixedDetailRows(m.Detail)
+	if prefix > 0 {
+		fixedRows = nil
+	}
 	for rowIndex, row := range fixedRows {
 		selected := rowIndex-len(fixedRows) == m.DetailSelected
 		fixedLines = append(fixedLines, detailTableRowLines(row, labelWidth, textWidth, selected, colors)...)
@@ -274,18 +278,7 @@ func truncateDisplay(value string, limit int) string {
 	if limit <= 0 {
 		return ""
 	}
-	if lipgloss.Width(value) <= limit {
-		return value
-	}
-	var b strings.Builder
-	for _, r := range value {
-		next := b.String() + string(r)
-		if lipgloss.Width(next) > limit {
-			break
-		}
-		b.WriteRune(r)
-	}
-	return b.String()
+	return ui.TruncateBlock(value, limit)
 }
 
 func padLeftDisplay(value string, width int) string {
@@ -395,22 +388,11 @@ func booleanIconStyle(value string) lipgloss.Style {
 }
 
 func wrapWords(value string, limit int) []string {
-	words := strings.Fields(strings.TrimSpace(value))
-	if len(words) == 0 {
+	value = strings.TrimSpace(value)
+	if value == "" {
 		return nil
 	}
-	lines := make([]string, 0, len(words))
-	current := words[0]
-	for _, word := range words[1:] {
-		if len([]rune(current))+1+len([]rune(word)) > limit {
-			lines = append(lines, current)
-			current = word
-			continue
-		}
-		current += " " + word
-	}
-	lines = append(lines, current)
-	return lines
+	return strings.Split(ansi.Wrap(value, max(1, limit), ""), "\n")
 }
 
 func detailLabelWidth(rows []DetailRow) int {
@@ -427,18 +409,9 @@ func normalizeNewlines(value string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(value, "\r\n", "\n"), "\r", "\n")
 }
 
-func displayRef(change dto.Change) string {
-	ref := strings.TrimPrefix(strings.TrimSpace(change.Ref), "#")
-	if ref != "" {
-		if value, err := strconv.Atoi(ref); err == nil {
-			return fmt.Sprintf("%06d", value)
-		}
-		return ref
-	}
-	return ""
-}
+func displayRef(change dto.ChangeView) string { return change.Ref }
 
-func epicLabel(change dto.Change) string {
+func epicLabel(change dto.ChangeView) string {
 	if strings.TrimSpace(change.EpicName) != "" {
 		return strings.TrimSpace(change.EpicName)
 	}
@@ -466,4 +439,30 @@ func formatListTimestamp(value string) string {
 		}
 	}
 	return "not a date"
+}
+
+// TableViewport fits the list into the shell's remaining measured height.
+func TableViewport(m Model, f Filters, width, height int, colors PhaseColors) string {
+	if height <= 0 {
+		return ""
+	}
+	v := TableView(m, f, width, max(1, height-4), colors)
+	lines := strings.Split(v, "\n")
+	if len(lines) > height {
+		return strings.Join(lines[:height], "\n")
+	}
+	return v
+}
+
+// DetailsViewport keeps all fields accessible through the scrollable table.
+func DetailsViewport(m Model, width, height int, colors PhaseColors) string {
+	if height <= 0 {
+		return ""
+	}
+	v := DetailsView(m, width, max(1, height-2), colors)
+	lines := strings.Split(v, "\n")
+	if len(lines) > height {
+		return strings.Join(lines[:height], "\n")
+	}
+	return v
 }

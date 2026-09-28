@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cli/internal/changes"
 	"cli/internal/dto"
 	"errors"
 	"os"
@@ -15,7 +16,7 @@ import (
 )
 
 func TestArtifactEditorSeedsOriginalDocument(t *testing.T) {
-	for _, field := range []detailEditField{detailEditDef, detailEditSpec, detailEditPullRequest} {
+	for _, field := range []detailEditField{detailEditBrief, detailEditSpec, detailEditPullRequest} {
 		for name, original := range map[string]string{
 			"empty":      "",
 			"tabs":       "```make\nbuild:\n\tgo build ./...\n```\n",
@@ -26,7 +27,7 @@ func TestArtifactEditorSeedsOriginalDocument(t *testing.T) {
 				t.Setenv("TMPDIR", dir)
 				m := NewModelWithClient(&fakeClient{})
 				m.state = ChangeDetailsState
-				m = applyMsg(m, changeLoadedMsg{id: 12, change: dto.Change{ID: "12", Def: original, Spec: original, PR: original}})
+				m = loadedChangeForTest(m, dto.ChangeView{ID: "12", Brief: original, Spec: original, PR: original}, nil)
 				next, cmd := m.beginDetailTextEditor(field)
 				require.NotNil(t, cmd)
 				require.Empty(t, next.(Model).err)
@@ -42,14 +43,14 @@ func TestArtifactEditorSeedsOriginalDocument(t *testing.T) {
 }
 
 func TestArtifactEditorUnchangedExitSkipsPersistence(t *testing.T) {
-	for _, field := range []detailEditField{detailEditDef, detailEditSpec, detailEditPullRequest} {
+	for _, field := range []detailEditField{detailEditBrief, detailEditSpec, detailEditPullRequest} {
 		for _, original := range []string{"", "Types: feature\n\n```make\nbuild:\n\tgo build ./...\n```\n"} {
 			t.Run(string(field)+"/"+original, func(t *testing.T) {
 				client := &fakeClient{}
-				m := NewModelWithClient(client)
+				m := newChangeTestModel(client)
 				m.state = ChangeDetailsState
 				m.detailEditField = field
-				m.changeList.Detail = dto.Change{ID: "12", Def: original, Spec: original, PR: original, ChangeTypes: []string{"bugfix"}}
+				m.changeList.Detail = dto.ChangeView{ID: "12", Brief: original, Spec: original, PR: original, ChangeTypes: []string{"bugfix"}}
 				m = m.setPromptValue(original)
 				next, cmd := m.Update(editorFinishedMsg{source: ChangeDetailsState, original: original, content: original})
 				require.NotNil(t, cmd)
@@ -69,23 +70,24 @@ func TestArtifactEditorUnchangedExitSkipsPersistence(t *testing.T) {
 
 func TestChangeCreateRetainsCommittedChangeAfterTypeFailure(t *testing.T) {
 	cause := errors.New("type rejected")
-	created := dto.Change{ID: "12", Title: "Created", Def: "Body"}
+	created := dto.ChangeView{ID: "12", Title: "Created", Brief: "Body"}
 	client := &fakeClient{createdChange: created, changeTypesUpdateErr: cause}
-	m := NewModelWithClient(client)
+	m := newChangeTestModel(client)
 	m.currentProject = dto.Option{ID: "7"}
 	m.state = ChangeCreateState
 	m = m.setPromptValue("# Created\n\nTypes: feature\n\nBody")
 	next, cmd := m.submitPrompt()
 	require.NotNil(t, cmd)
-	msg := cmd().(changeSavedMsg)
-	require.NoError(t, msg.err)
-	require.ErrorIs(t, msg.reloadErr, cause)
+	msg := cmd().(changes.Result)
+	require.NoError(t, msg.Err)
+	require.ErrorIs(t, msg.RefreshErr, cause)
 	m = applyMsg(next.(Model), msg)
 	assert.Equal(t, ChangeDetailsState, m.state)
-	assert.Equal(t, created, m.changeList.Detail)
-	assert.Contains(t, m.err, "change created; type update failed: type rejected")
+	assert.Equal(t, created.ID, m.changeList.Detail.ID)
+	assert.Contains(t, m.status, "created change #12")
+	assert.Contains(t, m.err, "type update failed: type rejected")
 	assert.Empty(t, m.input.Value())
-	assert.Equal(t, []string{"change/create", "change/update-change-types"}, client.requestOrder)
+	assert.Equal(t, []string{"change/create", "change/update-types"}, client.requestOrder)
 
 	// A repeated save cannot replay creation after the committed result.
 	next, cmd = m.executeCommand("/save")
@@ -100,10 +102,10 @@ func TestPromptSubmissionPreservesSlashPrefixedData(t *testing.T) {
 		t.Run(string(state), func(t *testing.T) {
 			for _, content := range []string{"/api/v1/health returns 200", "/cancel returns to the previous screen", "/unknown", "/quit"} {
 				t.Run(content, func(t *testing.T) {
-					client := &fakeClient{gotChange: dto.Change{ID: "12"}}
-					m := NewModelWithClient(client)
+					client := &fakeClient{gotChange: dto.ChangeView{ID: "12"}}
+					m := newChangeTestModel(client)
 					m.state = state
-					m.changeList.Detail = dto.Change{ID: "12"}
+					m.changeList.Detail = dto.ChangeView{ID: "12"}
 					m.projectList.Detail = dto.Project{ID: 7}
 					m.activeTestCase = dto.TestCase{ID: "31"}
 					if state == ChangeDetailsState {
@@ -136,9 +138,9 @@ func TestPromptSubmissionDispatchesRecognizedFormCommands(t *testing.T) {
 	for _, state := range []State{ChangeCreateState, ChangeUpdateState, TestCaseCreateState, TestCaseUpdateState, ProjectCreateState, ProjectUpdateState} {
 		t.Run(string(state), func(t *testing.T) {
 			client := &fakeClient{}
-			m := NewModelWithClient(client)
+			m := newChangeTestModel(client)
 			m.state = state
-			m.changeList.Detail = dto.Change{ID: "12"}
+			m.changeList.Detail = dto.ChangeView{ID: "12"}
 			m.projectList.Detail = dto.Project{ID: 7}
 			m = m.setPromptValue(" /cancel ")
 			next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -159,10 +161,10 @@ func TestEditorSubmissionPreservesSlashPrefixedData(t *testing.T) {
 	for _, state := range []State{TestCaseCreateState, TestCaseUpdateState, ProjectCreateState, ProjectUpdateState, ChangeDetailsState} {
 		t.Run(string(state), func(t *testing.T) {
 			for _, content := range []string{"/api/v1/health returns 200\nsecond line", "/cancel"} {
-				client := &fakeClient{gotChange: dto.Change{ID: "12"}}
-				m := NewModelWithClient(client)
+				client := &fakeClient{gotChange: dto.ChangeView{ID: "12"}}
+				m := newChangeTestModel(client)
 				m.state = state
-				m.changeList.Detail = dto.Change{ID: "12"}
+				m.changeList.Detail = dto.ChangeView{ID: "12"}
 				m.projectList.Detail = dto.Project{ID: 7}
 				m.activeTestCase = dto.TestCase{ID: "31"}
 				if state == ChangeDetailsState {
@@ -198,17 +200,17 @@ func TestEditorSubmissionPreservesSlashPrefixedData(t *testing.T) {
 }
 
 func TestArtifactDraftSurvivesFailedSaveAndRetry(t *testing.T) {
-	for _, field := range []detailEditField{detailEditDef, detailEditSpec, detailEditPullRequest} {
+	for _, field := range []detailEditField{detailEditBrief, detailEditSpec, detailEditPullRequest} {
 		for name, draft := range map[string]string{
 			"tabs":       "```make\nbuild:\n\tgo build ./...\n```\n",
 			"many lines": strings.Repeat("line\n", 10001) + "final line\n",
 		} {
 			t.Run(string(field)+"/"+name, func(t *testing.T) {
 				t.Setenv("TMPDIR", t.TempDir())
-				client := &fakeClient{changeUpdateErr: errors.New("offline"), gotChange: dto.Change{ID: "12"}}
-				m := NewModelWithClient(client)
+				client := &fakeClient{changeUpdateErr: errors.New("offline"), gotChange: dto.ChangeView{ID: "12"}}
+				m := newChangeTestModel(client)
 				m.state, m.detailEditField = ChangeDetailsState, field
-				m.changeList.Detail = dto.Change{ID: "12", Def: "persisted", Spec: "persisted", PR: "persisted"}
+				m.changeList.Detail = dto.ChangeView{ID: "12", Brief: "persisted", Spec: "persisted", PR: "persisted"}
 				next, cmd := m.Update(editorFinishedMsg{source: m.state, original: "persisted", content: draft})
 				m = applyCommand(next.(Model), cmd)
 				require.Equal(t, "save failed", m.status)
@@ -229,12 +231,12 @@ func TestArtifactDraftSurvivesFailedSaveAndRetry(t *testing.T) {
 				m, cmd = sendKey(m, tea.KeyEnter)
 				require.NotNil(t, cmd)
 				m = applyCommand(m, cmd)
-				require.Equal(t, "save", m.status)
+				require.Contains(t, m.status, "save")
 				assert.Empty(t, m.input.Value())
 				var submissions []string
 				switch field {
-				case detailEditDef:
-					submissions = client.changeDefUpdates
+				case detailEditBrief:
+					submissions = client.changeBriefUpdates
 				case detailEditSpec:
 					submissions = client.changeSpecUpdates
 				case detailEditPullRequest:
@@ -254,10 +256,10 @@ func TestEditorRetryKeepsLiteralData(t *testing.T) {
 		for _, content := range []string{"/api/v1/health returns 200", "/cancel"} {
 			t.Run(string(state)+content, func(t *testing.T) {
 				failure := errors.New("offline")
-				client := &fakeClient{changeUpdateErr: failure, createErr: failure, updateErr: failure, gotChange: dto.Change{ID: "12"}, createdProject: dto.Project{ID: 7}}
-				m := NewModelWithClient(client)
+				client := &fakeClient{changeUpdateErr: failure, createErr: failure, updateErr: failure, gotChange: dto.ChangeView{ID: "12"}, createdProject: dto.Project{ID: 7}}
+				m := newChangeTestModel(client)
 				m.state = state
-				m.changeList.Detail = dto.Change{ID: "12"}
+				m.changeList.Detail = dto.ChangeView{ID: "12"}
 				m.projectList.Detail = dto.Project{ID: 7}
 				m.activeTestCase = dto.TestCase{ID: "31"}
 				if state == ChangeDetailsState {
@@ -274,7 +276,7 @@ func TestEditorRetryKeepsLiteralData(t *testing.T) {
 				if state == ProjectCreateState || state == ProjectUpdateState {
 					require.Equal(t, "saved project", m.status)
 				} else {
-					require.Equal(t, "save", m.status)
+					require.Contains(t, m.status, "save")
 				}
 				switch state {
 				case TestCaseCreateState:
@@ -300,7 +302,7 @@ func TestEditorDraftEditingAndDiscard(t *testing.T) {
 		t.Run(draft[:min(len(draft), 10)], func(t *testing.T) {
 			m := NewModelWithClient(&fakeClient{})
 			m.state = TestCaseCreateState
-			m.changeList.Detail = dto.Change{ID: "12"}
+			m.changeList.Detail = dto.ChangeView{ID: "12"}
 			next, _ := m.Update(editorFinishedMsg{source: m.state, content: draft})
 			m = next.(Model)
 			lossless := m.input.Value() == draft
@@ -342,10 +344,10 @@ func TestEditorDraftAsyncPasteRetry(t *testing.T) {
 
 	for _, draft := range []string{"original", "/cancel", "\tkeep raw"} {
 		t.Run(draft, func(t *testing.T) {
-			client := &fakeClient{changeUpdateErr: errors.New("offline"), gotChange: dto.Change{ID: "12"}}
+			client := &fakeClient{changeUpdateErr: errors.New("offline"), gotChange: dto.ChangeView{ID: "12"}}
 			m := NewModelWithClient(client)
 			m.state = TestCaseCreateState
-			m.changeList.Detail = dto.Change{ID: "12"}
+			m.changeList.Detail = dto.ChangeView{ID: "12"}
 			// A paste requested before editor completion may arrive afterward.
 			_, paste := sendKey(m, tea.KeyCtrlV)
 			require.NotNil(t, paste)
@@ -373,7 +375,7 @@ func TestEditorDraftAsyncPasteRetry(t *testing.T) {
 			client.changeUpdateErr = nil
 			m, save = sendKey(m, tea.KeyEnter)
 			m = applyCommand(m, save)
-			require.Equal(t, "save", m.status)
+			require.Contains(t, m.status, "save")
 			require.Len(t, client.testCaseCreateInputs, 2)
 			assert.Equal(t, want, client.testCaseCreateInputs[1].Scenario)
 		})
@@ -381,15 +383,15 @@ func TestEditorDraftAsyncPasteRetry(t *testing.T) {
 }
 
 func TestDocumentEditorRequiresSuccessfulDetailLoad(t *testing.T) {
-	for _, field := range []detailEditField{detailEditDef, detailEditSpec, detailEditPullRequest, detailEditPRUrl} {
+	for _, field := range []detailEditField{detailEditBrief, detailEditSpec, detailEditPullRequest, detailEditPRUrl} {
 		t.Run(string(field), func(t *testing.T) {
 			dir := t.TempDir()
 			t.Setenv("TMPDIR", dir)
 			original := "Existing document\n\tkeep all bytes\n"
-			client := &fakeClient{gotChange: dto.Change{ID: "12", Def: original, Spec: original, PR: original, PRUrl: original}}
-			m := NewModelWithClient(client)
+			client := &fakeClient{gotChange: dto.ChangeView{ID: "12", Brief: original, Spec: original, PR: original, PRUrl: original}}
+			m := newChangeTestModel(client)
 			m.state = ChangesListState
-			m.changeList = m.changeList.WithRows([]dto.Change{{ID: "12", Title: "List row"}, {ID: "13", Title: "Other row"}})
+			m.changeList = m.changeList.WithRows([]dto.ChangeView{{ID: "12", Title: "List row"}, {ID: "13", Title: "Other row"}})
 			m, load := sendKey(m, tea.KeyEnter)
 			require.NotNil(t, load)
 			assertBlocked := func() {
@@ -403,16 +405,17 @@ func TestDocumentEditorRequiresSuccessfulDetailLoad(t *testing.T) {
 				require.NoError(t, err)
 				assert.Empty(t, files, "blocked edits must not create editor files")
 				assert.Zero(t, client.changeSpecUpdateCalls)
-				assert.Zero(t, client.changeDefUpdateCalls)
+				assert.Zero(t, client.changeBriefUpdateCalls)
 				assert.Zero(t, client.changePRUpdateCalls)
 				assert.Zero(t, client.changePRUrlUpdateCalls)
 			}
 			// Hold the initial asynchronous result, then fail it.
 			assertBlocked()
-			m = applyMsg(m, changeLoadedMsg{id: 12, err: errors.New("detail unavailable")})
+			m = loadedChangeForTest(m, dto.ChangeView{ID: "12"}, errors.New("detail unavailable"))
 			assert.Equal(t, "detail unavailable", m.err)
 			assertBlocked()
-			// A successful retry unlocks editing with the exact loaded bytes.
+			// A fresh read retry unlocks editing; the old result is obsolete.
+			m, load = sendCommand(m, "/retry")
 			m = applyMsg(m, load())
 			next, cmd := m.beginDetailTextEditor(field)
 			require.NotNil(t, cmd)
@@ -429,7 +432,7 @@ func TestDocumentEditorRequiresSuccessfulDetailLoad(t *testing.T) {
 			m.changeList.Selected = 1
 			m, load = sendKey(m, tea.KeyEnter)
 			require.NotNil(t, load)
-			m = applyMsg(m, changeLoadedMsg{id: 12, change: client.gotChange})
+			m = loadedChangeForTest(m, client.gotChange, nil)
 			assertBlocked()
 		})
 	}

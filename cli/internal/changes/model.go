@@ -2,6 +2,7 @@ package changes
 
 import (
 	"cli/internal/dto"
+	"context"
 	"fmt"
 	"regexp"
 	"sort"
@@ -21,10 +22,21 @@ type PhaseColors map[string]string
 
 // Model stores changes list and detail state.
 type Model struct {
-	Rows           []dto.Change
+	ProjectID, EntityID int
+	Generation          uint64
+	Operation           Operation
+	Busy, DetailLoaded  bool
+	Status, Outcome     string
+	Err                 error
+	Draft               Input
+	refreshOp           Operation
+	refreshID           int
+	cancel              context.CancelFunc
+
+	Rows           []dto.ChangeView
 	Selected       int
 	Offset         int
-	Detail         dto.Change
+	Detail         dto.ChangeView
 	DetailSelected int
 	DetailOffset   int
 	Loading        bool
@@ -49,10 +61,10 @@ type ParsedSpec struct {
 	ChangeTypesPresent bool
 }
 
-// ParsedDef stores the title and full def text extracted from def markdown.
-type ParsedDef struct {
+// ParsedBrief stores the title and full brief text extracted from brief markdown.
+type ParsedBrief struct {
 	Title              string
-	Def                string
+	Brief              string
 	ChangeTypes        []string
 	ChangeTypesPresent bool
 }
@@ -65,7 +77,7 @@ func StartLoading() Model {
 }
 
 // WithRows returns a changes model populated with loaded rows.
-func (m Model) WithRows(rows []dto.Change) Model {
+func (m Model) WithRows(rows []dto.ChangeView) Model {
 	m.Rows = rows
 	m.Selected = 0
 	m.Offset = 0
@@ -120,10 +132,10 @@ func (m Model) ClampSelection(filters Filters, pageSize int) Model {
 }
 
 // SelectDetail selects the current visible change.
-func (m Model) SelectDetail(filters Filters) (Model, dto.Change, bool) {
+func (m Model) SelectDetail(filters Filters) (Model, dto.ChangeView, bool) {
 	visible := FilteredRows(m.Rows, filters)
-	if len(visible) == 0 {
-		return m, dto.Change{}, false
+	if m.Loading || len(visible) == 0 {
+		return m, dto.ChangeView{}, false
 	}
 	m = m.ClampSelection(filters, 1)
 	m.Offset = clampOffset(m.Offset, m.Selected, len(visible), 1)
@@ -133,7 +145,7 @@ func (m Model) SelectDetail(filters Filters) (Model, dto.Change, bool) {
 }
 
 // WithDetail stores the selected Change and resets detail-table selection.
-func (m Model) WithDetail(change dto.Change) Model {
+func (m Model) WithDetail(change dto.ChangeView) Model {
 	m.Detail = change
 	m.DetailSelected = firstSelectableDetailSelection(change)
 	m.DetailOffset = 0
@@ -150,15 +162,16 @@ func (m Model) MoveDetailSelection(delta int, pageSize int, width int) Model {
 	}
 	m = m.ClampDetailSelection(pageSize, width)
 	next := nextSelectableDetailSelection(m.Detail, rows, m.DetailSelected, delta)
+	rows, prefix := detailViewportRows(m.Detail, pageSize, width)
 	m.DetailSelected = next
-	if m.DetailSelected < 0 {
+	if m.DetailSelected+prefix < 0 {
 		_, textWidth := DetailColumnWidths(m.Detail, width)
 		m.DetailOffset = clampLineOffset(m.DetailOffset, detailLineCount(rows, textWidth), detailScrollPageSize(m.Detail, pageSize, width))
 		return m
 	}
 	_, textWidth := DetailColumnWidths(m.Detail, width)
-	rowStart := detailRowLineStart(rows, m.DetailSelected, textWidth)
-	rowEnd := rowStart + detailRowLineCount(rows[m.DetailSelected], textWidth)
+	rowStart := detailRowLineStart(rows, m.DetailSelected+prefix, textWidth)
+	rowEnd := rowStart + detailRowLineCount(rows[m.DetailSelected+prefix], textWidth)
 	m.DetailOffset = detailOffsetKeepingRowVisible(m.DetailOffset, rowStart, rowEnd, detailLineCount(rows, textWidth), detailScrollPageSize(m.Detail, pageSize, width))
 	return m
 }
@@ -174,6 +187,7 @@ func (m Model) ClampDetailSelection(pageSize int, width int) Model {
 	if !validDetailSelection(m.Detail, rows, m.DetailSelected) {
 		m.DetailSelected = firstSelectableDetailSelection(m.Detail)
 	}
+	rows, _ = detailViewportRows(m.Detail, pageSize, width)
 	_, textWidth := DetailColumnWidths(m.Detail, width)
 	m.DetailOffset = clampLineOffset(m.DetailOffset, detailLineCount(rows, textWidth), detailScrollPageSize(m.Detail, pageSize, width))
 	return m
@@ -187,6 +201,7 @@ func (m Model) ScrollDetailViewport(delta int, pageSize int, width int) Model {
 		m.DetailOffset = 0
 		return m
 	}
+	rows, prefix := detailViewportRows(m.Detail, pageSize, width)
 	_, textWidth := DetailColumnWidths(m.Detail, width)
 	scrollPageSize := detailScrollPageSize(m.Detail, pageSize, width)
 	if abs(delta) >= pageSize {
@@ -197,7 +212,7 @@ func (m Model) ScrollDetailViewport(delta int, pageSize int, width int) Model {
 		}
 	}
 	m.DetailOffset = clampLineOffset(m.DetailOffset+delta, detailLineCount(rows, textWidth), scrollPageSize)
-	m.DetailSelected = selectableDetailRowAtOffset(rows, m.DetailOffset, textWidth)
+	m.DetailSelected = selectableDetailRowAtOffset(rows, m.DetailOffset, textWidth) - prefix
 	return m
 }
 
@@ -213,7 +228,7 @@ func (m Model) SelectDetailRow(pageSize int, width int) (Model, DetailRow, bool)
 }
 
 // DetailRows returns Change details as label/text table rows.
-func DetailRows(change dto.Change) []DetailRow {
+func DetailRows(change dto.ChangeView) []DetailRow {
 	if change.ID == "" && change.Title == "" {
 		return nil
 	}
@@ -224,7 +239,7 @@ func DetailRows(change dto.Change) []DetailRow {
 		{Label: "Epic", Text: epicLabel(change), Selectable: true},
 		{Label: "Types", Text: strings.Join(change.ChangeTypes, "|"), Selectable: true, DividerAfter: true},
 		{Label: "Title", Text: change.Title, Selectable: true, DividerAfter: true},
-		{Label: "Definition", Text: change.Def, Selectable: true, DividerAfter: true},
+		{Label: "Brief", Text: change.Brief, Selectable: true, DividerAfter: true},
 		{Label: "Spec", Text: change.Spec, Selectable: true, DividerAfter: true},
 	}
 	for i, testCase := range change.TestCases {
@@ -238,19 +253,26 @@ func DetailRows(change dto.Change) []DetailRow {
 			TestCaseDone: testCase.Done,
 		})
 	}
+	for _, d := range change.Documents {
+		if d.DocType != "brief" && d.DocType != "spec" && d.DocType != "pr" {
+			rows = append(rows, DetailRow{Label: "Doc " + d.DocType, Text: d.Body, Selectable: true, DividerAfter: true})
+		}
+	}
 	rows = append(rows,
 		DetailRow{Label: "PR", Text: change.PR, Selectable: true, DividerAfter: true},
 		DetailRow{Label: "PR URL", Text: change.PRUrl, Selectable: true},
-		DetailRow{Label: "Agent Edit", Text: agentEditIcon(change.AgentEdit), Selectable: true},
+		DetailRow{Label: "After change", Text: change.AfterChangeID, Selectable: true},
 		DetailRow{Label: "Complete", Text: fmt.Sprintf("%d/%d - %d%%", change.Done, change.Total, change.Completed), Selectable: true},
 		DetailRow{Label: "Open", Text: testCaseDoneIcon(change.Open), Selectable: true},
 		DetailRow{Label: "Created", Text: formatListTimestamp(change.Created), Selectable: true},
 		DetailRow{Label: "Modified", Text: formatListTimestamp(change.Modified), Selectable: true},
+		DetailRow{Label: "Project ID", Text: change.ProjectID, Selectable: true},
+		DetailRow{Label: "Epic ID", Text: change.EpicID, Selectable: true},
 	)
 	return rows
 }
 
-func fixedDetailRows(change dto.Change) []DetailRow {
+func fixedDetailRows(change dto.ChangeView) []DetailRow {
 	return []DetailRow{
 		{Label: "ID", Text: change.ID, Selectable: true},
 		{Label: "Ref UUID", Text: change.RefUUID, Selectable: true},
@@ -262,7 +284,7 @@ func DetailCopyValue(row DetailRow) string {
 	return row.Text
 }
 
-func firstSelectableDetailSelection(change dto.Change) int {
+func firstSelectableDetailSelection(change dto.ChangeView) int {
 	fixedRows := fixedDetailRows(change)
 	for i, row := range fixedRows {
 		if row.Selectable {
@@ -272,12 +294,12 @@ func firstSelectableDetailSelection(change dto.Change) int {
 	return firstSelectableDetailRow(DetailRows(change))
 }
 
-func validDetailSelection(change dto.Change, rows []DetailRow, selected int) bool {
+func validDetailSelection(change dto.ChangeView, rows []DetailRow, selected int) bool {
 	_, ok := detailRowForSelection(change, rows, selected)
 	return ok
 }
 
-func detailRowForSelection(change dto.Change, rows []DetailRow, selected int) (DetailRow, bool) {
+func detailRowForSelection(change dto.ChangeView, rows []DetailRow, selected int) (DetailRow, bool) {
 	if selected < 0 {
 		fixedRows := fixedDetailRows(change)
 		index := selected + len(fixedRows)
@@ -292,7 +314,7 @@ func detailRowForSelection(change dto.Change, rows []DetailRow, selected int) (D
 	return rows[selected], true
 }
 
-func selectableDetailSelections(change dto.Change, rows []DetailRow) []int {
+func selectableDetailSelections(change dto.ChangeView, rows []DetailRow) []int {
 	fixedRows := fixedDetailRows(change)
 	selections := make([]int, 0, len(fixedRows)+len(rows))
 	for i, row := range fixedRows {
@@ -308,7 +330,7 @@ func selectableDetailSelections(change dto.Change, rows []DetailRow) []int {
 	return selections
 }
 
-func nextSelectableDetailSelection(change dto.Change, rows []DetailRow, selected int, delta int) int {
+func nextSelectableDetailSelection(change dto.ChangeView, rows []DetailRow, selected int, delta int) int {
 	selections := selectableDetailSelections(change, rows)
 	if len(selections) == 0 || delta == 0 {
 		return selected
@@ -333,25 +355,33 @@ func nextSelectableDetailSelection(change dto.Change, rows []DetailRow, selected
 	return selections[next]
 }
 
-func detailScrollPageSize(change dto.Change, pageSize int, width int) int {
-	if pageSize < 1 {
-		pageSize = 1
+// detailViewportRows lets identity rows scroll when pinning them would hide the body.
+// The prefix translates viewport indexes to the stable detail selection indexes.
+func detailViewportRows(change dto.ChangeView, pageSize, width int) ([]DetailRow, int) {
+	rows := DetailRows(change)
+	if detailFixedLineCount(change, width) >= max(1, pageSize) {
+		fixed := fixedDetailRows(change)
+		return append(fixed, rows...), len(fixed)
 	}
-	_, textWidth := DetailColumnWidths(change, width)
-	for _, row := range fixedDetailRows(change) {
-		pageSize -= detailRowLineCount(row, textWidth)
-	}
-	if pageSize < 1 {
-		return 1
-	}
-	return pageSize
+	return rows, 0
 }
 
-func agentEditIcon(value bool) string {
-	if value {
-		return "\u2714"
+func detailFixedLineCount(change dto.ChangeView, width int) int {
+	_, textWidth := DetailColumnWidths(change, width)
+	lines := 0
+	for _, row := range fixedDetailRows(change) {
+		lines += detailRowLineCount(row, textWidth)
 	}
-	return "\u2718"
+	return lines
+}
+
+func detailScrollPageSize(change dto.ChangeView, pageSize int, width int) int {
+	pageSize = max(1, pageSize)
+	fixed := detailFixedLineCount(change, width)
+	if fixed >= pageSize {
+		return pageSize
+	}
+	return pageSize - fixed
 }
 
 func testCaseDoneIcon(value bool) string {
@@ -362,7 +392,7 @@ func testCaseDoneIcon(value bool) string {
 }
 
 // DetailColumnWidths returns label and text widths for the rendered details table.
-func DetailColumnWidths(change dto.Change, width int) (int, int) {
+func DetailColumnWidths(change dto.ChangeView, width int) (int, int) {
 	contentWidth := width - 2
 	if width <= 4 {
 		contentWidth = 20
@@ -458,7 +488,7 @@ func detailRowTextLines(row DetailRow, textWidth int) []string {
 }
 
 func detailRowShouldTruncate(row DetailRow) bool {
-	return row.Label == "Definition" || row.Label == "Spec" || row.Label == "PR"
+	return row.Label == "Brief" || row.Label == "Spec" || row.Label == "PR"
 }
 
 func detailDividerAfter(row DetailRow) bool {
@@ -542,8 +572,8 @@ func abs(value int) int {
 }
 
 // FilteredRows returns changes matching active filters.
-func FilteredRows(rows []dto.Change, filters Filters) []dto.Change {
-	filtered := make([]dto.Change, 0, len(rows))
+func FilteredRows(rows []dto.ChangeView, filters Filters) []dto.ChangeView {
+	filtered := make([]dto.ChangeView, 0, len(rows))
 	find := strings.ToLower(strings.TrimSpace(filters.Find))
 	for _, change := range rows {
 		if filters.Phase.ID != "" && change.ChangePhase != filters.Phase.ID && change.ChangePhase != filters.Phase.Label {
@@ -563,17 +593,17 @@ func FilteredRows(rows []dto.Change, filters Filters) []dto.Change {
 	return filtered
 }
 
-// ParseDefStructure extracts the Change title and def text.
-func ParseDefStructure(def string) (ParsedDef, error) {
-	normalized := strings.ReplaceAll(strings.ReplaceAll(def, "\r\n", "\n"), "\r", "\n")
+// ParseBriefStructure extracts the Change title and brief text.
+func ParseBriefStructure(brief string) (ParsedBrief, error) {
+	normalized := strings.ReplaceAll(strings.ReplaceAll(brief, "\r\n", "\n"), "\r", "\n")
 	lines := strings.Split(normalized, "\n")
 	firstIndex := firstNonBlankLine(lines, 0)
 	if firstIndex < 0 || !strings.HasPrefix(strings.TrimSpace(lines[firstIndex]), "# ") || strings.HasPrefix(strings.TrimSpace(lines[firstIndex]), "## ") {
-		return ParsedDef{}, fmt.Errorf("definition title is required")
+		return ParsedBrief{}, fmt.Errorf("brief title is required")
 	}
 	title := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(lines[firstIndex]), "# "))
 	if title == "" {
-		return ParsedDef{}, fmt.Errorf("definition title is required")
+		return ParsedBrief{}, fmt.Errorf("brief title is required")
 	}
 	types, typesPresent := ParseArtifactTypes(normalized)
 	bodyLines := lines[firstIndex+1:]
@@ -582,11 +612,11 @@ func ParseDefStructure(def string) (ParsedDef, error) {
 		bodyLines = bodyLines[firstBodyLine+1:]
 	}
 	if strings.TrimSpace(strings.Join(bodyLines, "\n")) == "" {
-		return ParsedDef{}, fmt.Errorf("definition body is required")
+		return ParsedBrief{}, fmt.Errorf("brief body is required")
 	}
-	return ParsedDef{
+	return ParsedBrief{
 		Title:              title,
-		Def:                normalized,
+		Brief:              normalized,
 		ChangeTypes:        types,
 		ChangeTypesPresent: typesPresent,
 	}, nil
@@ -658,7 +688,7 @@ func isArtifactTypesLine(line string) bool {
 }
 
 // SpecMarkdown returns editable spec markdown for a change.
-func SpecMarkdown(change dto.Change) string {
+func SpecMarkdown(change dto.ChangeView) string {
 	spec := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(change.Spec, "\r\n", "\n"), "\r", "\n"))
 	if _, err := ParseSpecStructure(spec); err == nil {
 		return change.Spec
@@ -703,7 +733,7 @@ func firstNonBlankLine(lines []string, start int) int {
 	return -1
 }
 
-func hasChangeType(change dto.Change, values ...string) bool {
+func hasChangeType(change dto.ChangeView, values ...string) bool {
 	for _, changeType := range change.ChangeTypes {
 		for _, value := range values {
 			if value != "" && changeType == value {
@@ -714,7 +744,7 @@ func hasChangeType(change dto.Change, values ...string) bool {
 	return false
 }
 
-func matchesFind(change dto.Change, query string) bool {
+func matchesFind(change dto.ChangeView, query string) bool {
 	values := []string{
 		change.ID,
 		change.RefUUID,
@@ -725,7 +755,7 @@ func matchesFind(change dto.Change, query string) bool {
 		change.ChangePhase,
 		change.EpicID,
 		change.EpicName,
-		change.Def,
+		change.Brief,
 		change.Spec,
 	}
 	values = append(values, change.ChangeTypes...)

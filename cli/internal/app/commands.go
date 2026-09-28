@@ -14,7 +14,7 @@ var commandsByState = map[State][]string{
 	ChangesListState:     changes.ListCommands(),
 	ChangeDetailsState:   changes.DetailCommands(),
 	TestCaseDetailsState: testcases.DetailCommands(),
-	ChangeCreateState:    {"/save", "/cancel"},
+	ChangeCreateState:    {"/title", "/uuid", "/save", "/cancel"},
 	ChangeUpdateState:    {"/save", "/cancel"},
 	TestCaseCreateState:  testcases.EditCommands(),
 	TestCaseUpdateState:  testcases.EditCommands(),

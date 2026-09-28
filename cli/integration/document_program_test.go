@@ -23,7 +23,7 @@ func TestCLIProgramOrdinaryDocumentEditor(t *testing.T) {
 			testDocumentEditorWaitsForDetail(t, failed)
 		})
 	}
-	for _, field := range []string{"def", "spec", "pr"} {
+	for _, field := range []string{"brief", "spec", "pr"} {
 		for _, outcome := range []string{"saved", "follow-up failure", "unchanged", "retry enter", "retry unchanged editor"} {
 			t.Run(fmt.Sprintf("%s/%s", field, outcome), func(t *testing.T) {
 				failure := outcome == "follow-up failure"
@@ -39,8 +39,7 @@ func TestCLIProgramOrdinaryDocumentEditor(t *testing.T) {
 					mu.Lock()
 					defer mu.Unlock()
 					w.Header().Set("Content-Type", "application/json")
-					change := map[string]any{"id": 12, "project_id": 7, "title": "Existing", "def": "Original text", "spec": "Original text", "pr": "Original text"}
-					change[field] = saved
+					change := programChange(12, "Existing")
 					change["change_types"] = []string{"bugfix"}
 					switch r.URL.Path {
 					case "/api/v1/project/config":
@@ -49,9 +48,13 @@ func TestCLIProgramOrdinaryDocumentEditor(t *testing.T) {
 						writeProgramJSON(w, programProject(7, "Program Project"))
 					case "/api/v1/change/list":
 						writeProgramJSON(w, []any{change})
-					case "/api/v1/change/get":
+					case "/api/v1/change/details":
 						writeProgramJSON(w, change)
-					case "/api/v1/change/update-" + field:
+					case "/api/v1/doc/current":
+						writeProgramJSON(w, []any{programDocument(field, saved)})
+					case "/api/v1/test-case/list":
+						writeProgramJSON(w, []any{})
+					case "/api/v1/doc/insert":
 						var body map[string]any
 						require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 						assert.Equal(t, false, body["agent_edit"])
@@ -60,16 +63,19 @@ func TestCLIProgramOrdinaryDocumentEditor(t *testing.T) {
 							http.Error(w, "document save rejected", http.StatusInternalServerError)
 							return
 						}
-						saved = body[field].(string)
-						change[field] = saved
-						writeProgramJSON(w, change)
-					case "/api/v1/change/update-change-types":
+						assert.Equal(t, field, body["doc_type"])
+						assert.Equal(t, float64(12), body["ref_id"])
+						assert.Equal(t, "change", body["ref_table"])
+						saved = body["body"].(string)
+						w.WriteHeader(201)
+						writeProgramJSON(w, map[string]any{"id": 91})
+					case "/api/v1/change/update-types":
 						paths = append(paths, r.URL.Path)
 						if failure {
 							http.Error(w, "type save failed", 500)
 							return
 						}
-						writeProgramJSON(w, change)
+						w.WriteHeader(204)
 					default:
 						t.Errorf("unexpected path %s", r.URL.Path)
 						http.NotFound(w, r)
@@ -127,9 +133,9 @@ func TestCLIProgramOrdinaryDocumentEditor(t *testing.T) {
 					assert.Empty(t, paths, "unchanged exit must not write the document or reset selected types")
 				} else {
 					assert.Equal(t, edited, saved)
-					expected := []string{"/api/v1/change/update-" + field, "/api/v1/change/update-change-types"}
+					expected := []string{"/api/v1/doc/insert", "/api/v1/change/update-types"}
 					if retry {
-						expected = append([]string{"/api/v1/change/update-" + field}, expected...)
+						expected = append([]string{"/api/v1/doc/insert"}, expected...)
 					}
 					assert.Equal(t, expected, paths)
 				}
@@ -163,8 +169,8 @@ func testDocumentEditorWaitsForDetail(t *testing.T, failed bool) {
 		case "/api/v1/project/details":
 			writeProgramJSON(w, programProject(7, "Program Project"))
 		case "/api/v1/change/list":
-			writeProgramJSON(w, []any{map[string]any{"id": 12, "title": "Existing"}})
-		case "/api/v1/change/get":
+			writeProgramJSON(w, []any{programChange(12, "Existing")})
+		case "/api/v1/change/details":
 			if gets.Add(1) == 1 {
 				<-release
 				if failed {
@@ -172,7 +178,11 @@ func testDocumentEditorWaitsForDetail(t *testing.T, failed bool) {
 					return
 				}
 			}
-			writeProgramJSON(w, map[string]any{"id": 12, "title": "Existing", "spec": original})
+			writeProgramJSON(w, programChange(12, "Existing"))
+		case "/api/v1/doc/current":
+			writeProgramJSON(w, []any{programDocument("spec", original)})
+		case "/api/v1/test-case/list":
+			writeProgramJSON(w, []any{})
 		default:
 			t.Errorf("unexpected request (including document writes): %s", r.URL.Path)
 			http.NotFound(w, r)
@@ -189,7 +199,7 @@ func testDocumentEditorWaitsForDetail(t *testing.T, failed bool) {
 	t.Setenv("CAPTURE", capture)
 	t.Setenv("EDITOR", script)
 	session.navigate(t, "/changes\r", "Rows 1-1 of 1")
-	session.navigate(t, "\r", "selected Existing")
+	session.navigate(t, "\r", "loading change")
 	session.navigate(t, "/edit-spec\r", "Load change details before editing")
 	assert.NoFileExists(t, capture, "pending detail must not launch the editor")
 	unblock()

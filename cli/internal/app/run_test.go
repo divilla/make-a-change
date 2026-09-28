@@ -31,9 +31,9 @@ type fakeClient struct {
 	createdProject           dto.Project
 	updatedProject           dto.Project
 	gotProject               dto.Project
-	changeRows               []dto.Change
-	createdChange            dto.Change
-	gotChange                dto.Change
+	changeRows               []dto.ChangeView
+	createdChange            dto.ChangeView
+	gotChange                dto.ChangeView
 	epics                    []dto.Option
 	phases                   []dto.Option
 	types                    []dto.Option
@@ -53,7 +53,7 @@ type fakeClient struct {
 	changeListCalls          int
 	changeCreateCalls        int
 	changeTitleUpdateCalls   int
-	changeDefUpdateCalls     int
+	changeBriefUpdateCalls   int
 	changeSpecUpdateCalls    int
 	changePRUpdateCalls      int
 	changePRUrlUpdateCalls   int
@@ -80,7 +80,7 @@ type fakeClient struct {
 	changeListProjectIDs     []string
 	changeCreateInputs       []dto.ChangeCreateInput
 	changeTitleUpdates       []string
-	changeDefUpdates         []string
+	changeBriefUpdates       []string
 	changeSpecUpdates        []string
 	changePRUpdates          []string
 	changeArtifactAgentEdits []bool
@@ -150,17 +150,23 @@ func (f *fakeClient) UpdateProject(_ context.Context, id int, name string) error
 	return nil
 }
 
-func (f *fakeClient) ListChangeRows(projectID string) ([]dto.Change, error) {
+func (f *fakeClient) ListChangeRows(_ context.Context, project int) ([]dto.Change, error) {
 	f.changeListCalls++
-	f.changeListProjectIDs = append(f.changeListProjectIDs, projectID)
+	f.changeListProjectIDs = append(f.changeListProjectIDs, strconv.Itoa(project))
 	if f.err != nil {
 		return nil, f.err
 	}
-	return f.changeRows, nil
+	rows := make([]dto.Change, 0, len(f.changeRows))
+	for _, v := range f.changeRows {
+		w := fakeWire(v)
+		w.ProjectID = project
+		rows = append(rows, w)
+	}
+	return rows, nil
 }
 
-func (f *fakeClient) GetChange(id int) (dto.Change, error) {
-	f.requestOrder = append(f.requestOrder, "change/get")
+func (f *fakeClient) GetChange(_ context.Context, id int) (dto.Change, error) {
+	f.requestOrder = append(f.requestOrder, "change/details")
 	f.changeGetCalls++
 	f.changeGetIDs = append(f.changeGetIDs, id)
 	if f.changeGetErr != nil {
@@ -169,151 +175,124 @@ func (f *fakeClient) GetChange(id int) (dto.Change, error) {
 	if f.err != nil {
 		return dto.Change{}, f.err
 	}
-	return f.gotChange, nil
+	v := fakeWire(f.gotChange)
+	if v.ID == 0 {
+		v.ID = id
+	}
+	return v, nil
 }
 
-func (f *fakeClient) CreateChange(input dto.ChangeCreateInput) (dto.Change, error) {
+func (f *fakeClient) CreateChange(_ context.Context, input dto.ChangeCreateInput) (int, error) {
 	f.requestOrder = append(f.requestOrder, "change/create")
 	f.changeCreateCalls++
 	f.changeCreateInputs = append(f.changeCreateInputs, input)
 	if f.changeCreateErr != nil {
-		return dto.Change{}, f.changeCreateErr
+		return 0, f.changeCreateErr
 	}
 	if f.err != nil {
-		return dto.Change{}, f.err
+		return 0, f.err
 	}
-	return f.createdChange, nil
+	id, _ := strconv.Atoi(f.createdChange.ID)
+	return id, nil
 }
 
-func (f *fakeClient) UpdateChangeTitle(id int, title string) (dto.Change, error) {
+func (f *fakeClient) UpdateChangeTitle(_ context.Context, _ int, title string) error {
 	f.changeTitleUpdateCalls++
 	f.changeTitleUpdates = append(f.changeTitleUpdates, title)
 	if f.changeUpdateErr != nil {
-		return dto.Change{}, f.changeUpdateErr
+		return f.changeUpdateErr
 	}
-	return dto.Change{ID: fmt.Sprint(id), Title: title}, nil
+	return nil
 }
 
-func (f *fakeClient) UpdateChangeDef(id int, def string, agentEdit bool) (dto.Change, error) {
-	f.requestOrder = append(f.requestOrder, "change/update-def")
-	f.changeDefUpdateCalls++
-	f.changeDefUpdates = append(f.changeDefUpdates, def)
-	f.changeArtifactAgentEdits = append(f.changeArtifactAgentEdits, agentEdit)
-	if f.changeUpdateErr != nil {
-		return dto.Change{}, f.changeUpdateErr
-	}
-	return dto.Change{ID: fmt.Sprint(id), Def: def, AgentEdit: agentEdit}, nil
-}
-
-func (f *fakeClient) UpdateChangeSpec(id int, spec string, agentEdit bool) (dto.Change, error) {
-	f.requestOrder = append(f.requestOrder, "change/update-spec")
-	f.changeSpecUpdateCalls++
-	f.changeSpecUpdates = append(f.changeSpecUpdates, spec)
-	f.changeArtifactAgentEdits = append(f.changeArtifactAgentEdits, agentEdit)
-	if f.changeUpdateErr != nil {
-		return dto.Change{}, f.changeUpdateErr
-	}
-	return dto.Change{ID: fmt.Sprint(id), Spec: spec, AgentEdit: agentEdit}, nil
-}
-
-func (f *fakeClient) UpdateChangePR(id int, pr string, agentEdit bool) (dto.Change, error) {
-	f.changePRUpdateCalls++
-	f.changePRUpdates = append(f.changePRUpdates, pr)
-	f.changeArtifactAgentEdits = append(f.changeArtifactAgentEdits, agentEdit)
-	if f.changeUpdateErr != nil {
-		return dto.Change{}, f.changeUpdateErr
-	}
-	return dto.Change{ID: fmt.Sprint(id), PR: pr, AgentEdit: agentEdit}, nil
-}
-
-func (f *fakeClient) UpdateChangePRUrl(id int, prURL string) (dto.Change, error) {
+func (f *fakeClient) UpdateChangePRUrl(_ context.Context, _ int, prURL string) error {
 	f.changePRUrlUpdateCalls++
 	f.changePRUrlUpdates = append(f.changePRUrlUpdates, prURL)
 	if f.changeUpdateErr != nil {
-		return dto.Change{}, f.changeUpdateErr
+		return f.changeUpdateErr
 	}
-	return dto.Change{ID: fmt.Sprint(id), PRUrl: prURL}, nil
+	return nil
 }
 
-func (f *fakeClient) UpdateChangeTypes(id int, changeTypes []string) (dto.Change, error) {
-	f.requestOrder = append(f.requestOrder, "change/update-change-types")
+func (f *fakeClient) UpdateChangeTypes(_ context.Context, _ int, changeTypes []string) error {
+	f.requestOrder = append(f.requestOrder, "change/update-types")
 	f.changeTypesUpdateCalls++
 	f.changeTypesUpdates = append(f.changeTypesUpdates, append([]string{}, changeTypes...))
 	if f.changeTypesUpdateErr != nil {
-		return dto.Change{}, f.changeTypesUpdateErr
+		return f.changeTypesUpdateErr
 	}
 	if f.changeUpdateErr != nil {
-		return dto.Change{}, f.changeUpdateErr
+		return f.changeUpdateErr
 	}
-	return dto.Change{ID: fmt.Sprint(id), ChangeTypes: changeTypes}, nil
+	return nil
 }
 
-func (f *fakeClient) UpdateChangePhase(id int, changePhase string) (dto.Change, error) {
+func (f *fakeClient) UpdateChangePhase(_ context.Context, _ int, changePhase string) error {
 	f.changePhaseUpdateCalls++
 	f.changePhaseUpdates = append(f.changePhaseUpdates, changePhase)
 	if f.changeUpdateErr != nil {
-		return dto.Change{}, f.changeUpdateErr
+		return f.changeUpdateErr
 	}
-	return dto.Change{ID: fmt.Sprint(id), ChangePhase: changePhase}, nil
+	return nil
 }
 
-func (f *fakeClient) UpdateChangeOpen(id int, open bool) (dto.Change, error) {
+func (f *fakeClient) UpdateChangeOpen(_ context.Context, _ int, open bool) error {
 	f.changeOpenUpdateCalls++
 	f.changeOpenUpdates = append(f.changeOpenUpdates, open)
 	if f.changeUpdateErr != nil {
-		return dto.Change{}, f.changeUpdateErr
+		return f.changeUpdateErr
 	}
-	return dto.Change{ID: fmt.Sprint(id), Open: open}, nil
+	return nil
 }
 
-func (f *fakeClient) UpdateChangeEpic(id int, epicID *int) (dto.Change, error) {
+func (f *fakeClient) UpdateChangeEpic(_ context.Context, _ int, epicID *int) error {
 	f.changeEpicUpdateCalls++
 	f.changeEpicUpdates = append(f.changeEpicUpdates, epicID)
 	if f.changeUpdateErr != nil {
-		return dto.Change{}, f.changeUpdateErr
+		return f.changeUpdateErr
 	}
-	return dto.Change{ID: fmt.Sprint(id)}, nil
+	return nil
 }
 
-func (f *fakeClient) CreateTestCase(changeID int, scenario string) (dto.Change, error) {
+func (f *fakeClient) CreateTestCase(changeID int, scenario string) (dto.ChangeView, error) {
 	f.requestOrder = append(f.requestOrder, "test-case/create")
 	f.testCaseCreateCalls++
 	f.testCaseCreateInputs = append(f.testCaseCreateInputs, dto.TestCase{ChangeID: fmt.Sprint(changeID), Scenario: scenario})
 	if f.changeUpdateErr != nil {
-		return dto.Change{}, f.changeUpdateErr
+		return dto.ChangeView{}, f.changeUpdateErr
 	}
 	return f.gotChange, nil
 }
 
-func (f *fakeClient) UpdateTestCase(id int, scenario string) (dto.Change, error) {
+func (f *fakeClient) UpdateTestCase(id int, scenario string) (dto.ChangeView, error) {
 	f.testCaseUpdateCalls++
 	f.testCaseUpdateInputs = append(f.testCaseUpdateInputs, dto.TestCase{ID: fmt.Sprint(id), Scenario: scenario})
 	if f.changeUpdateErr != nil {
-		return dto.Change{}, f.changeUpdateErr
+		return dto.ChangeView{}, f.changeUpdateErr
 	}
 	return f.gotChange, nil
 }
 
-func (f *fakeClient) UpdateTestCaseDone(id int, done bool) (dto.Change, error) {
+func (f *fakeClient) UpdateTestCaseDone(id int, done bool) (dto.ChangeView, error) {
 	f.testCaseDoneCalls++
 	f.testCaseDoneIDs = append(f.testCaseDoneIDs, id)
 	f.testCaseDoneUpdates = append(f.testCaseDoneUpdates, done)
 	if f.changeUpdateErr != nil {
-		return dto.Change{}, f.changeUpdateErr
+		return dto.ChangeView{}, f.changeUpdateErr
 	}
-	return dto.Change{ID: fmt.Sprint(id)}, nil
+	return dto.ChangeView{ID: fmt.Sprint(id)}, nil
 }
 
-func (f *fakeClient) DeleteTestCase(id int) (dto.Change, error) {
+func (f *fakeClient) DeleteTestCase(id int) (dto.ChangeView, error) {
 	f.testCaseDeleteCalls++
 	f.testCaseDeleteIDs = append(f.testCaseDeleteIDs, id)
 	if f.changeUpdateErr != nil {
-		return dto.Change{}, f.changeUpdateErr
+		return dto.ChangeView{}, f.changeUpdateErr
 	}
 	return f.gotChange, nil
 }
 
-func (f *fakeClient) DeleteChange(id int) error {
+func (f *fakeClient) DeleteChange(_ context.Context, id int) error {
 	f.changeDeleteCalls++
 	f.changeDeleteIDs = append(f.changeDeleteIDs, id)
 	if f.changeDeleteErr != nil {
@@ -708,7 +687,7 @@ func TestChangeEditorPreservesEditedMarkdownAfterFailedSave(t *testing.T) {
 			m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 			m.state = tt.source
 			m.input.SetValue(tt.original)
-			m.changeList.Detail = dto.Change{
+			m.changeList.Detail = dto.ChangeView{
 				ID:          "12",
 				Title:       "Original Change",
 				Spec:        tt.original,
@@ -1259,7 +1238,7 @@ func TestProjectCancelDoesNotCallPersistence(t *testing.T) {
 
 func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 	client := &fakeClient{
-		changeRows: []dto.Change{
+		changeRows: []dto.ChangeView{
 			{
 				ID:          "11",
 				Ref:         "3",
@@ -1276,7 +1255,7 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 				Modified:    "2026-06-29T10:45:00Z",
 			},
 		},
-		gotChange: dto.Change{
+		gotChange: dto.ChangeView{
 			ID:          "11",
 			RefUUID:     "11111111-2222-4333-8444-555555555555",
 			Ref:         "3",
@@ -1289,13 +1268,13 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 			Spec:        "# Backend Change\n\nTypes: feature|test\n\nEpic: Epic Five\n\n## Problem Statement\nBody.",
 			PR:          "Pull request summary.",
 			PRUrl:       "https://github.com/divilla/project-manager/pull/107",
-			AgentEdit:   true,
-			Open:        true,
-			Created:     "2026-06-29T08:15:00Z",
-			Modified:    "2026-06-29T10:45:00Z",
+
+			Open:     true,
+			Created:  "2026-06-29T08:15:00Z",
+			Modified: "2026-06-29T10:45:00Z",
 		},
 	}
-	m := newModelWithOptionCatalog(client)
+	m := newChangeTestModel(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.width = 120
 
@@ -1321,7 +1300,7 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 	assert.Contains(t, view, "Tot")
 	assert.Contains(t, view, "%")
 	assert.Contains(t, view, "Modified")
-	assert.Contains(t, view, "000003")
+	assert.Contains(t, view, "3")
 	assert.Contains(t, view, "backlog")
 	assert.Contains(t, view, "Backend Change")
 	assert.Contains(t, view, "feature|test")
@@ -1342,7 +1321,7 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 	assert.Contains(t, view, "ChangeDetailsScreen")
 	assert.Contains(t, view, "ID │ 11")
 	assert.Contains(t, view, "Ref UUID │ 11111111-2222-4333-8444-555555555555")
-	assert.Contains(t, view, "Ref │ 000003")
+	assert.Contains(t, view, "Ref │ 3")
 	assert.Contains(t, view, "Slug │ change-three")
 	assert.Contains(t, view, "Phase │ backlog")
 	assert.Contains(t, view, "Epic │ Epic Five")
@@ -1351,8 +1330,8 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 	assert.Contains(t, view, "───────────┼")
 	assert.NotContains(t, view, "Epic Five                                                                                              \n───────────┼")
 	assert.Less(t, strings.Index(view, "ID │ 11"), strings.Index(view, "Ref UUID │ 11111111-2222-4333-8444-555555555555"))
-	assert.Less(t, strings.Index(view, "Ref UUID │ 11111111-2222-4333-8444-555555555555"), strings.Index(view, "Ref │ 000003"))
-	assert.Less(t, strings.Index(view, "Ref │ 000003"), strings.Index(view, "Slug │ change-three"))
+	assert.Less(t, strings.Index(view, "Ref UUID │ 11111111-2222-4333-8444-555555555555"), strings.Index(view, "Ref │ 3"))
+	assert.Less(t, strings.Index(view, "Ref │ 3"), strings.Index(view, "Slug │ change-three"))
 	assert.Less(t, strings.Index(view, "Slug │ change-three"), strings.Index(view, "Phase │ backlog"))
 	assert.Less(t, strings.Index(view, "Phase │ backlog"), strings.Index(view, "Epic │ Epic Five"))
 	assert.Less(t, strings.Index(view, "Epic │ Epic Five"), strings.Index(view, "Types │ feature|test"))
@@ -1361,6 +1340,7 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 	assert.Contains(t, rawView, lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Render("Backend Change"))
 
 	got, _ = sendKey(got, tea.KeyPgDown)
+	got.changeList.DetailOffset = max(0, got.changeList.DetailOffset-1)
 	view = stripANSI(got.View())
 	assert.Contains(t, view, "Spec │ # Backend Change")
 	assert.Contains(t, view, "PR │ Pull request summary.")
@@ -1369,10 +1349,10 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 	got, _ = sendKey(got, tea.KeyPgDown)
 	view = stripANSI(got.View())
 	assert.Contains(t, view, "PR URL │ https://github.com/divilla/project-manager/pull/107")
-	assert.Contains(t, view, "Agent Edit │ ✔")
+	assert.Contains(t, view, "After change │ null")
 	assert.Contains(t, view, "Complete │ 0/0 - 0%")
-	assert.Less(t, strings.Index(view, "PR URL │ https://github.com/divilla/project-manager/pull/107"), strings.Index(view, "Agent Edit │ ✔"))
-	assert.Less(t, strings.Index(view, "Agent Edit │ ✔"), strings.Index(view, "Complete │ 0/0 - 0%"))
+	assert.Less(t, strings.Index(view, "PR URL │ https://github.com/divilla/project-manager/pull/107"), strings.Index(view, "After change │ null"))
+	assert.Less(t, strings.Index(view, "After change │ null"), strings.Index(view, "Complete │ 0/0 - 0%"))
 
 	got, _ = sendKey(got, tea.KeyPgDown)
 	view = stripANSI(got.View())
@@ -1387,7 +1367,7 @@ func TestChangesTableTruncatesEpicAndTitleAtMaxWidth(t *testing.T) {
 	m := NewModelWithClient(&fakeClient{})
 	m.state = ChangesListState
 	m.width = 220
-	m.changeList = m.changeList.WithRows([]dto.Change{{
+	m.changeList = m.changeList.WithRows([]dto.ChangeView{{
 		ID:       "1",
 		Ref:      "1",
 		EpicName: longEpic,
@@ -1405,7 +1385,7 @@ func TestChangesTableTruncatesEpicAndTitleAtMaxWidth(t *testing.T) {
 }
 
 func TestChangesTableUsesNaturalWidthUntilTerminalIsSmaller(t *testing.T) {
-	view := stripANSI(changes.TableView(changes.Model{}.WithRows([]dto.Change{{
+	view := stripANSI(changes.TableView(changes.Model{}.WithRows([]dto.ChangeView{{
 		ID:          "1",
 		Ref:         "1",
 		ChangeTypes: []string{strings.Repeat("Y", 35)},
@@ -1420,7 +1400,7 @@ func TestChangesTableUsesNaturalWidthUntilTerminalIsSmaller(t *testing.T) {
 	assert.Contains(t, view, strings.Repeat("Y", 30))
 	assert.NotContains(t, view, strings.Repeat("Y", 31))
 
-	narrow := stripANSI(changes.TableView(changes.Model{}.WithRows([]dto.Change{{
+	narrow := stripANSI(changes.TableView(changes.Model{}.WithRows([]dto.ChangeView{{
 		ID:          "1",
 		Ref:         "1",
 		ChangeTypes: []string{strings.Repeat("Y", 35)},
@@ -1434,7 +1414,7 @@ func TestChangesTableUsesNaturalWidthUntilTerminalIsSmaller(t *testing.T) {
 }
 
 func TestChangesTableRendersPhaseColumnWidthAndColors(t *testing.T) {
-	model := changes.Model{}.WithRows([]dto.Change{
+	model := changes.Model{}.WithRows([]dto.ChangeView{
 		{ID: "1", Ref: "1", ChangePhase: "backlog", Title: "Backlog", Completed: 10},
 		{ID: "2", Ref: "2", ChangePhase: "progress", Title: "Progress", Completed: 75},
 	})
@@ -1456,10 +1436,10 @@ func TestChangesListViewUsesLoadedPhaseColors(t *testing.T) {
 			{ID: "progress", Label: "progress", Color: "10"},
 		},
 	}
-	m := newModelWithOptionCatalog(client)
+	m := newChangeTestModel(client)
 	m.state = ChangesListState
 	m.width = 220
-	m.changeList = m.changeList.WithRows([]dto.Change{
+	m.changeList = m.changeList.WithRows([]dto.ChangeView{
 		{ID: "1", Ref: "1", ChangePhase: "backlog", Title: "Backlog", Completed: 10},
 		{ID: "2", Ref: "2", ChangePhase: "progress", Title: "Progress", Completed: 75},
 	})
@@ -1471,11 +1451,11 @@ func TestChangesListViewUsesLoadedPhaseColors(t *testing.T) {
 
 func TestChangesTableKeyboardSelectionMatchesProjects(t *testing.T) {
 	client := &fakeClient{
-		gotChange: dto.Change{ID: "2", Title: "Second Change"},
+		gotChange: dto.ChangeView{ID: "2", Title: "Second Change"},
 	}
-	m := newModelWithOptionCatalog(client)
+	m := newChangeTestModel(client)
 	m.state = ChangesListState
-	m.changeList = m.changeList.WithRows([]dto.Change{
+	m.changeList = m.changeList.WithRows([]dto.ChangeView{
 		{ID: "1", Ref: "1", Title: "First Change"},
 		{ID: "2", Ref: "2", Title: "Second Change"},
 	})
@@ -1499,15 +1479,16 @@ func TestChangesTableKeyboardSelectionMatchesProjects(t *testing.T) {
 
 	got = applyMsg(got, cmd())
 	assert.Equal(t, []int{2}, client.changeGetIDs)
-	assert.Equal(t, client.gotChange, got.changeList.Detail)
+	assert.Equal(t, client.gotChange.ID, got.changeList.Detail.ID)
+	assert.Equal(t, client.gotChange.Title, got.changeList.Detail.Title)
 }
 
 func TestChangesTableIsBoxedAndScrollsSelectedRowIntoView(t *testing.T) {
 	m := NewModelWithClient(&fakeClient{})
 	m.state = ChangesListState
-	m.height = 15
+	m.height = 16
 	m.width = 120
-	m.changeList = m.changeList.WithRows([]dto.Change{
+	m.changeList = m.changeList.WithRows([]dto.ChangeView{
 		{ID: "1", Ref: "1", Title: "Change One"},
 		{ID: "2", Ref: "2", Title: "Change Two"},
 		{ID: "3", Ref: "3", Title: "Change Three"},
@@ -1561,8 +1542,9 @@ func TestChangesEnterWithNoSelectableRowErrors(t *testing.T) {
 
 func TestNewChangeRequiresCurrentProject(t *testing.T) {
 	client := &fakeClient{}
-	m := newModelWithOptionCatalog(client)
+	m := newChangeTestModel(client)
 	m.state = ChangesListState
+	m.currentProject = dto.Option{}
 
 	got, cmd := sendCommand(m, "/new-change")
 
@@ -1572,15 +1554,15 @@ func TestNewChangeRequiresCurrentProject(t *testing.T) {
 	assert.Zero(t, client.changeCreateCalls)
 }
 
-func TestChangeCreateSaveExtractsTitleAndPreservesDef(t *testing.T) {
+func TestChangeCreateSaveExtractsTitleAndPreservesBrief(t *testing.T) {
 	spec := "# New Change\n\nTypes: feature|test\n\nEpic: Epic Five\n\n## Problem Statement\nKeep every section."
 	client := &fakeClient{
 		types:         []dto.Option{{ID: "feature", Label: "feature"}, {ID: "test", Label: "test"}},
 		epics:         []dto.Option{{ID: "5", Label: "Epic Five"}},
-		createdChange: dto.Change{ID: "12"},
-		gotChange:     dto.Change{ID: "12", Title: "New Change", Spec: spec, ChangeTypes: []string{"feature", "test"}, EpicID: "5", EpicName: "Epic Five"},
+		createdChange: dto.ChangeView{ID: "12"},
+		gotChange:     dto.ChangeView{ID: "12", Title: "New Change", Spec: spec, ChangeTypes: []string{"feature", "test"}, EpicID: "5", EpicName: "Epic Five"},
 	}
-	m := newModelWithOptionCatalog(client)
+	m := newChangeTestModel(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeCreateState
 	m.input.SetValue(spec)
@@ -1593,22 +1575,23 @@ func TestChangeCreateSaveExtractsTitleAndPreservesDef(t *testing.T) {
 	require.Len(t, client.changeCreateInputs, 1)
 	assert.Equal(t, 7, client.changeCreateInputs[0].ProjectID)
 	assert.Equal(t, "New Change", client.changeCreateInputs[0].Title)
-	assert.Equal(t, spec, client.changeCreateInputs[0].Def)
+	assert.Equal(t, spec, client.changeCreateInputs[0].Brief)
 	assert.Equal(t, [][]string{{"feature", "test"}}, client.changeTypesUpdates)
 	assert.Zero(t, client.epicCalls)
 	assert.Equal(t, []int{12}, client.changeGetIDs)
 	assert.Equal(t, ChangeDetailsState, got.state)
-	assert.Equal(t, client.gotChange, got.changeList.Detail)
+	assert.Equal(t, client.gotChange.ID, got.changeList.Detail.ID)
+	assert.Equal(t, client.gotChange.Title, got.changeList.Detail.Title)
 }
 
 func TestChangeCreateSuccessWithReloadFailureOpensCreatedDetails(t *testing.T) {
 	spec := "# New Change\n\nTypes: feature\n\n## Problem Statement\nKeep every section."
 	client := &fakeClient{
 		types:         []dto.Option{{ID: "feature", Label: "feature"}},
-		createdChange: dto.Change{ID: "12", Title: "New Change", Spec: spec, ChangeTypes: []string{"feature"}},
+		createdChange: dto.ChangeView{ID: "12", Title: "New Change", Spec: spec, ChangeTypes: []string{"feature"}},
 		changeGetErr:  errors.New("temporary reload failure"),
 	}
-	m := newModelWithOptionCatalog(client)
+	m := newChangeTestModel(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeCreateState
 	m.input.SetValue(spec)
@@ -1621,7 +1604,8 @@ func TestChangeCreateSuccessWithReloadFailureOpensCreatedDetails(t *testing.T) {
 	require.Len(t, client.changeCreateInputs, 1)
 	assert.Equal(t, []int{12}, client.changeGetIDs)
 	assert.Equal(t, ChangeDetailsState, got.state)
-	assert.Equal(t, client.createdChange, got.changeList.Detail)
+	assert.Equal(t, client.createdChange.ID, got.changeList.Detail.ID)
+	assert.Equal(t, spec, got.changeList.Detail.Brief)
 	assert.Equal(t, "temporary reload failure", got.err)
 	assert.Empty(t, got.input.Value())
 }
@@ -1631,10 +1615,10 @@ func TestStandaloneChangeSaveDoesNotRequireEpicLookup(t *testing.T) {
 	client := &fakeClient{
 		types:         []dto.Option{{ID: "feature", Label: "feature"}},
 		epicErr:       errors.New("epics unavailable"),
-		createdChange: dto.Change{ID: "12"},
-		gotChange:     dto.Change{ID: "12", Title: "Standalone Change", Spec: spec, ChangeTypes: []string{"feature"}},
+		createdChange: dto.ChangeView{ID: "12"},
+		gotChange:     dto.ChangeView{ID: "12", Title: "Standalone Change", Spec: spec, ChangeTypes: []string{"feature"}},
 	}
-	m := newModelWithOptionCatalog(client)
+	m := newChangeTestModel(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeCreateState
 	m.input.SetValue(spec)
@@ -1649,7 +1633,7 @@ func TestStandaloneChangeSaveDoesNotRequireEpicLookup(t *testing.T) {
 	assert.Equal(t, ChangeDetailsState, got.state)
 
 	updateSpec := "# Standalone Change\n\nTypes: feature\n\nEpic: \n\n## Problem Statement\nNo epic."
-	original := dto.Change{
+	original := dto.ChangeView{
 		ID:          "12",
 		Title:       "Standalone Change",
 		Spec:        spec,
@@ -1658,9 +1642,9 @@ func TestStandaloneChangeSaveDoesNotRequireEpicLookup(t *testing.T) {
 	client = &fakeClient{
 		types:     []dto.Option{{ID: "feature", Label: "feature"}},
 		epicErr:   errors.New("epics unavailable"),
-		gotChange: dto.Change{ID: "12", Title: "Standalone Change", Spec: updateSpec, ChangeTypes: []string{"feature"}},
+		gotChange: dto.ChangeView{ID: "12", Title: "Standalone Change", Spec: updateSpec, ChangeTypes: []string{"feature"}},
 	}
-	m = newModelWithOptionCatalog(client)
+	m = newChangeTestModel(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeUpdateState
 	m.changeList.Detail = original
@@ -1690,15 +1674,14 @@ func TestChangeCreateValidationErrorsDoNotCallBackendCreate(t *testing.T) {
 				types: []dto.Option{{ID: "feature", Label: "feature"}},
 				epics: []dto.Option{{ID: "5", Label: "Epic Five"}},
 			}
-			m := NewModelWithClient(client)
+			m := newChangeTestModel(client)
 			m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 			m.state = ChangeCreateState
 			m.input.SetValue(tt.spec)
 
 			updated, cmd := m.executeCommandFrom(ChangeCreateState, "/save")
 			got := updated.(Model)
-			require.NotNil(t, cmd)
-			got = applyMsg(got, cmd())
+			require.Nil(t, cmd)
 
 			assert.Equal(t, ChangeCreateState, got.state)
 			assert.NotEmpty(t, got.err)
@@ -1714,21 +1697,20 @@ func TestChangeSaveStructuralValidationDoesNotFetchReferences(t *testing.T) {
 		spec    string
 		wantErr string
 	}{
-		{name: "missing title", spec: "Types: feature\n\n## Problem Statement\nSpec.", wantErr: "definition title is required"},
+		{name: "missing title", spec: "Types: feature\n\n## Problem Statement\nSpec.", wantErr: "change title is required"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := &fakeClient{err: errors.New("reference backend unavailable")}
-			m := NewModelWithClient(client)
+			m := newChangeTestModel(client)
 			m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 			m.state = ChangeCreateState
 			m.input.SetValue(tt.spec)
 
 			updated, cmd := m.executeCommandFrom(ChangeCreateState, "/save")
 			got := updated.(Model)
-			require.NotNil(t, cmd)
-			got = applyMsg(got, cmd())
+			require.Nil(t, cmd)
 
 			assert.Equal(t, ChangeCreateState, got.state)
 			assert.Equal(t, tt.wantErr, got.err)
@@ -1741,16 +1723,16 @@ func TestChangeSaveStructuralValidationDoesNotFetchReferences(t *testing.T) {
 
 func TestChangeUpdateStructuralValidationDoesNotFetchReferences(t *testing.T) {
 	client := &fakeClient{err: errors.New("reference backend unavailable")}
-	m := NewModelWithClient(client)
+	m := newChangeTestModel(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeUpdateState
-	m.changeList.Detail = dto.Change{
+	m.changeList.Detail = dto.ChangeView{
 		ID:          "12",
 		Title:       "Existing Change",
 		Spec:        "# Existing Change\n\nTypes: feature\n\n## Problem Statement\nSpec.",
 		ChangeTypes: []string{"feature"},
 	}
-	m.input.SetValue("Types: feature\n\n## Problem Statement\nSpec.")
+	m.input.SetValue("   ")
 
 	updated, cmd := m.executeCommandFrom(ChangeUpdateState, "/save")
 	got := updated.(Model)
@@ -1758,7 +1740,7 @@ func TestChangeUpdateStructuralValidationDoesNotFetchReferences(t *testing.T) {
 	got = applyMsg(got, cmd())
 
 	assert.Equal(t, ChangeUpdateState, got.state)
-	assert.Equal(t, "spec title is required", got.err)
+	assert.Equal(t, "spec is required", got.err)
 	assert.Zero(t, client.typeCalls)
 	assert.Zero(t, client.epicCalls)
 	assert.Zero(t, client.changeTitleUpdateCalls)
@@ -1768,7 +1750,7 @@ func TestChangeUpdateStructuralValidationDoesNotFetchReferences(t *testing.T) {
 }
 
 func TestChangeUpdateSaveUpdatesChangedExtractedFieldsAndReloads(t *testing.T) {
-	original := dto.Change{
+	original := dto.ChangeView{
 		ID:          "12",
 		Title:       "Old Change",
 		Spec:        "# Old Change\n\nTypes: feature\n\n## Problem Statement\nOld spec.",
@@ -1779,9 +1761,9 @@ func TestChangeUpdateSaveUpdatesChangedExtractedFieldsAndReloads(t *testing.T) {
 	spec := "# New Change\n\nTypes: test\n\n## Problem Statement\nNew spec."
 	client := &fakeClient{
 		types:     []dto.Option{{ID: "feature", Label: "feature"}, {ID: "test", Label: "test"}},
-		gotChange: dto.Change{ID: "12", Title: "New Change", Spec: spec, ChangeTypes: []string{"test"}, EpicID: "5", EpicName: "Epic Five"},
+		gotChange: dto.ChangeView{ID: "12", Title: "New Change", Spec: spec, ChangeTypes: []string{"test"}, EpicID: "5", EpicName: "Epic Five"},
 	}
-	m := newModelWithOptionCatalog(client)
+	m := newChangeTestModel(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeUpdateState
 	m.changeList.Detail = original
@@ -1792,7 +1774,7 @@ func TestChangeUpdateSaveUpdatesChangedExtractedFieldsAndReloads(t *testing.T) {
 	require.NotNil(t, cmd)
 	got = applyMsg(got, cmd())
 
-	assert.Equal(t, []string{"New Change"}, client.changeTitleUpdates)
+	assert.Empty(t, client.changeTitleUpdates) // Document edits do not rename the change.
 	assert.Equal(t, []string{spec}, client.changeSpecUpdates)
 	assert.Equal(t, [][]string{{"test"}}, client.changeTypesUpdates)
 	assert.Zero(t, client.epicCalls)
@@ -1802,7 +1784,7 @@ func TestChangeUpdateSaveUpdatesChangedExtractedFieldsAndReloads(t *testing.T) {
 }
 
 func TestChangeUpdateSaveLeavesTypesUnchangedWhenMetadataIsOmitted(t *testing.T) {
-	original := dto.Change{
+	original := dto.ChangeView{
 		ID:          "12",
 		Title:       "Old Change",
 		ChangeTypes: []string{},
@@ -1810,9 +1792,9 @@ func TestChangeUpdateSaveLeavesTypesUnchangedWhenMetadataIsOmitted(t *testing.T)
 	spec := "# New Change\n\n## Problem Statement\nNew spec."
 	client := &fakeClient{
 		types:     []dto.Option{{ID: "feature", Label: "feature"}},
-		gotChange: dto.Change{ID: "12", Title: "New Change", Spec: spec, ChangeTypes: []string{}},
+		gotChange: dto.ChangeView{ID: "12", Title: "New Change", Spec: spec, ChangeTypes: []string{}},
 	}
-	m := newModelWithOptionCatalog(client)
+	m := newChangeTestModel(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeUpdateState
 	m.changeList.Detail = original
@@ -1824,7 +1806,7 @@ func TestChangeUpdateSaveLeavesTypesUnchangedWhenMetadataIsOmitted(t *testing.T)
 	got = applyMsg(got, cmd())
 
 	assert.Empty(t, got.err)
-	assert.Equal(t, []string{"New Change"}, client.changeTitleUpdates)
+	assert.Empty(t, client.changeTitleUpdates) // Document edits do not rename the change.
 	assert.Equal(t, []string{spec}, client.changeSpecUpdates)
 	assert.Zero(t, client.changeTypesUpdateCalls)
 	assert.Equal(t, []int{12}, client.changeGetIDs)
@@ -1832,7 +1814,7 @@ func TestChangeUpdateSaveLeavesTypesUnchangedWhenMetadataIsOmitted(t *testing.T)
 }
 
 func TestChangeUpdateSaveTreatsBlankTypesAsEmpty(t *testing.T) {
-	original := dto.Change{
+	original := dto.ChangeView{
 		ID:          "12",
 		Title:       "Existing Change",
 		Spec:        "# Existing Change\n\nTypes: feature\n\n## Problem Statement\nOld spec.",
@@ -1841,9 +1823,9 @@ func TestChangeUpdateSaveTreatsBlankTypesAsEmpty(t *testing.T) {
 	spec := "# Existing Change\n\nTypes:\n\n## Problem Statement\nOld spec."
 	client := &fakeClient{
 		types:     []dto.Option{{ID: "feature", Label: "feature"}},
-		gotChange: dto.Change{ID: "12", Title: "Existing Change", Spec: spec, ChangeTypes: []string{}},
+		gotChange: dto.ChangeView{ID: "12", Title: "Existing Change", Spec: spec, ChangeTypes: []string{}},
 	}
-	m := newModelWithOptionCatalog(client)
+	m := newChangeTestModel(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeUpdateState
 	m.changeList.Detail = original
@@ -1863,7 +1845,7 @@ func TestChangeUpdateSaveTreatsBlankTypesAsEmpty(t *testing.T) {
 }
 
 func TestChangeUpdateOnlyCallsChangedFieldEndpoints(t *testing.T) {
-	original := dto.Change{
+	original := dto.ChangeView{
 		ID:          "12",
 		Title:       "Old Change",
 		Spec:        "# Old Change\n\nTypes: feature\n\n## Problem Statement\nOld spec.",
@@ -1872,9 +1854,9 @@ func TestChangeUpdateOnlyCallsChangedFieldEndpoints(t *testing.T) {
 	spec := "# Old Change\n\nTypes: feature\n\n## Problem Statement\nNew spec."
 	client := &fakeClient{
 		types:     []dto.Option{{ID: "feature", Label: "feature"}},
-		gotChange: dto.Change{ID: "12", Title: "Old Change", Spec: spec, ChangeTypes: []string{"feature"}},
+		gotChange: dto.ChangeView{ID: "12", Title: "Old Change", Spec: spec, ChangeTypes: []string{"feature"}},
 	}
-	m := newModelWithOptionCatalog(client)
+	m := newChangeTestModel(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeUpdateState
 	m.changeList.Detail = original
@@ -1893,7 +1875,7 @@ func TestChangeUpdateOnlyCallsChangedFieldEndpoints(t *testing.T) {
 }
 
 func TestChangeSpecEditUsesBackendArtifactWithoutSynthesizingMetadata(t *testing.T) {
-	change := dto.Change{
+	change := dto.ChangeView{
 		ID:          "12",
 		RefUUID:     "0198a86f-9b8a-7d89-ae5b-6f25b528b04c",
 		Title:       "Legacy Change",
@@ -1909,7 +1891,7 @@ func TestChangeSpecEditUsesBackendArtifactWithoutSynthesizingMetadata(t *testing
 }
 
 func TestChangeSpecEditDoesNotInjectBackendEpic(t *testing.T) {
-	change := dto.Change{
+	change := dto.ChangeView{
 		ID:          "12",
 		RefUUID:     "0198a86f-9b8a-7d89-ae5b-6f25b528b04c",
 		Title:       "Existing Change",
@@ -1927,7 +1909,7 @@ func TestChangeSpecEditDoesNotInjectBackendEpic(t *testing.T) {
 
 func TestChangeSpecEditPreservesOmittedTypes(t *testing.T) {
 	spec := "# Existing Change\n\n## Problem Statement\nExisting spec."
-	change := dto.Change{
+	change := dto.ChangeView{
 		ID:          "12",
 		RefUUID:     "0198a86f-9b8a-7d89-ae5b-6f25b528b04c",
 		Title:       "Existing Change",
@@ -1945,7 +1927,7 @@ func TestChangeSpecEditPreservesLongMarkdownOutsidePromptLimit(t *testing.T) {
 	spec := "# Long Change\n\nTypes: feature\n\n## Problem Statement\n" + longSection
 	require.Greater(t, len(spec), defaultPromptCharLimit)
 
-	change := dto.Change{
+	change := dto.ChangeView{
 		ID:          "12",
 		RefUUID:     "0198a86f-9b8a-7d89-ae5b-6f25b528b04c",
 		Title:       "Long Change",
@@ -1959,19 +1941,19 @@ func TestChangeSpecEditPreservesLongMarkdownOutsidePromptLimit(t *testing.T) {
 	assert.Zero(t, got.input.CharLimit)
 }
 
-func beginSpecArtifactEditor(t *testing.T, change dto.Change) Model {
+func beginSpecArtifactEditor(t *testing.T, change dto.ChangeView) Model {
 	t.Helper()
 	client := &fakeClient{gotChange: change}
-	m := NewModelWithClient(client)
+	m := newChangeTestModel(client)
 	m.state = ChangeDetailsState
-	m = applyMsg(m, changeLoadedMsg{id: 12, change: change})
+	m = loadedChangeForTest(m, change, nil)
 	loading, loadCmd := sendCommand(m, "/edit-spec")
 	require.NotNil(t, loadCmd)
 	return loading
 }
 
 func TestChangeUpdateDoesNotChangeBackendEpic(t *testing.T) {
-	original := dto.Change{
+	original := dto.ChangeView{
 		ID:          "12",
 		Title:       "Existing Change",
 		Spec:        "# Existing Change\n\nTypes: feature\n\n## Problem Statement\nExisting spec.",
@@ -1982,29 +1964,28 @@ func TestChangeUpdateDoesNotChangeBackendEpic(t *testing.T) {
 		types:     []dto.Option{{ID: "feature", Label: "feature"}},
 		gotChange: original,
 	}
-	m := newModelWithOptionCatalog(client)
+	m := newChangeTestModel(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeUpdateState
 	m.changeList.Detail = original
 
 	updated, cmd := m.saveChangeUpdateValue(changes.SpecMarkdown(original))
 	got := updated.(Model)
-	require.NotNil(t, cmd)
-	got = applyMsg(got, cmd())
+	require.Nil(t, cmd)
 
 	assert.Zero(t, client.changeTitleUpdateCalls)
 	assert.Zero(t, client.changeSpecUpdateCalls)
-	assert.Equal(t, [][]string{{"feature"}}, client.changeTypesUpdates)
+	assert.Empty(t, client.changeTypesUpdates)
 	assert.Zero(t, client.epicCalls)
 	assert.Zero(t, client.changeEpicUpdateCalls)
-	assert.Equal(t, []int{12}, client.changeGetIDs)
+	assert.Empty(t, client.changeGetIDs)
 	assert.Equal(t, ChangeDetailsState, got.state)
 }
 
 func TestChangeFindFilterNarrowsVisibleRowsAndClearRestoresList(t *testing.T) {
 	m := NewModelWithClient(&fakeClient{})
 	m.state = ChangesListState
-	m.changeList = m.changeList.WithRows([]dto.Change{
+	m.changeList = m.changeList.WithRows([]dto.ChangeView{
 		{ID: "1", Ref: "1", Title: "Alpha", ChangePhase: "backlog", ChangeTypes: []string{"feature"}, Spec: "first"},
 		{ID: "2", Ref: "2", Title: "Beta", ChangePhase: "done", ChangeTypes: []string{"test"}, Spec: "second"},
 	})
@@ -2030,27 +2011,27 @@ func TestChangeFindFilterNarrowsVisibleRowsAndClearRestoresList(t *testing.T) {
 func TestChangeFindFilterMatchesDisplayedPaddedRef(t *testing.T) {
 	m := NewModelWithClient(&fakeClient{})
 	m.state = ChangesListState
-	m.changeList = m.changeList.WithRows([]dto.Change{
+	m.changeList = m.changeList.WithRows([]dto.ChangeView{
 		{ID: "1", Ref: "3", Title: "Alpha", ChangePhase: "backlog", ChangeTypes: []string{"feature"}},
 		{ID: "2", Ref: "4", Title: "Beta", ChangePhase: "done", ChangeTypes: []string{"test"}},
 	})
 
 	got, _ := sendCommand(m, "/find-filter")
-	got.input.SetValue("000003")
+	got.input.SetValue("3")
 	got, _ = sendKey(got, tea.KeyEnter)
 
 	assert.Equal(t, ChangesListState, got.state)
 	view := stripANSI(got.View())
-	assert.Contains(t, view, "000003")
+	assert.Contains(t, view, "3")
 	assert.Contains(t, view, "Alpha")
 	assert.NotContains(t, view, "Beta")
 }
 
 func TestChangeFindFilterClampsSelectedRow(t *testing.T) {
-	client := &fakeClient{gotChange: dto.Change{ID: "2", Title: "Beta"}}
-	m := NewModelWithClient(client)
+	client := &fakeClient{gotChange: dto.ChangeView{ID: "2", Title: "Beta"}}
+	m := newChangeTestModel(client)
 	m.state = ChangesListState
-	m.changeList = m.changeList.WithRows([]dto.Change{
+	m.changeList = m.changeList.WithRows([]dto.ChangeView{
 		{ID: "1", Ref: "1", Title: "Alpha", ChangePhase: "backlog", ChangeTypes: []string{"feature"}},
 		{ID: "2", Ref: "2", Title: "Beta", ChangePhase: "done", ChangeTypes: []string{"test"}},
 		{ID: "3", Ref: "3", Title: "Gamma", ChangePhase: "review", ChangeTypes: []string{"feature"}},
@@ -2122,7 +2103,7 @@ func TestUnknownCommandLeavesStateUnchanged(t *testing.T) {
 func TestChangeDetailsTableSelectionMovesAcrossAllRows(t *testing.T) {
 	m := NewModel()
 	m.state = ChangeDetailsState
-	m.changeList = m.changeList.WithDetail(dto.Change{
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{
 		ID:          "11",
 		RefUUID:     "11111111-2222-4333-8444-555555555555",
 		Ref:         "3",
@@ -2171,7 +2152,7 @@ func TestChangeDetailsCopySelectedField(t *testing.T) {
 
 	m := NewModel()
 	m.state = ChangeDetailsState
-	m.changeList = m.changeList.WithDetail(dto.Change{
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{
 		ID:      "11",
 		RefUUID: "11111111-2222-4333-8444-555555555555",
 		Ref:     "3",
@@ -2206,7 +2187,7 @@ func TestChangeDetailsCopyReportsClipboardFailure(t *testing.T) {
 
 	m := NewModel()
 	m.state = ChangeDetailsState
-	m.changeList = m.changeList.WithDetail(dto.Change{ID: "11", Title: "Backend Change"})
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{ID: "11", Title: "Backend Change"})
 
 	got, cmd := sendKeyMsg(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("ctrl+insert")})
 	require.NotNil(t, cmd)
@@ -2219,16 +2200,16 @@ func TestChangeDetailsCopyReportsClipboardFailure(t *testing.T) {
 func TestChangeDetailsPhaseSelectionSavesAndReloads(t *testing.T) {
 	client := &fakeClient{
 		phases: []dto.Option{{ID: "stage", Label: "stage"}, {ID: "backlog", Label: "backlog"}},
-		gotChange: dto.Change{
+		gotChange: dto.ChangeView{
 			ID:          "12",
 			Ref:         "3",
 			Title:       "Backend Change",
 			ChangePhase: "stage",
 		},
 	}
-	m := newModelWithOptionCatalog(client)
+	m := newChangeTestModel(client)
 	m.state = ChangeDetailsState
-	m.changeList = m.changeList.WithDetail(dto.Change{
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{
 		ID:          "12",
 		Ref:         "3",
 		Title:       "Backend Change",
@@ -2260,9 +2241,9 @@ func TestChangeDetailsFieldSelectionEscapeCancelsWithoutSaving(t *testing.T) {
 	client := &fakeClient{
 		phases: []dto.Option{{ID: "stage", Label: "stage"}},
 	}
-	m := newModelWithOptionCatalog(client)
+	m := newChangeTestModel(client)
 	m.state = ChangeDetailsState
-	m.changeList = m.changeList.WithDetail(dto.Change{
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{
 		ID:          "12",
 		Ref:         "3",
 		Title:       "Backend Change",
@@ -2287,16 +2268,16 @@ func TestChangeDetailsFieldSelectionEscapeCancelsWithoutSaving(t *testing.T) {
 func TestChangeDetailsEpicNoneSelectionClearsEpic(t *testing.T) {
 	client := &fakeClient{
 		epics: []dto.Option{{ID: "4", Label: "Epic Four"}, {ID: "5", Label: "Epic Five"}},
-		gotChange: dto.Change{
+		gotChange: dto.ChangeView{
 			ID:    "12",
 			Ref:   "3",
 			Title: "Backend Change",
 		},
 	}
-	m := NewModelWithClient(client)
+	m := newChangeTestModel(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeDetailsState
-	m.changeList = m.changeList.WithDetail(dto.Change{
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{
 		ID:       "12",
 		Ref:      "3",
 		Title:    "Backend Change",
@@ -2320,22 +2301,22 @@ func TestChangeDetailsEpicNoneSelectionClearsEpic(t *testing.T) {
 	require.Len(t, client.changeEpicUpdates, 1)
 	assert.Nil(t, client.changeEpicUpdates[0])
 	assert.Equal(t, []int{12}, client.changeGetIDs)
-	assert.Empty(t, got.changeList.Detail.EpicID)
+	assert.Equal(t, "null", got.changeList.Detail.EpicID)
 	assert.Equal(t, ChangeDetailsState, got.state)
 	assert.Equal(t, 3, got.changeList.DetailSelected)
 }
 
 func TestChangeDetailsTitleSelectionOpensPromptAndSaves(t *testing.T) {
 	client := &fakeClient{
-		gotChange: dto.Change{
+		gotChange: dto.ChangeView{
 			ID:    "12",
 			Ref:   "3",
 			Title: "New Title",
 		},
 	}
-	m := NewModelWithClient(client)
+	m := newChangeTestModel(client)
 	m.state = ChangeDetailsState
-	m.changeList = m.changeList.WithDetail(dto.Change{
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{
 		ID:    "12",
 		Ref:   "3",
 		Title: "Old Title",
@@ -2347,7 +2328,7 @@ func TestChangeDetailsTitleSelectionOpensPromptAndSaves(t *testing.T) {
 	assert.Equal(t, ChangeUpdateState, got.state)
 	assert.Equal(t, detailEditTitle, got.detailEditField)
 	assert.Equal(t, "Old Title", got.input.Value())
-	assert.Equal(t, "Write a Title", got.input.Placeholder)
+	assert.Equal(t, "Enter value (Ctrl+C clears, Esc cancels)", got.input.Placeholder)
 	assert.Contains(t, got.View(), "ChangeUpdateScreen")
 
 	got = got.setPromptValue("New Title")
@@ -2365,10 +2346,10 @@ func TestChangeDetailsTitleSelectionOpensPromptAndSaves(t *testing.T) {
 }
 
 func TestChangeDetailsTitleCancelDoesNotSave(t *testing.T) {
-	client := &fakeClient{gotChange: dto.Change{ID: "12", Ref: "3", Title: "Old Title"}}
-	m := NewModelWithClient(client)
+	client := &fakeClient{gotChange: dto.ChangeView{ID: "12", Ref: "3", Title: "Old Title"}}
+	m := newChangeTestModel(client)
 	m.state = ChangeDetailsState
-	m.changeList = m.changeList.WithDetail(dto.Change{
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{
 		ID:    "12",
 		Ref:   "3",
 		Title: "Old Title",
@@ -2409,19 +2390,19 @@ func TestChangeDetailsRejectsInvalidArtifactSavesBeforeBackend(t *testing.T) {
 			name:      "empty pr",
 			field:     detailEditPullRequest,
 			value:     "   ",
-			wantError: "PR is required",
+			wantError: "pr is required",
 		},
 		{
 			name:      "empty pr url",
 			field:     detailEditPRUrl,
 			value:     "   ",
-			wantError: "PR URL is required",
+			wantError: "PR URL requires a nonblank HTTP(S) URL; clearing is unsupported",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := &fakeClient{}
-			cmd := changeDetailTextUpdateCommand(client, ChangeDetailsState, dto.Change{ID: "12"}, tt.field, tt.value)
+			cmd := changeDetailTextUpdateCommand(client, ChangeDetailsState, dto.ChangeView{ID: "12"}, tt.field, tt.value)
 			require.NotNil(t, cmd)
 			msg := cmd()
 			saved, ok := msg.(changeSavedMsg)
@@ -2436,8 +2417,8 @@ func TestChangeDetailsRejectsInvalidArtifactSavesBeforeBackend(t *testing.T) {
 	}
 }
 
-func TestDefSpecAndPRSavesApplyPresentTypesMetadata(t *testing.T) {
-	fields := []detailEditField{detailEditDef, detailEditSpec, detailEditPullRequest}
+func TestBriefSpecAndPRSavesApplyPresentTypesMetadata(t *testing.T) {
+	fields := []detailEditField{detailEditBrief, detailEditSpec, detailEditPullRequest}
 	metadata := []struct {
 		name   string
 		line   string
@@ -2450,9 +2431,9 @@ func TestDefSpecAndPRSavesApplyPresentTypesMetadata(t *testing.T) {
 	for _, field := range fields {
 		for _, tt := range metadata {
 			t.Run(string(field)+"/"+tt.name, func(t *testing.T) {
-				client := &fakeClient{gotChange: dto.Change{ID: "12"}}
+				client := &fakeClient{gotChange: dto.ChangeView{ID: "12"}}
 				value := "# Artifact\n\n" + tt.line + "\n\nBody"
-				msg := changeDetailTextUpdateCommand(client, ChangeDetailsState, dto.Change{ID: "12"}, field, value)()
+				msg := changeDetailTextUpdateCommand(client, ChangeDetailsState, dto.ChangeView{ID: "12"}, field, value)()
 				saved, ok := msg.(changeSavedMsg)
 				require.True(t, ok)
 				require.NoError(t, saved.err)
@@ -2470,16 +2451,16 @@ func TestChangeDetailsTypesSelectionAddsUnselectedType(t *testing.T) {
 			{ID: "feature", Label: "feature"},
 			{ID: "test", Label: "test"},
 		},
-		gotChange: dto.Change{
+		gotChange: dto.ChangeView{
 			ID:          "12",
 			Ref:         "3",
 			Title:       "Backend Change",
 			ChangeTypes: []string{"docs", "feature"},
 		},
 	}
-	m := newModelWithOptionCatalog(client)
+	m := newChangeTestModel(client)
 	m.state = ChangeDetailsState
-	m.changeList = m.changeList.WithDetail(dto.Change{
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{
 		ID:          "12",
 		Ref:         "3",
 		Title:       "Backend Change",
@@ -2518,16 +2499,16 @@ func TestChangeDetailsTypesSelectionRemovesSelectedType(t *testing.T) {
 			{ID: "feature", Label: "feature"},
 			{ID: "test", Label: "test"},
 		},
-		gotChange: dto.Change{
+		gotChange: dto.ChangeView{
 			ID:          "12",
 			Ref:         "3",
 			Title:       "Backend Change",
 			ChangeTypes: []string{"test"},
 		},
 	}
-	m := newModelWithOptionCatalog(client)
+	m := newChangeTestModel(client)
 	m.state = ChangeDetailsState
-	m.changeList = m.changeList.WithDetail(dto.Change{
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{
 		ID:          "12",
 		Ref:         "3",
 		Title:       "Backend Change",
@@ -2561,9 +2542,9 @@ func TestChangeDetailsTypesSelectionEnterWithoutToggleReturnsWithoutSaving(t *te
 			{ID: "test", Label: "test"},
 		},
 	}
-	m := newModelWithOptionCatalog(client)
+	m := newChangeTestModel(client)
 	m.state = ChangeDetailsState
-	m.changeList = m.changeList.WithDetail(dto.Change{
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{
 		ID:          "12",
 		Ref:         "3",
 		Title:       "Backend Change",
@@ -2587,16 +2568,16 @@ func TestChangeDetailsTypesSelectionEnterWithoutToggleReturnsWithoutSaving(t *te
 
 func TestChangeDetailsOpenSpaceTogglesAndReloads(t *testing.T) {
 	client := &fakeClient{
-		gotChange: dto.Change{
+		gotChange: dto.ChangeView{
 			ID:    "12",
 			Ref:   "3",
 			Title: "Backend Change",
 			Open:  false,
 		},
 	}
-	m := NewModelWithClient(client)
+	m := newChangeTestModel(client)
 	m.state = ChangeDetailsState
-	m.changeList = m.changeList.WithDetail(dto.Change{
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{
 		ID:    "12",
 		Ref:   "3",
 		Title: "Backend Change",
@@ -2606,7 +2587,7 @@ func TestChangeDetailsOpenSpaceTogglesAndReloads(t *testing.T) {
 
 	got, cmd := sendRune(m, ' ')
 	require.NotNil(t, cmd)
-	assert.Equal(t, "saving open", got.status)
+	assert.Equal(t, "saving", got.status)
 	got = applyMsg(got, cmd())
 
 	assert.Equal(t, []bool{false}, client.changeOpenUpdates)
@@ -2618,7 +2599,7 @@ func TestChangeDetailsOpenSpaceTogglesAndReloads(t *testing.T) {
 
 func TestChangeDetailsTestCaseSpaceTogglesAndReloads(t *testing.T) {
 	client := &fakeClient{
-		gotChange: dto.Change{
+		gotChange: dto.ChangeView{
 			ID:    "12",
 			Ref:   "3",
 			Title: "Backend Change",
@@ -2628,9 +2609,9 @@ func TestChangeDetailsTestCaseSpaceTogglesAndReloads(t *testing.T) {
 			},
 		},
 	}
-	m := NewModelWithClient(client)
+	m := newChangeTestModel(client)
 	m.state = ChangeDetailsState
-	m.changeList = m.changeList.WithDetail(dto.Change{
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{
 		ID:    "12",
 		Ref:   "3",
 		Title: "Backend Change",
@@ -2656,7 +2637,7 @@ func TestChangeDetailsTestCaseSpaceTogglesAndReloads(t *testing.T) {
 
 func TestChangeDetailsNewTestcaseCreatesAndRefreshes(t *testing.T) {
 	client := &fakeClient{
-		gotChange: dto.Change{
+		gotChange: dto.ChangeView{
 			ID:    "12",
 			Ref:   "3",
 			Title: "Backend Change",
@@ -2665,9 +2646,9 @@ func TestChangeDetailsNewTestcaseCreatesAndRefreshes(t *testing.T) {
 			},
 		},
 	}
-	m := NewModelWithClient(client)
+	m := newChangeTestModel(client)
 	m.state = ChangeDetailsState
-	m.changeList = m.changeList.WithDetail(dto.Change{ID: "12", Ref: "3", Title: "Backend Change"})
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{ID: "12", Ref: "3", Title: "Backend Change"})
 
 	got, cmd := sendCommand(m, "/new-testcase")
 	require.Nil(t, cmd)
@@ -2687,7 +2668,7 @@ func TestChangeDetailsNewTestcaseCreatesAndRefreshes(t *testing.T) {
 
 func TestChangeDetailsTestcaseEnterEditsScenarioAndRefreshes(t *testing.T) {
 	client := &fakeClient{
-		gotChange: dto.Change{
+		gotChange: dto.ChangeView{
 			ID:    "12",
 			Ref:   "3",
 			Title: "Backend Change",
@@ -2696,9 +2677,9 @@ func TestChangeDetailsTestcaseEnterEditsScenarioAndRefreshes(t *testing.T) {
 			},
 		},
 	}
-	m := NewModelWithClient(client)
+	m := newChangeTestModel(client)
 	m.state = ChangeDetailsState
-	m.changeList = m.changeList.WithDetail(dto.Change{
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{
 		ID:    "12",
 		Ref:   "3",
 		Title: "Backend Change",
@@ -2726,11 +2707,11 @@ func TestChangeDetailsTestcaseEnterEditsScenarioAndRefreshes(t *testing.T) {
 
 func TestChangeDetailsTestcaseDeleteConfirmsAndRefreshes(t *testing.T) {
 	client := &fakeClient{
-		gotChange: dto.Change{ID: "12", Ref: "3", Title: "Backend Change"},
+		gotChange: dto.ChangeView{ID: "12", Ref: "3", Title: "Backend Change"},
 	}
-	m := NewModelWithClient(client)
+	m := newChangeTestModel(client)
 	m.state = ChangeDetailsState
-	m.changeList = m.changeList.WithDetail(dto.Change{
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{
 		ID:    "12",
 		Ref:   "3",
 		Title: "Backend Change",
@@ -2765,7 +2746,7 @@ func TestCtrlNShortcutsCreateChangeAndTestCase(t *testing.T) {
 
 	detail := NewModelWithClient(&fakeClient{})
 	detail.state = ChangeDetailsState
-	detail.changeList = detail.changeList.WithDetail(dto.Change{ID: "12", Ref: "3", Title: "Backend Change"})
+	detail.changeList = detail.changeList.WithDetail(dto.ChangeView{ID: "12", Ref: "3", Title: "Backend Change"})
 	got, cmd = sendKey(detail, tea.KeyCtrlN)
 	require.Nil(t, cmd)
 	assert.Equal(t, TestCaseCreateState, got.state)
@@ -2776,7 +2757,7 @@ func TestShortcutHelpRendersInFooter(t *testing.T) {
 	m := NewModelWithClient(&fakeClient{})
 	m.state = ChangeDetailsState
 	m.width = 120
-	m.changeList = m.changeList.WithDetail(dto.Change{ID: "12", Ref: "3", Title: "Backend Change"})
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{ID: "12", Ref: "3", Title: "Backend Change"})
 
 	lines := strings.Split(stripANSI(m.View()), "\n")
 	require.NotEmpty(t, lines)
@@ -2804,7 +2785,7 @@ func TestChangesListHeaderRendersFiltersAndTable(t *testing.T) {
 	m := NewModelWithClient(&fakeClient{})
 	m.state = ChangesListState
 	m.width = 160
-	m.changeList = m.changeList.WithRows([]dto.Change{{
+	m.changeList = m.changeList.WithRows([]dto.ChangeView{{
 		ID:          "12",
 		Ref:         "3",
 		Title:       "Backend Change",
@@ -2841,7 +2822,7 @@ func TestChangesListFiltersRenderValuesPureWhite(t *testing.T) {
 	m := NewModelWithClient(&fakeClient{})
 	m.state = ChangesListState
 	m.width = 160
-	m.changeList = m.changeList.WithRows([]dto.Change{{
+	m.changeList = m.changeList.WithRows([]dto.ChangeView{{
 		ID:          "12",
 		Ref:         "3",
 		Title:       "Backend Change",
@@ -2859,7 +2840,7 @@ func TestChangeDetailsTableTruncatesLongSpecAndPullRequestRows(t *testing.T) {
 	m.state = ChangeDetailsState
 	m.width = 120
 	m.height = 40
-	m.changeList = m.changeList.WithDetail(dto.Change{
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{
 		ID:          "11",
 		Ref:         "3",
 		Slug:        "change-three",
@@ -2872,7 +2853,7 @@ func TestChangeDetailsTableTruncatesLongSpecAndPullRequestRows(t *testing.T) {
 	})
 
 	firstView := stripANSI(m.View())
-	assert.Contains(t, firstView, "Ref │ 000003")
+	assert.Contains(t, firstView, "Ref │ 3")
 	assert.Contains(t, firstView, "Spec │ spec content")
 	assert.Contains(t, firstView, "...")
 	assert.NotContains(t, firstView, "pull request end")
@@ -2886,7 +2867,7 @@ func TestChangeDetailsTableTruncatesLongSpecAndPullRequestRows(t *testing.T) {
 
 	got, _ = sendKey(got, tea.KeyPgUp)
 	backView := stripANSI(got.View())
-	assert.Contains(t, backView, "Ref │ 000003")
+	assert.Contains(t, backView, "Ref │ 3")
 }
 
 func TestP302EpicActionsRequireRealSelection(t *testing.T) {
@@ -3020,6 +3001,8 @@ func TestDeleteCommandsOpenExpectedConfirmations(t *testing.T) {
 
 func TestChangeDetailsCommandsAreExact(t *testing.T) {
 	assert.Equal(t, []string{
+		"/find",
+		"/document", "/title", "/brief", "/pr-url", "/after-change", "/open", "/retry", "/help",
 		"/new-testcase",
 		"/phase",
 		"/epic",
@@ -3032,7 +3015,8 @@ func TestChangeDetailsCommandsAreExact(t *testing.T) {
 
 func TestChangesListCommandsAreExact(t *testing.T) {
 	assert.Equal(t, []string{
-		"/new-change",
+		"/find",
+		"/new-change", "/retry",
 		"/phase-filter",
 		"/epic-filter",
 		"/type-filter",
@@ -3090,7 +3074,7 @@ func TestSelectorDropdownsLoadAndReturn(t *testing.T) {
 		phases:    []dto.Option{{ID: "backlog", Label: "backlog"}},
 		types:     []dto.Option{{ID: "feature", Label: "feature"}},
 		epics:     []dto.Option{{ID: "3", Label: "Epic Three"}},
-		gotChange: dto.Change{ID: "12", Ref: "3", Title: "Backend Change"},
+		gotChange: dto.ChangeView{ID: "12", Ref: "3", Title: "Backend Change"},
 	}
 
 	m := newModelWithOptionCatalog(client)
@@ -3104,7 +3088,8 @@ func TestSelectorDropdownsLoadAndReturn(t *testing.T) {
 	assert.Equal(t, "7", got.currentProject.ID)
 
 	got.state = ChangeDetailsState
-	got.changeList = got.changeList.WithDetail(dto.Change{ID: "12", Ref: "3", Title: "Backend Change"})
+	got.changeDetailLoaded = true
+	got.changeList = got.changeList.WithDetail(dto.ChangeView{ID: "12", Ref: "3", Title: "Backend Change"})
 	got, cmd = sendCommand(got, "/phase")
 	got = applyMsg(got, cmd())
 	got, cmd = sendKey(got, tea.KeyEnter)
@@ -3169,6 +3154,7 @@ func TestSelectorFailureAndEscapePreservePreviousState(t *testing.T) {
 	client := &fakeClient{err: errors.New("backend unavailable")}
 	m := NewModelWithClient(client)
 	m.state = ChangeDetailsState
+	m.changeDetailLoaded = true
 
 	got, cmd := sendCommand(m, "/phase")
 	got = applyMsg(got, cmd())
@@ -3185,7 +3171,7 @@ func TestFilterSelectorsReturnToChangesList(t *testing.T) {
 		epics:  []dto.Option{{ID: "1", Label: "Epic One"}},
 		types:  []dto.Option{{ID: "test", Label: "test"}},
 	}
-	m := newModelWithOptionCatalog(client)
+	m := newChangeTestModel(client)
 	m.state = ChangesListState
 	m.currentProject = dto.Option{ID: "7", Label: "Project One"}
 
@@ -3274,7 +3260,7 @@ func TestFindInputHighlightsAndEmptyFindErrors(t *testing.T) {
 func TestConfirmationRequiresYesOrCancel(t *testing.T) {
 	m := NewModelWithClient(&fakeClient{})
 	m.state = ChangeDetailsState
-	m.changeList = m.changeList.WithDetail(dto.Change{ID: "12", Title: "Backend Change"})
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{ID: "12", Title: "Backend Change"})
 
 	got, _ := sendCommand(m, "/delete")
 	assert.Equal(t, ChangeDeleteConfirmation, got.state)
@@ -3296,12 +3282,12 @@ func TestConfirmationRequiresYesOrCancel(t *testing.T) {
 
 func TestChangeDeleteConfirmationDeletesAndReloadsList(t *testing.T) {
 	client := &fakeClient{
-		changeRows: []dto.Change{{ID: "13", Ref: "4", Title: "Remaining Change"}},
+		changeRows: []dto.ChangeView{{ID: "13", Ref: "4", Title: "Remaining Change"}},
 	}
-	m := NewModelWithClient(client)
+	m := newChangeTestModel(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeDetailsState
-	m.changeList = m.changeList.WithDetail(dto.Change{ID: "12", Ref: "3", Title: "Backend Change"})
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{ID: "12", Ref: "3", Title: "Backend Change"})
 
 	got, _ := sendCommand(m, "/delete")
 	require.Equal(t, ChangeDeleteConfirmation, got.state)
@@ -3315,23 +3301,24 @@ func TestChangeDeleteConfirmationDeletesAndReloadsList(t *testing.T) {
 	updated, reload := got.Update(cmd())
 	got = updated.(Model)
 	require.Equal(t, ChangesListState, got.state)
-	assert.True(t, got.changeList.Loading)
+	assert.False(t, got.changeList.Loading)
 	assert.Equal(t, []int{12}, client.changeDeleteIDs)
 
-	require.NotNil(t, reload)
-	got = applyMsg(got, reload())
+	require.Nil(t, reload)
 
 	assert.Equal(t, ChangesListState, got.state)
 	assert.Equal(t, []string{"7"}, client.changeListProjectIDs)
-	assert.Equal(t, []dto.Change{{ID: "13", Ref: "4", Title: "Remaining Change"}}, got.changeList.Rows)
+	require.Len(t, got.changeList.Rows, 1)
+	assert.Equal(t, "13", got.changeList.Rows[0].ID)
+	assert.Equal(t, "Remaining Change", got.changeList.Rows[0].Title)
 }
 
 func TestChangeDeleteFailurePreservesDetail(t *testing.T) {
 	client := &fakeClient{changeDeleteErr: errors.New("delete failed")}
-	m := NewModelWithClient(client)
+	m := newChangeTestModel(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeDetailsState
-	m.changeList = m.changeList.WithDetail(dto.Change{ID: "12", Ref: "3", Title: "Backend Change"})
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{ID: "12", Ref: "3", Title: "Backend Change"})
 
 	got, _ := sendCommand(m, "/delete")
 	got.dropdown.filter = "/yes"
@@ -3387,11 +3374,11 @@ func TestConfigCommandRendersResolvedConfigWithoutBackendCalls(t *testing.T) {
 	assert.NotContains(t, view, "temp_dir:")
 	assert.Contains(t, view, "project_id: 7")
 	assert.NotContains(t, view, "flow_dir: /repo/.mch/default")
-	assert.NotContains(t, view, "slug: def")
-	assert.NotContains(t, view, "prompt: prompts/change-def.md")
-	assert.NotContains(t, view, "entry: make def-entry")
-	assert.NotContains(t, view, "exec: make def-exec")
-	assert.NotContains(t, view, "exit: make def-exit")
+	assert.NotContains(t, view, "slug: brief")
+	assert.NotContains(t, view, "prompt: prompts/change-brief.md")
+	assert.NotContains(t, view, "entry: make brief-entry")
+	assert.NotContains(t, view, "exec: make brief-exec")
+	assert.NotContains(t, view, "exit: make brief-exit")
 	assert.NotContains(t, view, "stage_modes:")
 	assert.NotContains(t, view, "task_statuses:")
 	assert.NotContains(t, view, "task_steps:")
@@ -3694,3 +3681,101 @@ func (f *fakeClient) CreateEpic(_ context.Context, _ int, _ string) (int, error)
 }
 func (f *fakeClient) UpdateEpic(_ context.Context, _ int, _ string) error { return f.updateErr }
 func (f *fakeClient) DeleteEpic(_ context.Context, _ int) error           { return f.err }
+
+func fakeWire(v dto.ChangeView) dto.Change {
+	id, _ := strconv.Atoi(v.ID)
+	project, _ := strconv.Atoi(v.ProjectID)
+	if project == 0 {
+		project = 7
+	}
+	w := dto.Change{ID: id, ProjectID: project, RefUUID: v.RefUUID, Title: v.Title, ChangePhase: v.ChangePhase, ChangeTypes: v.ChangeTypes, Open: v.Open, DoneTC: v.Done, TotalTC: v.Total, Completed: v.Completed, PRUrl: v.PRUrl}
+	w.CreatedAt, _ = time.Parse(time.RFC3339, v.Created)
+	w.UpdatedAt, _ = time.Parse(time.RFC3339, v.Modified)
+	if v.Ref != "" {
+		n, _ := strconv.Atoi(v.Ref)
+		r := int32(n)
+		w.Ref = &r
+	}
+	if v.Slug != "" {
+		w.Slug = &v.Slug
+	}
+	if v.EpicID != "" {
+		n, _ := strconv.Atoi(v.EpicID)
+		w.EpicID = &n
+	}
+	if v.EpicName != "" {
+		w.EpicName = &v.EpicName
+	}
+	return w
+}
+
+func (f *fakeClient) UpdateChangeAfterChange(_ context.Context, _ int, _ *int) error {
+	return f.changeUpdateErr
+}
+
+func (f *fakeClient) CurrentDocuments(_ context.Context, id int, _ string) ([]dto.Document, error) {
+	return []dto.Document{{ID: 1, RefID: id, DocType: "brief", Body: f.gotChange.Brief}, {ID: 2, RefID: id, DocType: "spec", Body: f.gotChange.Spec}, {ID: 3, RefID: id, DocType: "pr", Body: f.gotChange.PR}}, nil
+}
+
+func (f *fakeClient) InsertDocument(_ context.Context, in dto.DocumentInput) (int, error) {
+	f.requestOrder = append(f.requestOrder, "doc/insert")
+	f.changeArtifactAgentEdits = append(f.changeArtifactAgentEdits, in.AgentEdit)
+	switch in.DocType {
+	case "brief":
+		f.changeBriefUpdateCalls++
+		f.changeBriefUpdates = append(f.changeBriefUpdates, in.Body)
+	case "spec":
+		f.changeSpecUpdateCalls++
+		f.changeSpecUpdates = append(f.changeSpecUpdates, in.Body)
+	case "pr":
+		f.changePRUpdateCalls++
+		f.changePRUpdates = append(f.changePRUpdates, in.Body)
+	}
+	return 91, f.changeUpdateErr
+}
+
+func (f *fakeClient) ListTestCases(context.Context, int) ([]dto.TestCase, error) {
+	return f.gotChange.TestCases, nil
+}
+
+// Drive the replacement feature operation in retained editor follow-up assertions.
+func changeDetailTextUpdateCommand(client appClient, source State, view dto.ChangeView, field detailEditField, value string) tea.Cmd {
+	m := NewModelWithClient(client)
+	m.currentProject = dto.Option{ID: "7"}
+	m.changeList.Detail = view
+	m.state = source
+	m.detailEditField = field
+	m.optionCatalog.config = dto.ProjectConfig{ChangeDocs: []string{"brief", "spec", "pr"}, ChangeTypes: []string{"feature", "fix", "unsupported"}}
+	next, cmd := m.saveChangeDetailTextValue(value)
+	return func() tea.Msg {
+		if cmd == nil {
+			return changeSavedMsg{source: source, err: next.(Model).changeList.Err}
+		}
+		r := cmd().(changes.Result)
+		return changeSavedMsg{source: source, change: r.Detail, err: r.Err, reloadErr: r.RefreshErr}
+	}
+}
+
+func newChangeTestModel(client *fakeClient) Model {
+	m := newModelWithOptionCatalog(client)
+	m.currentProject = dto.Option{ID: "7"}
+	m.changeList.ProjectID = 7
+	m.changeDetailLoaded = true
+	m.optionCatalog.config = dto.ProjectConfig{ChangePhases: []string{"backlog", "progress", "done", "stage"}, ChangeTypes: []string{"feature", "fix", "test", "docs", "unsupported"}, ChangeDocs: []string{"brief", "spec", "pr"}}
+	return m
+}
+
+func loadedChangeForTest(m Model, view dto.ChangeView, err error) Model {
+	id, _ := strconv.Atoi(view.ID)
+	project, _ := strconv.Atoi(m.currentProject.ID)
+	if project == 0 {
+		project = 7
+		m.currentProject.ID = "7"
+	}
+	if m.changeList.Operation != changes.Details {
+		m.changeList.ProjectID = project
+		m.changeList.EntityID = id
+		m.changeList.Operation = changes.Details
+	}
+	return applyMsg(m, changes.Result{Generation: m.changeList.Generation, ProjectID: project, ID: id, Operation: changes.Details, Detail: view, Err: err})
+}

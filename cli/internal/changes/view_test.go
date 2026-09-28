@@ -15,7 +15,7 @@ import (
 var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 func TestDetailsViewSeparatesSpecAndTestCases(t *testing.T) {
-	model := Model{}.WithDetail(dto.Change{
+	model := Model{}.WithDetail(dto.ChangeView{
 		ID:      "12",
 		RefUUID: "11111111-2222-4333-8444-555555555555",
 		Ref:     "3",
@@ -41,7 +41,7 @@ func TestDetailsViewSeparatesSpecAndTestCases(t *testing.T) {
 }
 
 func TestDetailsViewEmojiRowsDoNotOverflowSelectionWidth(t *testing.T) {
-	change := dto.Change{
+	change := dto.ChangeView{
 		ID:      "12",
 		Ref:     "3",
 		Title:   "Backend Change",
@@ -63,7 +63,7 @@ func TestDetailsViewEmojiRowsDoNotOverflowSelectionWidth(t *testing.T) {
 }
 
 func TestDetailsViewRendersUnassignedRefAsBlank(t *testing.T) {
-	model := Model{}.WithDetail(dto.Change{
+	model := Model{}.WithDetail(dto.ChangeView{
 		ID:    "201",
 		Title: "Unreferenced Change",
 	})
@@ -78,7 +78,7 @@ func TestDetailsViewRendersUnassignedRefAsBlank(t *testing.T) {
 }
 
 func TestDetailsViewCountsFixedRowsInsidePageSize(t *testing.T) {
-	model := Model{}.WithDetail(dto.Change{
+	model := Model{}.WithDetail(dto.ChangeView{
 		ID:      "12",
 		RefUUID: "11111111-2222-4333-8444-555555555555",
 		Ref:     "3",
@@ -97,7 +97,7 @@ func TestDetailsViewCountsFixedRowsInsidePageSize(t *testing.T) {
 }
 
 func TestMoveDetailSelectionKeepsVisibleRowsAnchored(t *testing.T) {
-	model := Model{}.WithDetail(dto.Change{
+	model := Model{}.WithDetail(dto.ChangeView{
 		ID:          "12",
 		Ref:         "201",
 		Slug:        "201-change",
@@ -114,7 +114,7 @@ func TestMoveDetailSelectionKeepsVisibleRowsAnchored(t *testing.T) {
 }
 
 func TestMoveDetailSelectionScrollsOnlyEnoughToRevealBottom(t *testing.T) {
-	model := Model{}.WithDetail(dto.Change{
+	model := Model{}.WithDetail(dto.ChangeView{
 		ID:          "12",
 		Ref:         "201",
 		Slug:        "201-change",
@@ -140,4 +140,55 @@ func TestP205PhaseStyleUsesOnlyProjectColors(t *testing.T) {
 
 func stripANSI(value string) string {
 	return ansiPattern.ReplaceAllString(value, "")
+}
+
+func BenchmarkChangeLongRendering(b *testing.B) {
+	for _, n := range []int{5000, 50000, 100000} {
+		b.Run(fmt.Sprint(n), func(b *testing.B) {
+			m := Model{}.WithDetail(dto.ChangeView{ID: "12", Title: strings.Repeat("x", n)})
+			b.ReportAllocs()
+			for b.Loop() {
+				_ = DetailsView(m, 80, 12)
+			}
+		})
+	}
+}
+
+func TestShortDetailsViewportScrollsIdentityAndBody(t *testing.T) {
+	for _, height := range []int{3, 4, 5} {
+		t.Run(fmt.Sprint(height), func(t *testing.T) {
+			const width = 100
+			page := height - 2
+			original := Model{}.WithDetail(dto.ChangeView{ID: "12", RefUUID: "11111111-2222-4333-8444-555555555555", Ref: "3", Title: "first title line\nlast title line", PRUrl: "https://example.test/pr"})
+			model := original
+			var seen strings.Builder
+			for i := 0; i < 100; i++ {
+				view := DetailsViewport(model, width, height, nil)
+				require.LessOrEqual(t, lipgloss.Height(view), height)
+				seen.WriteString(stripANSI(view))
+				model = model.ScrollDetailViewport(page, page, width)
+			}
+			for _, value := range []string{"ID │ 12", "Ref UUID", original.Detail.RefUUID, "Ref │ 3", "first title line", "last title line", "https://example.test/pr", "Modified"} {
+				require.Contains(t, seen.String(), value)
+			}
+			for i := 0; i < 100; i++ {
+				model = model.ScrollDetailViewport(-page, page, width)
+			}
+			require.Contains(t, stripANSI(DetailsViewport(model, width, height, nil)), "ID │ 12")
+			model = original
+			for i := 0; i < len(DetailRows(model.Detail))+2; i++ {
+				var row DetailRow
+				var ok bool
+				model, row, ok = model.SelectDetailRow(page, width)
+				require.True(t, ok)
+				view := stripANSI(DetailsViewport(model, width, height, nil))
+				if row.Label == "Title" {
+					require.Contains(t, view, "title line")
+				} else {
+					require.Contains(t, view, row.Label)
+				}
+				model = model.MoveDetailSelection(1, page, width)
+			}
+		})
+	}
 }

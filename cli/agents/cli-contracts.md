@@ -540,3 +540,100 @@ The manifest-selected `TestCLIProgramEpicDelayedScopeAndShutdown` adds empty
 find list/detail scenarios with pending HTTP requests, cancellation, successful
 keyboard-driven recovery and orderly exit. No API contract or existing assertion
 changed; the same complete-program driver and fake backend are reused.
+
+## P4 change management (023)
+
+Review fixes 03 retain P4-03/05 field-update contracts:
+`TestP403ClearingUpdatePromptPreservesField` drives Ctrl+C, replacement typing and
+Enter for PR URL and prerequisite fields, asserts the original specification is
+preserved with no document insertion, and checks Escape/second-Ctrl+C cancellation.
+The existing `TestCLIProgramChangeCRUDAndPartialSuccess` now clears those two
+prompts through keyboard input before saving; exact update payloads, normal and
+failed-refresh outcomes, and rejection of unexpected document routes remain
+asserted. The prompt hint distinguishes clearing input from canceling the editor.
+
+Review fixes 02 retain P4-03/04/05 contracts:
+`TestP403EditorReturnsToCreateFormBeforeFirstSave` verifies valid Markdown returns
+from the initial editor without writing, title override, UUID supplied/omitted,
+unchanged editor reopening and exact brief bytes through explicit confirmation.
+The canceled-subfield regression now confirms before asserting creation.
+`TestShortDetailsViewportScrollsIdentityAndBody` covers three-, four- and five-line
+panes, every identity/body field, reverse paging and selection/copy row identity.
+`TestP404ShortDetailShellKeepsAllFieldsReachable` drives PageUp/PageDown and resize
+with three/four-line detail space and wrapped error feedback. Fixed rows become
+scrollable only when they would consume all body space.
+The existing manifest-selected `TestCLIProgramChangeCRUDAndPartialSuccess` now
+starts with a valid Markdown brief in the normal case and retains a plain brief
+in the partial-success case. It asserts zero creates after editor completion,
+then changes title/UUID and verifies the exact single create payload. Existing
+CRUD, retry and raw-byte assertions remain; the real PTY scenario is unchanged.
+
+Review fixes 01 retain P4-03/04/05 contracts:
+`TestP403CanceledCreateSubfieldDoesNotConsumeNextBrief` covers title/UUID cancel
+via Esc and `/cancel`, reopening creation, and exact new brief submission.
+`TestP404SavedLongTitleKeepsDetailViewportUsable` covers saved 3,300-character
+titles with successful or failed refresh, terminal height and paging to later rows.
+`TestP405LongSavedValuesKeepBoundedFeedbackAndFullDetail` covers long title,
+PR URL, phase and type feedback, escaped controls, full retained values and failed
+read-only retries. These are unit regressions; the existing complete-program and
+real PTY campaign remains unchanged and passed independently.
+
+[Specification](../../agent/specs/023-cli-change-management.md). Change transport
+now uses all eleven current POST routes, one cancellable operation per method.
+List/details decode required typed fields directly; create returns only its 201
+ID; writes and deletion accept empty 204 responses. Nullable ref/slug/epic and
+prerequisite distinguish explicit null from absent fields. Counts/completion are
+int64, timestamps are time.Time, and server identity/completion are never rebuilt
+from document titles or testcase ratios. `Change` is the wire/business value;
+`ChangeView` is a separate screen projection of change, document and testcase reads.
+
+`changes` owns operation state, validation, create drafts, ordered effect sequencing,
+revision/project/entity matching and committed outcomes. The shell routes keys,
+shared prompt/editor I/O, catalogs and feature results. Every committed create,
+field save, document insertion and optional metadata type update is recorded
+before dependent reads/writes. Read-only `/retry` cannot replay those writes.
+Failed editor saves keep the exact literal bytes; loaded slash-shaped titles and
+unchanged editor output stay data/no-ops. A committed outcome is retained only for
+its associated failed refresh; recovery or unrelated navigation removes it.
+
+Dependency-driven P6 support is intentionally included: `documents.Access` validates
+selected-project configured types and exposes ordinary current/insert capabilities.
+Change details use `/doc/current`'s array and separate `/test-case/list`; `/brief`,
+`/edit-spec` and `/document` append document versions with human provenance.
+Configured custom document types are also selectable. Generic owner navigation,
+history/details and full document management remain P6. Testcase mutation contracts
+and feature ownership remain P5; their legacy adapter tests are explicitly retained
+and are not evidence of current backend mutation compatibility.
+
+| Criterion | Meaningful named unit coverage | Complete-program / PTY evidence |
+| --- | --- | --- |
+| P4-01 eleven typed operations, exact payload/status, one request, malformed data, cancellation | `TestP401AllChangeOperationsExactTypedPayloadsAndOneRequest`, `TestP401MalformedChangeFieldsAndStatusCauses`, `TestP401ChangeCancellationAndUUIDOmission`, `TestP401InvalidIDsNeverRequest`; retained P2 transport deadline/status/cause/redirect tests | `TestCLIProgramChangeCRUDAndPartialSuccess`, `TestCLIProgramChangeMalformedReadRecovery`; adapter counters remain unit-only |
+| P4-02 every returned field, nullable identity/associations, int64 completion, separate presentation | `TestP402EveryReturnedFieldAndLiteralNoOp`, `TestP401MalformedChangeFieldsAndStatusCauses`, `TestP404ChangeViewportsFitAndExposeEveryField`, retained change table/detail assertions | `TestCLIProgramChangeCRUDAndPartialSuccess`, `TestShellNavigationEditorAndScrolling` show actual server completion and nullable fields |
+| P4-03 list/details/create/delete and seven field updates, help, forms, explicit title/brief/UUID, catalogs, clears/false/empty, HTTP(S) URL | `TestP403EachChangeActionAndValidation`, `TestP403InvalidFormsAndAbsentCatalogsNeverWrite`, `TestP403ExplicitCreateFieldsRetainRawBrief`, `TestP403NullableAssociationForm`; retained phase/epic/type/open/title keyboard tests and exact command lists | `TestCLIProgramChangeCRUDAndPartialSuccess` drives all eleven routes, ordered catalogs, null clears, false open, empty type set, UUID and plain brief creation; retained document editor program |
+| P4-04 ownership, viewports, literal values, scoped outcomes, empty find, stale/project/entity/revision identity and shutdown | `TestP404ChangeEmptyFindAndObsoleteResults`, `TestP404ChangeReadCannotOverwriteDraftOrSelectedProject`, `TestP404StaleResultsCanceledWorkAndInvisibleRows`, `TestP404ChangeViewportsFitAndExposeEveryField`, `TestP404ChangeLongRenderingAndLiteralTitleNoOp`; package boundary checks | `TestCLIProgramChangeDelayedScopeAndShutdown`, `TestCLIProgramChangeReloadBlocksCachedRows`, CRUD recovery program and real PTY |
+| P4-05 independently committed steps, failed later writes/reads, read-only retry, busy duplicate prevention, raw/literal editor bytes and unchanged no-op | `TestP405CommittedStepsSurviveLaterFailureAndRetryOnlyReads`, `TestP405CancellationAfterCommitRetainsStepAndLiteralValue`; retained `TestOrdinaryDocumentSaveRetainsCommittedTextAfterFollowUpFailure`, `TestChangeCreateRetainsCommittedChangeAfterTypeFailure`, `TestArtifactDraftSurvivesFailedSaveAndRetry`, `TestEditorRetryKeepsLiteralData`, P1 configuration drain and P2/P3 partial-success regressions | `TestCLIProgramChangeCRUDAndPartialSuccess`, `TestCLIProgramOrdinaryDocumentEditor`, retained project/epic/save-drain programs |
+| P4-06 current/insert document DTOs, configured ordinary editors, separate testcase read, no successful insert replay | `TestP406DocumentCurrentInsertAndSeparateTestCases`, `TestP406MalformedDocumentAndTestcaseReads`, `TestP406ConfiguredDocumentAccessAndExactBytes`, `TestP406ConfiguredDocumentSelectorAndNoCatalog`; retained editor exact bytes/tabs/long-document and metadata tests | `TestCLIProgramOrdinaryDocumentEditor` now asserts current document reads and exact insert payloads/201 IDs; follow-up type failures never repeat insertion |
+| P4-07 keyboard effects/results, malformed response, lifecycle, test reuse, manifests | All preceding P4 tests, existing manifest inventory and architecture tooling | Four new manifest-selected change programs plus the extended `TestShellNavigationEditorAndScrolling` use fake servers/owned processes only |
+
+Field mapping: the P4-01 route test asserts IDs/project IDs, UUID omission/value,
+phase/types/title/open/PR URL, nullable epic/prerequisite and create brief payloads.
+The P4-02 test verifies returned ref/slug/epic identity and completion separately
+from derived values; malformed-field cases cover **each** list/detail wire field,
+including required nullable presence, timestamp types and wide counts. The viewport
+test traverses multiline titles and all identity/count/timestamp/relationship fields.
+
+Assertion migration: `TestHTTPClientChangeListCreateUpdateAndGetPayloads` is replaced
+by P4-01/P4-02/P4-06 exact-route/typed-wire tests. Obsolete change document fields,
+agent-edit state, guessed envelopes and entity-returning mutations are replaced by
+current document DTO assertions; `TestRetainedTestCaseMutationPayloads` preserves
+its four still-unmigrated testcase request assertions. Brief replaces def in active
+DTOs/screens/parsers/tests. Creation can infer a Markdown heading as a convenience,
+but explicit title and plain brief need no Markdown structure. Document edits no
+longer rename a change from a heading; explicit title action tests preserve rename
+coverage. Unchanged document editing now performs no type rewrite or detail read.
+Backend reference values display without zero-padding an obsolete identifier.
+Loaded details reject stale old success after a failed generation: the editor-read
+regression now schedules a fresh `/retry`. List/PTY row counts reflect measured
+shell height (seven visible rows at 100x20); scrolling and selection assertions
+remain. Four existing format files/package-comment baselines remain separately
+owned by P5/P10. No backend, database, dependency, Flow resource or live agent changed.
