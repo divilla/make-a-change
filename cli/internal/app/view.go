@@ -37,6 +37,12 @@ func (m Model) View() string {
 	}
 	if m.state == ProjectDetailsState {
 		details := projects.DetailsView(m.projectList.Detail, width)
+		if m.projectList.Loading {
+			details += "\nLoading project…"
+		}
+		if m.projectList.ShowConfig {
+			details += "\n" + projects.ConfigView(m.projectList.Catalog)
+		}
 		if details != "" {
 			lines = append(lines, "")
 			lines = append(lines, details)

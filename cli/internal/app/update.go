@@ -13,7 +13,7 @@ import (
 
 // Init starts any initial asynchronous command required by the model.
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{tea.ClearScreen, optionCatalogCommand(m.client)}
+	cmds := []tea.Cmd{tea.ClearScreen}
 	if m.needsProjectSelection() {
 		selectProject := func() tea.Msg {
 			return startupProjectSelectionMsg{}
@@ -22,7 +22,7 @@ func (m Model) Init() tea.Cmd {
 		return tea.Batch(cmds...)
 	}
 	if m.appConfig.ProjectID > 0 {
-		cmds = append(cmds, currentProjectCommand(m.client, m.appConfig.ProjectID))
+		cmds = append(cmds, currentProjectCommand(m.ctx, m.client, m.appConfig.ProjectID, m.selectionGeneration), optionCatalogCommand(m.ctx, m.client, m.appConfig.ProjectID, m.catalogGeneration))
 		return tea.Batch(cmds...)
 	}
 	return tea.Batch(cmds...)
@@ -36,8 +36,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			// Keep the UI open so a failed save is visible before the user exits.
 			m.quitRequested = false
-			m.err = "project selected in memory; failed to save project_id: " + msg.err.Error()
-			m.status = "config save failed"
+			if msg.projectID == 0 {
+				// Clearing a deleted selection is a separate local write. Keep the
+				// committed deletion and any refresh error/read-only retry guidance.
+				m.err = strings.TrimPrefix(m.err+"; project selection cleared in memory; failed to save project_id: "+msg.err.Error(), "; ")
+				m.status += "; config save failed"
+			} else {
+				m.err = "project selected in memory; failed to save project_id: " + msg.err.Error()
+				m.status = "config save failed"
+			}
 		}
 		if m.configSavePending {
 			m.configSavePending = false
@@ -46,7 +53,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.quitRequested {
 			return m.requestQuit()
 		}
-		if msg.err == nil {
+		if msg.err == nil && !strings.HasPrefix(m.status, "deleted project") {
 			m.status = "project selection saved"
 		}
 		return m, nil
@@ -56,7 +63,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.beginSelector(SelectProjectDropDown)
 	case selectorLoadedMsg:
-		if m.dropdown.source != msg.source {
+		if m.dropdown.source != msg.source || msg.generation != m.selectorGeneration || (msg.projectID != "" && msg.projectID != m.currentProject.ID) {
 			return m, nil
 		}
 		m.dropdown.loading = false
@@ -86,20 +93,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = "no options available"
 		}
 		return m, nil
-	case projectListLoadedMsg:
-		if m.state != ProjectsListState {
-			return m, nil
-		}
-		if msg.err != nil {
-			m.projectList = m.projectList.WithError()
-			m.err = msg.err.Error()
-			return m, nil
-		}
-		m.projectList = m.projectList.WithRows(msg.projects)
-		if len(m.projectList.Rows) == 0 {
-			m.status = "no projects"
-		}
-		return m, nil
+	case projects.Result:
+		return m.applyProjectResult(msg)
 	case changeListLoadedMsg:
 		if m.state != ChangesListState {
 			return m, nil
@@ -185,50 +180,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.arrive(msg.target, "deleted")
 	case optionCatalogLoadedMsg:
+		if msg.id != m.appConfig.ProjectID || msg.generation != m.catalogGeneration {
+			return m, nil
+		}
 		if msg.err != nil {
 			m.optionCatalog = optionCatalog{err: msg.err}
-			m.err = msg.err.Error()
-			m.status = "option catalog failed"
+			if m.status == "config save failed" {
+				m.err += "; project configuration unavailable: " + msg.err.Error()
+			} else {
+				m.err = msg.err.Error()
+				m.status = "option catalog failed"
+			}
 			return m, nil
 		}
 		m.optionCatalog = optionCatalog{phases: msg.phases, types: msg.types, loaded: true}
 		return m, nil
-	case projectSavedMsg:
-		if m.state != msg.source {
-			return m, nil
-		}
-		if msg.err != nil {
-			m.err = msg.err.Error()
-			m.status = "save failed"
-			return m, nil
-		}
-		m.projectList.Detail = msg.project
-		m.state = ProjectDetailsState
-		m.status = "save"
-		m = m.setPromptValue("")
-		return m, nil
-	case projectLoadedMsg:
-		if m.state != ProjectDetailsState {
-			return m, nil
-		}
-		if currentID, err := projectNumericID(m.projectList.Detail); err == nil && currentID != msg.id {
-			return m, nil
-		}
-		if msg.err != nil {
-			m.err = msg.err.Error()
-			m.status = "load failed"
-			return m, nil
-		}
-		m.projectList.Detail = msg.project
-		m.status = "loaded project"
-		return m, nil
 	case currentProjectLoadedMsg:
 		currentID, err := strconv.Atoi(m.currentProject.ID)
-		if err != nil || currentID != msg.id {
+		if err != nil || currentID != msg.id || msg.generation != m.selectionGeneration {
 			return m, nil
 		}
 		if msg.err != nil {
-			m.err = msg.err.Error()
+			if m.status == "config save failed" {
+				m.err += "; project details unavailable: " + msg.err.Error()
+			} else {
+				m.err = msg.err.Error()
+			}
 			return m, nil
 		}
 		m.currentProject = dto.Option{ID: m.currentProject.ID, Label: strings.TrimSpace(msg.project.Name)}
@@ -286,6 +263,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.quitRequested {
+		return m, nil
+	}
+	if m.projectList.Busy {
 		return m, nil
 	}
 	key := msg.String()
@@ -643,12 +623,7 @@ func (m Model) handleListSelection() (tea.Model, tea.Cmd) {
 		}
 		m.state = ProjectDetailsState
 		m.status = "selected " + projects.DisplayName(selected)
-		id, err := projectNumericID(selected)
-		if err != nil {
-			m.err = err.Error()
-			return m, nil
-		}
-		return m, projectGetCommand(m.client, id)
+		return m.beginProject(projects.Details, selected.ID, "")
 	default:
 		m.err = "nothing selectable in current state"
 	}
@@ -682,6 +657,16 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		return m.arrive(ProjectsListState, string(ProjectsListState))
 	case "/select-project":
 		return m.beginSelector(SelectProjectDropDown)
+	case "/project-config":
+		return m.beginProject(projects.Config, m.projectList.Detail.ID, "")
+	case "/retry":
+		if source == ProjectsListState {
+			return m.beginProject(projects.List, 0, "")
+		}
+		if m.projectList.ShowConfig {
+			return m.beginProject(projects.Config, m.projectList.Detail.ID, "")
+		}
+		return m.beginProject(projects.Details, m.projectList.Detail.ID, "")
 	case "/config":
 		return m.arrive(ConfigState, string(ConfigState))
 	case "/help":
@@ -708,6 +693,7 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 				return m, nil
 			}
 		}
+		m.projectList = m.projectList.Invalidate()
 		m.state = navigation.CreateTarget(source)
 		if m.state == ChangeCreateState {
 			m = m.setPromptValue("")
@@ -739,6 +725,7 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		if command == "/edit-spec" {
 			return m.beginDetailTextEditor(detailEditSpec)
 		}
+		m.projectList = m.projectList.Invalidate()
 		m.state = navigation.UpdateTarget(source)
 		if m.state == ChangeUpdateState {
 			m = m.setPromptValue(m.changeList.Detail.Spec)
@@ -812,6 +799,7 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 }
 
 func (m Model) arrive(state State, status string) (tea.Model, tea.Cmd) {
+	m.projectList = m.projectList.Invalidate()
 	m.state = state
 	m.status = status
 	m.applyPromptLimit()
@@ -832,16 +820,9 @@ func (m Model) arrive(state State, status string) (tea.Model, tea.Cmd) {
 		m.status = "loading change"
 		return m, changeGetCommand(m.client, id)
 	case ProjectsListState:
-		m.projectList = projects.StartLoading()
-		return m, projectListCommand(m.client)
+		return m.beginProject(projects.List, 0, "")
 	case ProjectDetailsState:
-		id, err := projectNumericID(m.projectList.Detail)
-		if err != nil {
-			m.err = err.Error()
-			return m, nil
-		}
-		m.status = "loading project"
-		return m, projectGetCommand(m.client, id)
+		return m.beginProject(projects.Details, m.projectList.Detail.ID, "")
 	default:
 		return m, nil
 	}
@@ -857,6 +838,7 @@ func (m Model) beginSelector(state State) (tea.Model, tea.Cmd) {
 		onSelect = MainState
 	}
 	source := selectorSourceForState(state)
+	m.selectorGeneration++
 	m.openSelectorDropdown(state, previous, onSelect, string(state), source)
 	return m, m.selectorCommand(source)
 }

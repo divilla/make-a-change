@@ -3,10 +3,10 @@ package projects
 
 // ListCommands returns slash commands for the projects list screen.
 func ListCommands() []string {
-	return []string{"/new-project", "/help", "/find", "/return"}
+	return []string{"/new-project", "/retry", "/help", "/find", "/return"}
 }
 
 // DetailCommands returns slash commands for project details.
 func DetailCommands() []string {
-	return []string{"/edit", "/help", "/find", "/return"}
+	return []string{"/edit", "/delete", "/project-config", "/retry", "/help", "/find", "/return"}
 }

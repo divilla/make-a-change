@@ -29,10 +29,10 @@ func testProgramTestCaseRetry(t *testing.T, scenario string, useEditor bool) {
 		w.Header().Set("Content-Type", "application/json")
 		change := map[string]any{"id": 12, "project_id": 7, "title": "Existing"}
 		switch r.URL.Path {
-		case "/api/v1/options/change-phases-list", "/api/v1/options/change-types-list":
-			writeProgramJSON(w, []any{})
-		case "/api/v1/project/get":
-			writeProgramJSON(w, map[string]any{"id": 7, "name": "Program Project"})
+		case "/api/v1/project/config":
+			writeProgramJSON(w, programProjectConfig())
+		case "/api/v1/project/details":
+			writeProgramJSON(w, programProject(7, "Program Project"))
 		case "/api/v1/change/list":
 			writeProgramJSON(w, []any{change})
 		case "/api/v1/change/get":

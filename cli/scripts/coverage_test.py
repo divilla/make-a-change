@@ -179,7 +179,9 @@ class CoverageTest(unittest.TestCase):
         self.assertEqual(manifest['pty']['tests'], ['TestShellNavigationEditorAndScrolling'])
         self.assertEqual(set(manifest['program']['tests']), {
             'TestCLIProgramStartupNavigationAndSelection', 'TestCLIProgramEditorSaveAndFailure',
-            'TestCLIProgramOrdinaryDocumentEditor', 'TestCLIStartupWithoutFlowResources'})
+            'TestCLIProgramOrdinaryDocumentEditor', 'TestCLIStartupWithoutFlowResources',
+            'TestCLIProgramProjectCRUDAndPartialSuccess', 'TestCLIProgramProjectSwitchWithPendingConfig',
+            'TestCLIProgramShutdownCancelsProjectHTTP', 'TestCLIProgramProjectReloadBlocksCachedSelection'})
         available='\n'.join(n for suite in manifest.values() for n in suite['tests'])
         with patch.object(coverage,'command',return_value=subprocess.CompletedProcess([],0,available)):
             self.assertEqual(coverage.scenarios(),manifest)

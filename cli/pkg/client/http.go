@@ -9,36 +9,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
-
-// Client defines backend API methods used by mch.
-type Client interface {
-	ListProjects() ([]dto.Option, error)
-	ListProjectRows() ([]dto.Project, error)
-	GetProject(id int) (dto.Project, error)
-	CreateProject(name string) (dto.Project, error)
-	UpdateProject(id int, name string) (dto.Project, error)
-	ListChangeRows(projectID string) ([]dto.Change, error)
-	GetChange(id int) (dto.Change, error)
-	CreateChange(input dto.ChangeCreateInput) (dto.Change, error)
-	UpdateChangeTitle(id int, title string) (dto.Change, error)
-	UpdateChangeDef(id int, def string, agentEdit bool) (dto.Change, error)
-	UpdateChangeSpec(id int, spec string, agentEdit bool) (dto.Change, error)
-	UpdateChangePR(id int, pr string, agentEdit bool) (dto.Change, error)
-	UpdateChangePRUrl(id int, prURL string) (dto.Change, error)
-	UpdateChangeTypes(id int, changeTypes []string) (dto.Change, error)
-	UpdateChangePhase(id int, changePhase string) (dto.Change, error)
-	UpdateChangeOpen(id int, open bool) (dto.Change, error)
-	UpdateChangeEpic(id int, epicID *int) (dto.Change, error)
-	CreateTestCase(changeID int, scenario string) (dto.Change, error)
-	UpdateTestCase(id int, scenario string) (dto.Change, error)
-	UpdateTestCaseDone(id int, done bool) (dto.Change, error)
-	DeleteTestCase(id int) (dto.Change, error)
-	DeleteChange(id int) error
-	ListEpics(projectID string) ([]dto.Option, error)
-	ListPhases() ([]dto.Option, error)
-	ListTypes() ([]dto.Option, error)
-}
 
 // HTTPClient calls the Project Manager backend over HTTP.
 type HTTPClient struct {
@@ -50,57 +22,8 @@ type HTTPClient struct {
 func NewHTTPClient(baseURL string) HTTPClient {
 	return HTTPClient{
 		BaseURL: baseURL,
-		Client:  http.DefaultClient,
+		Client:  &http.Client{Timeout: 15 * time.Second},
 	}
-}
-
-// ListProjects loads projects as selector options.
-func (c HTTPClient) ListProjects() ([]dto.Option, error) {
-	projects, err := c.ListProjectRows()
-	if err != nil {
-		return nil, err
-	}
-	options := make([]dto.Option, 0, len(projects))
-	for _, project := range projects {
-		label := project.Name
-		if label == "" {
-			label = project.ID
-		}
-		if label == "" {
-			continue
-		}
-		options = append(options, dto.Option{ID: project.ID, Label: label})
-	}
-	return options, nil
-}
-
-// ListProjectRows loads projects with full table row fields.
-func (c HTTPClient) ListProjectRows() ([]dto.Project, error) {
-	return c.postProjects("/api/v1/project/list", map[string]any{}, "projects")
-}
-
-// GetProject loads a single project by numeric ID.
-func (c HTTPClient) GetProject(id int) (dto.Project, error) {
-	if id <= 0 {
-		return dto.Project{}, fmt.Errorf("project ID must be a valid positive number")
-	}
-	return c.postProject("/api/v1/project/get", map[string]any{"id": id})
-}
-
-// CreateProject creates a project with the required name field.
-func (c HTTPClient) CreateProject(name string) (dto.Project, error) {
-	return c.postProject("/api/v1/project/create", map[string]any{"name": name})
-}
-
-// UpdateProject updates a project name by numeric ID.
-func (c HTTPClient) UpdateProject(id int, name string) (dto.Project, error) {
-	if id <= 0 {
-		return dto.Project{}, fmt.Errorf("project ID must be a valid positive number")
-	}
-	return c.postProject("/api/v1/project/update", map[string]any{
-		"id":   id,
-		"name": name,
-	})
 }
 
 // ListChangeRows loads changes for a project.
@@ -290,42 +213,12 @@ func (c HTTPClient) ListEpics(projectID string) ([]dto.Option, error) {
 	return c.postOptions("/api/v1/epic/list", map[string]any{"project_id": numericProjectID}, "epics")
 }
 
-// ListPhases loads change phase selector options.
-func (c HTTPClient) ListPhases() ([]dto.Option, error) {
-	return c.postOptions("/api/v1/options/change-phases-list", map[string]any{}, "phases")
-}
-
-// ListTypes loads change type selector options.
-func (c HTTPClient) ListTypes() ([]dto.Option, error) {
-	return c.postOptions("/api/v1/options/change-types-list", map[string]any{}, "types")
-}
-
 func (c HTTPClient) postOptions(path string, payload any, group string) ([]dto.Option, error) {
 	data, err := c.postJSON(path, payload)
 	if err != nil {
 		return nil, err
 	}
 	return findOptions(data, group), nil
-}
-
-func (c HTTPClient) postProjects(path string, payload any, group string) ([]dto.Project, error) {
-	data, err := c.postJSON(path, payload)
-	if err != nil {
-		return nil, err
-	}
-	return findProjects(data, group), nil
-}
-
-func (c HTTPClient) postProject(path string, payload any) (dto.Project, error) {
-	data, err := c.postJSON(path, payload)
-	if err != nil {
-		return dto.Project{}, err
-	}
-	project, ok := findProject(data)
-	if !ok {
-		return dto.Project{}, fmt.Errorf("project response missing project")
-	}
-	return project, nil
 }
 
 func (c HTTPClient) postChanges(path string, payload any, group string) ([]dto.Change, error) {
@@ -414,27 +307,6 @@ func findOptions(value any, group string) []dto.Option {
 	return nil
 }
 
-func findProjects(value any, group string) []dto.Project {
-	switch typed := value.(type) {
-	case []any:
-		return projectsFromArray(typed)
-	case map[string]any:
-		for key, candidate := range typed {
-			if key == group {
-				if list, ok := candidate.([]any); ok {
-					return projectsFromArray(list)
-				}
-			}
-		}
-		for _, candidate := range typed {
-			if nested := findProjects(candidate, group); len(nested) > 0 {
-				return nested
-			}
-		}
-	}
-	return nil
-}
-
 func findChanges(value any, group string) []dto.Change {
 	switch typed := value.(type) {
 	case []any:
@@ -506,34 +378,6 @@ func findTestCases(value any) []dto.TestCase {
 	return nil
 }
 
-func findProject(value any) (dto.Project, bool) {
-	switch typed := value.(type) {
-	case []any:
-		projects := projectsFromArray(typed)
-		if len(projects) > 0 {
-			return projects[0], true
-		}
-	case map[string]any:
-		for _, key := range []string{"project", "data", "result"} {
-			if candidate, ok := typed[key]; ok {
-				if project, found := findProject(candidate); found {
-					return project, true
-				}
-			}
-		}
-		project := projectFromMap(typed)
-		if project.ID != "" || project.Name != "" {
-			return project, true
-		}
-		for _, candidate := range typed {
-			if project, found := findProject(candidate); found {
-				return project, true
-			}
-		}
-	}
-	return dto.Project{}, false
-}
-
 func optionsFromArray(values []any) []dto.Option {
 	options := make([]dto.Option, 0, len(values))
 	for _, value := range values {
@@ -556,22 +400,6 @@ func optionsFromArray(values []any) []dto.Option {
 		}
 	}
 	return options
-}
-
-func projectsFromArray(values []any) []dto.Project {
-	projects := make([]dto.Project, 0, len(values))
-	for _, value := range values {
-		typed, ok := value.(map[string]any)
-		if !ok {
-			continue
-		}
-		project := projectFromMap(typed)
-		if project.ID == "" && project.Name == "" {
-			continue
-		}
-		projects = append(projects, project)
-	}
-	return projects
 }
 
 func changesFromArray(values []any) []dto.Change {
@@ -609,17 +437,6 @@ func testCasesFromArray(values []any) []dto.TestCase {
 		testCases = append(testCases, testCase)
 	}
 	return testCases
-}
-
-func projectFromMap(values map[string]any) dto.Project {
-	return dto.Project{
-		ID:          firstString(values, "id", "project_id"),
-		Name:        firstString(values, "name", "title"),
-		LastRef:     firstInt(values, "last_ref"),
-		ChangeCount: firstInt(values, "change_count"),
-		Created:     firstString(values, "created", "created_at"),
-		Modified:    firstString(values, "modified", "updated", "updated_at"),
-	}
 }
 
 func changeFromMap(values map[string]any) dto.Change {

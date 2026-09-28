@@ -1,12 +1,16 @@
 package projects
 
-import "cli/internal/dto"
+import (
+	"cli/internal/dto"
+	"context"
+)
 
-// API defines backend operations needed by project screens.
+// API is the project capability injected by the shell.
 type API interface {
-    ListProjects() ([]dto.Option, error)
-    ListProjectRows() ([]dto.Project, error)
-    GetProject(id int) (dto.Project, error)
-    CreateProject(name string) (dto.Project, error)
-    UpdateProject(id int, name string) (dto.Project, error)
+	ListProjectRows(context.Context) ([]dto.Project, error)
+	GetProject(context.Context, int) (dto.Project, error)
+	CreateProject(context.Context, string) (int, error)
+	UpdateProject(context.Context, int, string) error
+	DeleteProject(context.Context, int) error
+	GetProjectConfig(context.Context, int) (dto.ProjectConfig, error)
 }

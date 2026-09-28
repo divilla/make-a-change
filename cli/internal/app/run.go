@@ -66,16 +66,21 @@ func RunProgramWithIO(args []string, in io.Reader, out io.Writer, options Progra
 	if err != nil {
 		return fmt.Errorf("failed to load repository configuration: %w", err)
 	}
+	ctx := options.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	model := newModelWithConfig(httpclient.NewHTTPClient(cfg.BackendURL), cfg)
+	model.ctx = ctx
 	lipgloss.SetColorProfile(termenv.ANSI256)
 	programOptions := []tea.ProgramOption{
 		tea.WithInput(in),
 		tea.WithOutput(out),
 		tea.WithMouseCellMotion(),
 	}
-	if options.Context != nil {
-		programOptions = append(programOptions, tea.WithContext(options.Context))
-	}
+	programOptions = append(programOptions, tea.WithContext(ctx))
 	program := tea.NewProgram(model, programOptions...)
 	if options.ProgramReady != nil {
 		options.ProgramReady(program)

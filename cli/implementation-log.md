@@ -14,3 +14,10 @@
 +87 -0 code - +124 -2 tests --- review fixes 06
 +76 -0 code - +73 -4 tests --- review fixes 07
 
+2026-28-09 12:26 021-cli-projects-typed-transport
++1988 -1713 code - +1091 -387 tests --- spec
++32 -23 code - +68 -0 tests --- review fixes 01
++63 -29 code - +152 -3 tests --- review fixes 02
++43 -34 code - +52 -0 tests --- review fixes 03
++55 -30 code - +152 -0 tests --- review fixes 04
+

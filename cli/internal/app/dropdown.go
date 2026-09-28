@@ -2,6 +2,7 @@ package app
 
 import (
 	"cli/internal/dto"
+	"cli/internal/projects"
 	"cli/internal/styles"
 	"strconv"
 	"strings"
@@ -129,6 +130,10 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 			target := m.dropdown.onSelect
 			previous := m.dropdown.previous
 			m.dropdown = dropdownModel{}
+			if previous == ProjectDetailsState {
+				m.state = ProjectDetailsState
+				return m.beginProject(projects.Delete, m.projectList.Detail.ID, "")
+			}
 			if previous == ChangeDetailsState && target == ChangesListState {
 				m.state = ChangeDetailsState
 				m.status = "deleting change"
@@ -202,7 +207,12 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 		m.state = m.dropdown.onSelect
 		m.status = "selected " + selected.Label + "; saving config"
 		m.dropdown = dropdownModel{}
-		return m.persistCurrentProject()
+		m.selectionGeneration++
+		m.catalogGeneration++
+		m.optionCatalog = optionCatalog{}
+		m.changesFilters = changesFilters{}
+		m, save := m.persistCurrentProject()
+		return m, tea.Batch(save, optionCatalogCommand(m.ctx, m.client, id, m.catalogGeneration), currentProjectCommand(m.ctx, m.client, id, m.selectionGeneration))
 	}
 	m.state = m.dropdown.onSelect
 	m.status = "selected " + selected.Label

@@ -6,6 +6,7 @@ import (
 	"cli/internal/epics"
 	"cli/internal/projects"
 	"cli/internal/styles"
+	"context"
 	"strconv"
 
 	httpclient "cli/pkg/client"
@@ -94,26 +95,11 @@ type dropdownModel struct {
 }
 
 type selectorLoadedMsg struct {
-	source  selectorSource
-	options []dto.Option
-	err     error
-}
-
-type projectListLoadedMsg struct {
-	projects []dto.Project
-	err      error
-}
-
-type projectSavedMsg struct {
-	source  State
-	project dto.Project
-	err     error
-}
-
-type projectLoadedMsg struct {
-	id      int
-	project dto.Project
-	err     error
+	generation uint64
+	projectID  string
+	source     selectorSource
+	options    []dto.Option
+	err        error
 }
 
 type changeListLoadedMsg struct {
@@ -140,15 +126,19 @@ type changeDeletedMsg struct {
 }
 
 type optionCatalogLoadedMsg struct {
-	phases []dto.Option
-	types  []dto.Option
-	err    error
+	id         int
+	generation uint64
+	config     dto.ProjectConfig
+	phases     []dto.Option
+	types      []dto.Option
+	err        error
 }
 
 type currentProjectLoadedMsg struct {
-	id      int
-	project dto.Project
-	err     error
+	generation uint64
+	id         int
+	project    dto.Project
+	err        error
 }
 
 type editorFinishedMsg struct {
@@ -164,39 +154,42 @@ type appClient interface {
 	projects.API
 	changes.API
 	epics.API
-	ListTypes() ([]dto.Option, error)
 }
 
 // Model is the root Bubble Tea model for the mch application shell.
 type Model struct {
-	input              textarea.Model
-	editorDraft        *string
-	state              State
-	previousState      State
-	width              int
-	height             int
-	quitting           bool
-	quitRequested      bool
-	err                string
-	status             string
-	helpQuery          string
-	promptCursorRow    int
-	promptCursorCol    int
-	pendingAltO        bool
-	changesFilters     changesFilters
-	optionCatalog      optionCatalog
-	changeList         changes.Model
-	changeDetailLoaded bool
-	currentProject     dto.Option
-	projectList        projects.Model
-	client             appClient
-	appConfig          appConfig
-	configSaveInFlight bool
-	configSavePending  bool
-	configPath         string
-	dropdown           dropdownModel
-	detailEditField    detailEditField
-	activeTestCase     dto.TestCase
+	ctx                 context.Context
+	selectionGeneration uint64
+	catalogGeneration   uint64
+	selectorGeneration  uint64
+	input               textarea.Model
+	editorDraft         *string
+	state               State
+	previousState       State
+	width               int
+	height              int
+	quitting            bool
+	quitRequested       bool
+	err                 string
+	status              string
+	helpQuery           string
+	promptCursorRow     int
+	promptCursorCol     int
+	pendingAltO         bool
+	changesFilters      changesFilters
+	optionCatalog       optionCatalog
+	changeList          changes.Model
+	changeDetailLoaded  bool
+	currentProject      dto.Option
+	projectList         projects.Model
+	client              appClient
+	appConfig           appConfig
+	configSaveInFlight  bool
+	configSavePending   bool
+	configPath          string
+	dropdown            dropdownModel
+	detailEditField     detailEditField
+	activeTestCase      dto.TestCase
 }
 
 // NewModel creates the default mch model using local config and HTTP backend access.
@@ -242,6 +235,7 @@ func newModelWithConfig(client appClient, cfg appConfig) Model {
 		}
 	}
 	return Model{
+		ctx:            context.Background(),
 		input:          input,
 		state:          MainState,
 		width:          80,

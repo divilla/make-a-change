@@ -59,37 +59,37 @@ replaces global option routes. No SQL or backend internals belong in CLI tests.
 <!-- routes:start -->
 | Method | Route | CLI action / owning pass |
 | --- | --- | --- |
-| POST | `/api/v1/project/list` | Projects P3: list |
-| POST | `/api/v1/project/config` | Projects P3: config |
-| POST | `/api/v1/project/details` | Projects P3: details |
-| POST | `/api/v1/project/create` | Projects P3: create |
-| POST | `/api/v1/project/update` | Projects P3: update |
-| POST | `/api/v1/project/delete` | Projects P3: delete |
-| POST | `/api/v1/epic/list` | Epics P4: list |
-| POST | `/api/v1/epic/details` | Epics P4: details |
-| POST | `/api/v1/epic/create` | Epics P4: create |
-| POST | `/api/v1/epic/update` | Epics P4: update |
-| POST | `/api/v1/epic/delete` | Epics P4: delete |
-| POST | `/api/v1/change/list` | Changes P5: list |
-| POST | `/api/v1/change/details` | Changes P5: details |
-| POST | `/api/v1/change/create` | Changes P5: create |
-| POST | `/api/v1/change/update-epic` | Changes P5: update-epic |
-| POST | `/api/v1/change/update-after-change` | Changes P5: update-after-change |
-| POST | `/api/v1/change/update-phase` | Changes P5: update-phase |
-| POST | `/api/v1/change/update-open` | Changes P5: update-open |
-| POST | `/api/v1/change/update-types` | Changes P5: update-types |
-| POST | `/api/v1/change/update-title` | Changes P5: update-title |
-| POST | `/api/v1/change/update-pr-url` | Changes P5: update-pr-url |
-| POST | `/api/v1/change/delete` | Changes P5: delete |
-| POST | `/api/v1/test-case/list` | Testcases P6: list |
-| POST | `/api/v1/test-case/create` | Testcases P6: create |
-| POST | `/api/v1/test-case/update` | Testcases P6: update |
-| POST | `/api/v1/test-case/update-done` | Testcases P6: update-done |
-| POST | `/api/v1/test-case/delete` | Testcases P6: delete |
-| POST | `/api/v1/doc/list` | Documents P7; workflow P8–P9: list |
-| POST | `/api/v1/doc/current` | Documents P7; workflow P8–P9: current |
-| POST | `/api/v1/doc/details` | Documents P7; workflow P8–P9: details |
-| POST | `/api/v1/doc/insert` | Documents P7; workflow P8–P9: insert |
+| POST | `/api/v1/project/list` | Projects P2: list |
+| POST | `/api/v1/project/config` | Projects P2: config |
+| POST | `/api/v1/project/details` | Projects P2: details |
+| POST | `/api/v1/project/create` | Projects P2: create |
+| POST | `/api/v1/project/update` | Projects P2: update |
+| POST | `/api/v1/project/delete` | Projects P2: delete |
+| POST | `/api/v1/epic/list` | Epics P3: list |
+| POST | `/api/v1/epic/details` | Epics P3: details |
+| POST | `/api/v1/epic/create` | Epics P3: create |
+| POST | `/api/v1/epic/update` | Epics P3: update |
+| POST | `/api/v1/epic/delete` | Epics P3: delete |
+| POST | `/api/v1/change/list` | Changes P4: list |
+| POST | `/api/v1/change/details` | Changes P4: details |
+| POST | `/api/v1/change/create` | Changes P4: create |
+| POST | `/api/v1/change/update-epic` | Changes P4: update-epic |
+| POST | `/api/v1/change/update-after-change` | Changes P4: update-after-change |
+| POST | `/api/v1/change/update-phase` | Changes P4: update-phase |
+| POST | `/api/v1/change/update-open` | Changes P4: update-open |
+| POST | `/api/v1/change/update-types` | Changes P4: update-types |
+| POST | `/api/v1/change/update-title` | Changes P4: update-title |
+| POST | `/api/v1/change/update-pr-url` | Changes P4: update-pr-url |
+| POST | `/api/v1/change/delete` | Changes P4: delete |
+| POST | `/api/v1/test-case/list` | Testcases P5: list |
+| POST | `/api/v1/test-case/create` | Testcases P5: create |
+| POST | `/api/v1/test-case/update` | Testcases P5: update |
+| POST | `/api/v1/test-case/update-done` | Testcases P5: update-done |
+| POST | `/api/v1/test-case/delete` | Testcases P5: delete |
+| POST | `/api/v1/doc/list` | Documents P6; workflow P8–P9: list |
+| POST | `/api/v1/doc/current` | Documents P6; workflow P8–P9: current |
+| POST | `/api/v1/doc/details` | Documents P6; workflow P8–P9: details |
+| POST | `/api/v1/doc/insert` | Documents P6; workflow P8–P9: insert |
 | POST | `/api/v1/config/list` | Configurations P7: list |
 | POST | `/api/v1/config/details` | Configurations P7: details |
 | POST | `/api/v1/config/insert` | Configurations P7: insert |
@@ -329,3 +329,112 @@ dispatch in forms and unknown-command errors on the main screen. P1-07's existin
 scenario and Enter retry after save failure, asserting both HTTP payloads.
 Editor literal-data cases remain intact. No assertions or manifest scenarios
 were removed, and no HTTP route or payload contract changed.
+
+
+## P2 projects and typed transport (021)
+
+[Specification](../../agent/specs/021-cli-projects-typed-transport.md). Backend
+project handlers and domain DTOs were re-read: every operation is POST, list is
+an unfiltered array, details use `/api/v1/project/details`, create returns only
+`{id}` with 201, update/delete return empty 204, and config returns its slug and
+six ordered string arrays. Project IDs/counts/last_ref and timestamps are typed;
+selectors and date strings are constructed only in presentation. There is no
+project configuration-assignment write. Transport follows no alternate route or
+envelope, accepts caller context and injected clients, bounds HTTP lifetime to
+15 seconds, and preserves status/causes including response-close failures.
+
+Project validation, drafts, operation generations, sequencing and result handling
+now belong to `internal/projects`; the root routes screens, prompts/editor I/O,
+selection and injected capabilities. Mutations execute once and retain created
+IDs or saved/deleted outcomes when subsequent reads fail. `/retry` reads only.
+Selected-project catalogs are per-model, cleared on selection changes, and loaded
+through project/config. Late same-project generations and different-project
+results are ignored. No absent color or global/default config is manufactured.
+Atomic asynchronous selection persistence, permissions, failure visibility and
+quit draining remain covered by the retained P1 regressions.
+
+| Criterion | Named unit assertions | Manifest-selected program/PTY assertions |
+| --- | --- | --- |
+| P2-01 | `TestP201ProjectRoutesShapesAndExactlyOneRequest` | `TestCLIProgramProjectCRUDAndPartialSuccess` exercises all six routes, name inputs and displayed detail/config values |
+| P2-02 | `TestP202ContractErrorsPreserveStatusAndCause`, `TestP202TransportFailuresCancellationAndFiniteDeadline`, `TestP202EmptyListAndInvalidIDs`, `TestP202RedirectIsStatusErrorWithoutAlternateRequest` | `TestCLIProgramShutdownCancelsProjectHTTP`; adapter-only counters remain unit only |
+| P2-03 | `TestP203ProjectActionsStatesAndAllDisplayedFields`, retained project forms/rendering/navigation tests | `TestCLIProgramProjectCRUDAndPartialSuccess`, `TestCLIProgramEditorSaveAndFailure`, `TestShellNavigationEditorAndScrolling` |
+| P2-04 | `TestP204MutationSuccessFailurePartialSuccessAndReadOnlyRetry`, `TestP204DeleteSelectedProjectClearsScopedCatalogAndPersists`, retained literal editor/draft tests | `TestCLIProgramProjectCRUDAndPartialSuccess` success and refresh-failure cases; retained editor program scenarios |
+| P2-05 | `TestP205PhaseStyleUsesOnlyProjectColors`, `TestP205OrderedProjectCatalogsWithoutFallback`, `TestP205SelectionCatalogScopeAndPersistenceFailure`, `TestP205ConfigReadRecoversSelectedProjectSelectors`, retained atomic-save/config-drain tests | `TestCLIProgramProjectSwitchWithPendingConfig`, `TestCLIProgramStartupNavigationAndSelection` |
+| P2-06 | `TestP206DelayedResultsCannotOverwriteNewOperation`, `TestP206SelectionIdentityRejectsDelayedCatalogAndDetail`, `TestP206ConfigReadPreservesCatalogOnUnrelatedOrStaleResults`, `TestP206ShellReadNavigationCancelsObsoleteProjectResult`, `TestP206ProgramContextReachesProjectCommands` | `TestCLIProgramProjectSwitchWithPendingConfig`, `TestCLIProgramShutdownCancelsProjectHTTP` |
+| P2-07 | `TestP207ProjectReadFailuresAndEmptyResults`, real architecture and manifest tooling checks | All preceding scenarios plus retained `TestCLIProgramOrdinaryDocumentEditor` and `TestCLIStartupWithoutFlowResources` |
+
+Assertion migrations: the old adapter tests `TestHTTPClientListsProjectRows`,
+`TestHTTPClientProjectCreateUpdateAndGetPayloads`, and
+`TestHTTPClientProjectMutationValidationAndBackendErrors` are replaced by the
+P2-01/P2-02 cases above. Their exact route/payload/status/field/error assertions
+now cover current contracts instead of envelopes, string IDs, alternate timestamp
+fields and entity-returning mutations. `TestHTTPClientPostsToSelectorEndpoints`
+retains its epic assertion; project/config and presentation catalog assertions
+replace global option endpoints. All program/PTY fakes now return complete current
+project values and 201 IDs. Existing app tests use typed project values; the old
+invalid-string ID case becomes a zero-ID validation case, with wrong-wire-type
+rejection tested at the adapter. Timestamp display still tests a typed zero-time
+fallback; malformed wire timestamps are contract errors. Project delete is now
+advertised and tested. Update refresh failure now expects committed details,
+retained name and explicit refresh-failed status instead of a failed-save form.
+Editor retry tests execute the originally scheduled command sequence, preserving
+literal bytes and exactly-once attempts rather than scheduling a second save.
+
+Remaining legacy adapter ownership (no compatibility aliases were added):
+`ListEpics` and permissive epic options → P3; `ListChangeRows`, `GetChange`,
+`CreateChange`, `DeleteChange`, title/types/phase/open/epic/PR-URL updates → P4;
+`CreateTestCase`, `UpdateTestCase`, `UpdateTestCaseDone`, `DeleteTestCase` → P5;
+`UpdateChangeDef`, `UpdateChangeSpec`, `UpdateChangePR` → P6 document migration.
+Their legacy map decoders remain only for those unported operations. Backend
+config management and health are P7. No live backend/database, Flow resources,
+agent process, dependency or backend source was required or changed in P2.
+
+The downstream `TestPhaseStyleUsesOptionColorOrGreyFallback` assertion is migrated
+to `TestP205PhaseStyleUsesOnlyProjectColors`: missing colors now retain terminal
+styling instead of inventing a gray or built-in phase color. This is the only
+change-rendering behavior changed by P2; the now-unused built-in catalog is removed.
+Touched changes model/view/test files also receive required baseline formatting.
+
+### P2 review fixes 02 — configuration ordering and list reload selection
+
+P2-05/P2-06 `TestP206ManualConfigSupersedesPendingSelectionCatalog` delays both
+startup and selection catalog results until after an explicit configuration read,
+covering old successes and failures. Recovered phase/type selectors remain usable,
+and the independent pending project-name read remains valid. Configuration has
+its own generation, advanced by selection, deletion and accepted successful manual
+results; feature operation generations still guard manual results. No HTTP contract
+changes.
+
+P2-03/P2-06 `TestP203ProjectReloadCannotSelectHiddenCachedRow` proves loading
+clears cached rows and their selection, rejects Enter without canceling the list
+request, and selects the refreshed project after completion. Manifest-selected
+`TestCLIProgramProjectReloadBlocksCachedSelection` exercises return navigation,
+Enter during a held HTTP list response, continued refresh and the resulting detail
+request through the complete program. The manifest inventory assertion includes
+the new scenario; no retained test or assertion was removed.
+
+### P2 review fixes 03 — canceled manual configuration reads
+
+P2-05/P2-06 `TestP206CanceledManualConfigPreservesPendingCatalog` keeps startup
+and selection catalog responses pending while opening `/project-config`, then
+returns to the project list and discards the late manual result. Both response
+orderings (shared result before/after cancellation) preserve phase/type selectors.
+The shared generation advances only when a successful manual result is accepted;
+starting a screen-scoped read cannot invalidate shared loading. Existing manual
+success supersession and unrelated/stale-result tests remain unchanged. Existing
+manifest-selected program/PTY scenarios are retained; no new terminal coverage
+claim is made for these unit-only permutations. No HTTP contract changed.
+
+### P2 review fixes 04 — deletion with failed local selection clear
+
+P2-04/P2-05 `TestP204DeleteSelectedProjectPreservesOutcomeOnConfigFailure` checks
+local atomic-write failure after committed deletion with and without list-refresh
+failure, including a queued clear after an earlier selection save. It preserves
+deletion status, refresh diagnostics and `/retry` guidance, uses accurate cleared
+selection wording, keeps in-memory selection empty, cancels automatic quit on save
+failure, preserves local data and proves retries never repeat the delete.
+Manifest-selected `TestCLIProgramProjectCRUDAndPartialSuccess` adds both failure
+combinations using keyboard-driven deletion and a temporary config destination
+that cannot be replaced. Visible diagnostics and exactly one delete plus the
+follow-up list and read retry are asserted. Existing selection-save, queue/drain,
+CRUD, program and PTY assertions remain; no HTTP contract or manifest changed.

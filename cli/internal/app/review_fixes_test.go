@@ -104,7 +104,7 @@ func TestPromptSubmissionPreservesSlashPrefixedData(t *testing.T) {
 					m := NewModelWithClient(client)
 					m.state = state
 					m.changeList.Detail = dto.Change{ID: "12"}
-					m.projectList.Detail = dto.Project{ID: "7"}
+					m.projectList.Detail = dto.Project{ID: 7}
 					m.activeTestCase = dto.TestCase{ID: "31"}
 					if state == ChangeDetailsState {
 						m.detailEditField = detailEditTitle
@@ -139,7 +139,7 @@ func TestPromptSubmissionDispatchesRecognizedFormCommands(t *testing.T) {
 			m := NewModelWithClient(client)
 			m.state = state
 			m.changeList.Detail = dto.Change{ID: "12"}
-			m.projectList.Detail = dto.Project{ID: "7"}
+			m.projectList.Detail = dto.Project{ID: 7}
 			m = m.setPromptValue(" /cancel ")
 			next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 			assert.Empty(t, next.(Model).err)
@@ -163,7 +163,7 @@ func TestEditorSubmissionPreservesSlashPrefixedData(t *testing.T) {
 				m := NewModelWithClient(client)
 				m.state = state
 				m.changeList.Detail = dto.Change{ID: "12"}
-				m.projectList.Detail = dto.Project{ID: "7"}
+				m.projectList.Detail = dto.Project{ID: 7}
 				m.activeTestCase = dto.TestCase{ID: "31"}
 				if state == ChangeDetailsState {
 					m.detailEditField = detailEditTitle
@@ -254,26 +254,28 @@ func TestEditorRetryKeepsLiteralData(t *testing.T) {
 		for _, content := range []string{"/api/v1/health returns 200", "/cancel"} {
 			t.Run(string(state)+content, func(t *testing.T) {
 				failure := errors.New("offline")
-				client := &fakeClient{changeUpdateErr: failure, createErr: failure, updateErr: failure, gotChange: dto.Change{ID: "12"}, createdProject: dto.Project{ID: "7"}}
+				client := &fakeClient{changeUpdateErr: failure, createErr: failure, updateErr: failure, gotChange: dto.Change{ID: "12"}, createdProject: dto.Project{ID: 7}}
 				m := NewModelWithClient(client)
 				m.state = state
 				m.changeList.Detail = dto.Change{ID: "12"}
-				m.projectList.Detail = dto.Project{ID: "7"}
+				m.projectList.Detail = dto.Project{ID: 7}
 				m.activeTestCase = dto.TestCase{ID: "31"}
 				if state == ChangeDetailsState {
 					m.detailEditField = detailEditTitle
 				}
-				next, _ := m.Update(editorFinishedMsg{source: state, content: content})
+				next, cmd := m.Update(editorFinishedMsg{source: state, content: content})
 				m = next.(Model)
-				// Execute the save separately from the Bubble Tea redraw sequence.
-				_, cmd := m.submitPromptValue(content)
 				m = applyCommand(m, cmd)
 				require.Equal(t, "save failed", m.status)
 				client.changeUpdateErr, client.createErr, client.updateErr = nil, nil, nil
 				m, cmd = sendKey(m, tea.KeyEnter)
 				require.NotNil(t, cmd, "Enter retries literal editor data")
 				m = applyCommand(m, cmd)
-				require.Equal(t, "save", m.status)
+				if state == ProjectCreateState || state == ProjectUpdateState {
+					require.Equal(t, "saved project", m.status)
+				} else {
+					require.Equal(t, "save", m.status)
+				}
 				switch state {
 				case TestCaseCreateState:
 					require.Len(t, client.testCaseCreateInputs, 2)

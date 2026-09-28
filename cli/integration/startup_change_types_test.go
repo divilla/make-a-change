@@ -18,10 +18,6 @@ func TestCLIStartupWithoutFlowResources(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/api/v1/options/change-phases-list":
-			_ = json.NewEncoder(w).Encode([]map[string]any{{"slug": "backlog"}})
-		case "/api/v1/options/change-types-list":
-			_ = json.NewEncoder(w).Encode([]map[string]any{{"slug": "fix"}, {"slug": "feature"}})
 		case "/api/v1/project/list":
 			_ = json.NewEncoder(w).Encode([]any{})
 		default:

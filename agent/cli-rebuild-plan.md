@@ -1,16 +1,17 @@
 # CLI rebuild plan
 
-Status: authorized execution, 2026-09-28. P0 specification 019 is implemented
-and merged to dev (`e46bf64`). P1 specification 020 is implemented through `307340d`; native review pass08
-is clean. Its dev merge and P2 typed transport/projects are next. Actual
-validation and review evidence are recorded in the compact checkpoint.
-The user authorized the sequential
-specification → implementation → review → dev-merge factory; helpers own Git
-publication. No stage or production promotion is authorized. See the
-[CLI checkpoint](../cli/agents/cli-rebuild-checkpoint.md) for actual command exits,
-independent statement counts, baseline failures and the next P2 action after P1 review/dev merge.
-Full architecture scope, retained resources and final-result coverage policy
-remain confirmed below.
+Status: authorized execution, 2026-09-28. P0/spec019 merged as `e46bf64`;
+P1/spec020 merged as actual dev `6a3d5bb`. P2/spec021 is implemented and published
+through `92c192d`, with native review pass05 clean against P1 dev. The final
+reviewed production revision measures unit2365/2852 (82.9243%) and terminal
+1655/2852 (58.0295%); strict gates fail honestly. Unit/race/program/PTY,
+architecture/tooling/dependency checks pass. Six untouched format files and
+baseline package-comment lint remain tracked in the
+[compact checkpoint](../cli/agents/cli-rebuild-checkpoint.md), with commands,
+exits, hashes and package gaps. The next action is the dev merge helper, verify
+its actual squash SHA, then P3 epics on a fresh change branch. No future merge
+SHA is asserted. The entire sequential factory remains authorized; no stage or
+production promotion. Confirmed scope and final-result coverage policy follow.
 
 Reference: [backend refactor plan](backend-refactor-plan.md), especially its
 six-step specification → branch → implementation → verification/review → dev

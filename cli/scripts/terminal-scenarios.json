@@ -5,7 +5,11 @@
       "TestCLIProgramStartupNavigationAndSelection",
       "TestCLIProgramEditorSaveAndFailure",
       "TestCLIProgramOrdinaryDocumentEditor",
-      "TestCLIStartupWithoutFlowResources"
+      "TestCLIStartupWithoutFlowResources",
+      "TestCLIProgramProjectCRUDAndPartialSuccess",
+      "TestCLIProgramProjectSwitchWithPendingConfig",
+      "TestCLIProgramShutdownCancelsProjectHTTP",
+      "TestCLIProgramProjectReloadBlocksCachedSelection"
     ]
   },
   "pty": {

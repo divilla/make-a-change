@@ -271,14 +271,20 @@ func newShellBackend(t *testing.T, failSave bool) *httptest.Server {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/api/v1/options/change-phases-list":
-			writeProgramJSON(w, []map[string]any{{"slug": "backlog", "color": "12"}})
-		case "/api/v1/options/change-types-list":
-			writeProgramJSON(w, []map[string]any{{"slug": "feature"}})
+		case "/api/v1/project/config":
+			writeProgramJSON(w, programProjectConfig())
 		case "/api/v1/project/list":
-			writeProgramJSON(w, []map[string]any{{"id": 7, "name": "Program Project"}, {"id": 8, "name": "Second Project"}})
-		case "/api/v1/project/get":
-			writeProgramJSON(w, map[string]any{"id": 7, "name": "Program Project"})
+			writeProgramJSON(w, []map[string]any{programProject(7, "Program Project"), programProject(8, "Second Project")})
+		case "/api/v1/project/details":
+			var body struct {
+				ID int `json:"id"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			name := "Program Project"
+			if body.ID == 8 {
+				name = "Second Project"
+			}
+			writeProgramJSON(w, programProject(body.ID, name))
 		case "/api/v1/project/create":
 			if failSave {
 				http.Error(w, "save rejected", 500)
@@ -286,7 +292,8 @@ func newShellBackend(t *testing.T, failSave bool) *httptest.Server {
 			}
 			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
-			writeProgramJSON(w, map[string]any{"id": 7, "name": body["name"]})
+			w.WriteHeader(http.StatusCreated)
+			writeProgramJSON(w, map[string]any{"id": 7})
 		case "/api/v1/change/list":
 			writeProgramJSON(w, []any{})
 		default:
@@ -321,4 +328,12 @@ func (s *programSession) navigate(t *testing.T, keys, marker string) {
 	before := s.output.count(marker)
 	s.send(t, keys)
 	s.output.waitForCount(t, marker, before+1)
+}
+
+func programProject(id int, name string) map[string]any {
+	return map[string]any{"id": id, "name": name, "config": "program", "last_ref": 12, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z", "change_count": 3}
+}
+
+func programProjectConfig() map[string]any {
+	return map[string]any{"slug": "program", "project_docs": []string{"readme"}, "epic_docs": []string{"brief"}, "change_docs": []string{"brief", "spec"}, "change_phases": []string{"backlog"}, "change_colors": []string{"12"}, "change_types": []string{"feature"}}
 }

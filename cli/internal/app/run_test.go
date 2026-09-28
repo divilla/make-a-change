@@ -6,13 +6,17 @@ import (
 	"cli/internal/dto"
 	"cli/internal/projects"
 	"cli/internal/styles"
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/bubbles/cursor"
 	tea "github.com/charmbracelet/bubbletea"
@@ -95,17 +99,21 @@ type fakeClient struct {
 	requestOrder             []string
 }
 
-func (f *fakeClient) ListProjects() ([]dto.Option, error) {
-	f.listCalls++
-	return f.projects, f.err
-}
-
-func (f *fakeClient) ListProjectRows() ([]dto.Project, error) {
+func (f *fakeClient) ListProjectRows(context.Context) ([]dto.Project, error) {
 	f.rowListCalls++
+	f.listCalls++
+	if f.projects != nil {
+		rows := make([]dto.Project, 0, len(f.projects))
+		for _, o := range f.projects {
+			id, _ := strconv.Atoi(o.ID)
+			rows = append(rows, dto.Project{ID: id, Name: o.Label})
+		}
+		return rows, f.err
+	}
 	return f.projectRows, f.err
 }
 
-func (f *fakeClient) GetProject(id int) (dto.Project, error) {
+func (f *fakeClient) GetProject(_ context.Context, id int) (dto.Project, error) {
 	f.getCalls++
 	f.getIDs = append(f.getIDs, id)
 	if f.getErr != nil {
@@ -117,29 +125,29 @@ func (f *fakeClient) GetProject(id int) (dto.Project, error) {
 	return f.gotProject, nil
 }
 
-func (f *fakeClient) CreateProject(name string) (dto.Project, error) {
+func (f *fakeClient) CreateProject(_ context.Context, name string) (int, error) {
 	f.createCalls++
 	f.createNames = append(f.createNames, name)
 	if f.createErr != nil {
-		return dto.Project{}, f.createErr
+		return 0, f.createErr
 	}
 	if f.err != nil {
-		return dto.Project{}, f.err
+		return 0, f.err
 	}
-	return f.createdProject, nil
+	return f.createdProject.ID, nil
 }
 
-func (f *fakeClient) UpdateProject(id int, name string) (dto.Project, error) {
+func (f *fakeClient) UpdateProject(_ context.Context, id int, name string) error {
 	f.updateCalls++
 	f.updateIDs = append(f.updateIDs, id)
 	f.updateNames = append(f.updateNames, name)
 	if f.updateErr != nil {
-		return dto.Project{}, f.updateErr
+		return f.updateErr
 	}
 	if f.err != nil {
-		return dto.Project{}, f.err
+		return f.err
 	}
-	return f.updatedProject, nil
+	return nil
 }
 
 func (f *fakeClient) ListChangeRows(projectID string) ([]dto.Change, error) {
@@ -414,7 +422,7 @@ func TestStartupTriggersProjectSelectionWhenProjectIDIsUnset(t *testing.T) {
 	assert.Equal(t, SelectProjectDropDown, got.state)
 	assert.Equal(t, selectorProjects, got.dropdown.source)
 
-	load := selectorCommand(client, got.dropdown.source, got.currentProject.ID)
+	load := got.selectorCommand(got.dropdown.source)
 	got = applyMsg(got, load())
 
 	assert.Equal(t, SelectProjectDropDown, got.state)
@@ -422,7 +430,7 @@ func TestStartupTriggersProjectSelectionWhenProjectIDIsUnset(t *testing.T) {
 }
 
 func TestStartupSkipsProjectSelectionWhenProjectIDIsSaved(t *testing.T) {
-	client := &fakeClient{gotProject: dto.Project{ID: "7", Name: "Project Seven"}}
+	client := &fakeClient{gotProject: dto.Project{ID: 7, Name: "Project Seven"}}
 	m := newModelWithConfig(client, testAppConfig(appConfig{ProjectID: 7}))
 	m.width = 120
 
@@ -438,9 +446,9 @@ func TestStartupSkipsProjectSelectionWhenProjectIDIsSaved(t *testing.T) {
 func TestStartupLoadsChangeOptionCatalog(t *testing.T) {
 	client := &fakeClient{
 		phases: []dto.Option{{ID: "todo", Label: "todo", Color: "12"}},
-		types:  []dto.Option{{ID: "feature", Label: "Feature"}, {ID: "fix", Label: "Fix"}},
+		types:  []dto.Option{{ID: "feature", Label: "feature"}, {ID: "fix", Label: "fix"}},
 	}
-	m := newModelWithConfig(client, appConfig{})
+	m := newModelWithConfig(client, appConfig{ProjectID: 7})
 
 	got := applyCommand(m, m.Init())
 
@@ -501,7 +509,7 @@ func TestStartupProjectSelectionShowsErrorWhenNoProjectsExist(t *testing.T) {
 	cmd := m.Init()
 	require.NotNil(t, cmd)
 	got := applyCommand(m, cmd)
-	load := selectorCommand(client, got.dropdown.source, got.currentProject.ID)
+	load := got.selectorCommand(got.dropdown.source)
 	got = applyMsg(got, load())
 
 	assert.Equal(t, MainState, got.state)
@@ -745,8 +753,8 @@ func TestProjectEditorUsesEditorEnvWithNanoFallback(t *testing.T) {
 
 func TestPromptEnterSavesProjectFormRawMultilineValue(t *testing.T) {
 	client := &fakeClient{
-		createdProject: dto.Project{ID: "7"},
-		gotProject:     dto.Project{ID: "7", Name: "Line 1\nLine 2"},
+		createdProject: dto.Project{ID: 7},
+		gotProject:     dto.Project{ID: 7, Name: "Line 1\nLine 2"},
 	}
 	m := NewModelWithClient(client)
 	m.state = ProjectCreateState
@@ -814,18 +822,18 @@ func TestProjectsCommandReloadsAndRendersSelectableTable(t *testing.T) {
 	client := &fakeClient{
 		projectRows: []dto.Project{
 			{
-				ID:          "7",
+				ID:          7,
 				Name:        "Project Seven",
 				ChangeCount: 3,
-				Created:     "2026-06-29T08:15:00Z",
-				Modified:    "2026-06-29T10:45:00Z",
+				CreatedAt:   projectTime("2026-06-29T08:15:00Z"),
+				UpdatedAt:   projectTime("2026-06-29T10:45:00Z"),
 			},
 			{
-				ID:          "8",
+				ID:          8,
 				Name:        "Project Eight",
 				ChangeCount: 0,
-				Created:     "bad timestamp",
-				Modified:    "",
+				CreatedAt:   time.Time{},
+				UpdatedAt:   time.Time{},
 			},
 		},
 	}
@@ -868,9 +876,9 @@ func TestProjectsTableUsesDynamicNameWidthAndTrimsVeryLongNames(t *testing.T) {
 	m := NewModelWithClient(&fakeClient{})
 	m.state = ProjectsListState
 	m.projectList.Rows = []dto.Project{
-		{ID: "1", Name: "demo1", ChangeCount: 2, Created: "2026-06-23T04:51:00Z", Modified: "2026-06-23T04:51:00Z"},
-		{ID: "350", Name: longName, ChangeCount: 0, Created: "2026-06-29T15:57:00Z", Modified: "2026-06-29T15:57:00Z"},
-		{ID: "351", Name: tooLongName, ChangeCount: 1, Created: "2026-06-29T15:58:00Z", Modified: "2026-06-29T15:58:00Z"},
+		{ID: 1, Name: "demo1", ChangeCount: 2, CreatedAt: projectTime("2026-06-23T04:51:00Z"), UpdatedAt: projectTime("2026-06-23T04:51:00Z")},
+		{ID: 350, Name: longName, ChangeCount: 0, CreatedAt: projectTime("2026-06-29T15:57:00Z"), UpdatedAt: projectTime("2026-06-29T15:57:00Z")},
+		{ID: 351, Name: tooLongName, ChangeCount: 1, CreatedAt: projectTime("2026-06-29T15:58:00Z"), UpdatedAt: projectTime("2026-06-29T15:58:00Z")},
 	}
 
 	rendered := stripANSI(projects.TableView(m.projectList, 160))
@@ -894,8 +902,8 @@ func TestProjectsTableSelectionIsBounded(t *testing.T) {
 	m := NewModelWithClient(&fakeClient{})
 	m.state = ProjectsListState
 	m.projectList.Rows = []dto.Project{
-		{ID: "1", Name: "One"},
-		{ID: "2", Name: "Two"},
+		{ID: 1, Name: "One"},
+		{ID: 2, Name: "Two"},
 	}
 
 	got, _ := sendKey(m, tea.KeyUp)
@@ -914,14 +922,14 @@ func TestProjectsTableSelectionIsBounded(t *testing.T) {
 func TestProjectsEnterOpensDetailsWithoutMutatingCurrentProject(t *testing.T) {
 	current := dto.Option{ID: "99", Label: "Current Project"}
 	client := &fakeClient{
-		gotProject: dto.Project{ID: "8", Name: "Fresh Project Eight", ChangeCount: 5, Created: "2026-06-30T08:15:00Z", Modified: "2026-06-30T11:45:00Z"},
+		gotProject: dto.Project{ID: 8, Name: "Fresh Project Eight", ChangeCount: 5, CreatedAt: projectTime("2026-06-30T08:15:00Z"), UpdatedAt: projectTime("2026-06-30T11:45:00Z")},
 	}
 	m := newModelWithOptionCatalog(client)
 	m.state = ProjectsListState
 	m.currentProject = current
 	m.projectList.Rows = []dto.Project{
-		{ID: "7", Name: "Project Seven", ChangeCount: 3, Created: "2026-06-29T08:15:00Z", Modified: "2026-06-29T10:45:00Z"},
-		{ID: "8", Name: "Project Eight", ChangeCount: 4, Created: "2026-06-30T08:15:00Z", Modified: "2026-06-30T10:45:00Z"},
+		{ID: 7, Name: "Project Seven", ChangeCount: 3, CreatedAt: projectTime("2026-06-29T08:15:00Z"), UpdatedAt: projectTime("2026-06-29T10:45:00Z")},
+		{ID: 8, Name: "Project Eight", ChangeCount: 4, CreatedAt: projectTime("2026-06-30T08:15:00Z"), UpdatedAt: projectTime("2026-06-30T10:45:00Z")},
 	}
 	m.projectList.Selected = 1
 
@@ -929,7 +937,7 @@ func TestProjectsEnterOpensDetailsWithoutMutatingCurrentProject(t *testing.T) {
 
 	assert.Equal(t, ProjectDetailsState, got.state)
 	assert.Equal(t, current, got.currentProject)
-	assert.Equal(t, dto.Project{ID: "8", Name: "Project Eight", ChangeCount: 4, Created: "2026-06-30T08:15:00Z", Modified: "2026-06-30T10:45:00Z"}, got.projectList.Detail)
+	assert.Equal(t, dto.Project{ID: 8, Name: "Project Eight", ChangeCount: 4, CreatedAt: projectTime("2026-06-30T08:15:00Z"), UpdatedAt: projectTime("2026-06-30T10:45:00Z")}, got.projectList.Detail)
 	require.NotNil(t, cmd)
 	got = applyMsg(got, cmd())
 	assert.Equal(t, []int{8}, client.getIDs)
@@ -946,11 +954,11 @@ func TestProjectDetailsRenderRequiredLabelsAndTimestampFallback(t *testing.T) {
 	m.state = ProjectDetailsState
 	m.width = 32
 	m.projectList.Detail = dto.Project{
-		ID:          "7",
+		ID:          7,
 		Name:        "Project Seven",
 		ChangeCount: 3,
-		Created:     "2026-06-29T13:04:59.999Z",
-		Modified:    "malformed",
+		CreatedAt:   projectTime("2026-06-29T13:04:59.999Z"),
+		UpdatedAt:   time.Time{},
 	}
 
 	rawDetails := projects.DetailsView(m.projectList.Detail, 32)
@@ -958,7 +966,7 @@ func TestProjectDetailsRenderRequiredLabelsAndTimestampFallback(t *testing.T) {
 	whiteValue := lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
 	pinkValue := lipgloss.NewStyle().Foreground(lipgloss.Color("218"))
 	timestampValue := lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
-	createdValue := projects.FormatTimestamp("2026-06-29T13:04:59.999Z")
+	createdValue := projects.FormatTimestamp(projectTime("2026-06-29T13:04:59.999Z"))
 
 	assert.Contains(t, view, "         #ID: 7")
 	assert.Contains(t, view, "        Name: Project Seven")
@@ -980,7 +988,7 @@ func TestProjectDetailsWrapsNameAtEightyCharactersWithoutBreakingWords(t *testin
 	m := NewModelWithClient(&fakeClient{})
 	m.state = ProjectDetailsState
 	m.width = 120
-	m.projectList.Detail = dto.Project{ID: "7", Name: name}
+	m.projectList.Detail = dto.Project{ID: 7, Name: name}
 
 	view := stripANSI(m.View())
 
@@ -993,7 +1001,7 @@ func TestProjectDetailsPreservesExplicitNameNewlines(t *testing.T) {
 	m := NewModelWithClient(&fakeClient{})
 	m.state = ProjectDetailsState
 	m.width = 120
-	m.projectList.Detail = dto.Project{ID: "7", Name: "First line\nSecond line"}
+	m.projectList.Detail = dto.Project{ID: 7, Name: "First line\nSecond line"}
 
 	view := stripANSI(m.View())
 
@@ -1003,23 +1011,23 @@ func TestProjectDetailsPreservesExplicitNameNewlines(t *testing.T) {
 
 func TestProjectPagesReloadOnArrival(t *testing.T) {
 	client := &fakeClient{
-		projectRows: []dto.Project{{ID: "7", Name: "Reloaded List Project"}},
-		gotProject:  dto.Project{ID: "7", Name: "Reloaded Detail Project"},
+		projectRows: []dto.Project{{ID: 7, Name: "Reloaded List Project"}},
+		gotProject:  dto.Project{ID: 7, Name: "Reloaded Detail Project"},
 	}
 
 	m := newModelWithOptionCatalog(client)
 	m.state = ProjectDetailsState
-	m.projectList.Detail = dto.Project{ID: "7", Name: "Stale Detail Project"}
+	m.projectList.Detail = dto.Project{ID: 7, Name: "Stale Detail Project"}
 	got, cmd := sendCommand(m, "/return")
 	require.NotNil(t, cmd)
 	assert.Equal(t, ProjectsListState, got.state)
 	assert.True(t, got.projectList.Loading)
 	got = applyMsg(got, cmd())
 	assert.Equal(t, 1, client.rowListCalls)
-	assert.Equal(t, []dto.Project{{ID: "7", Name: "Reloaded List Project"}}, got.projectList.Rows)
+	assert.Equal(t, []dto.Project{{ID: 7, Name: "Reloaded List Project"}}, got.projectList.Rows)
 
 	got.state = ProjectUpdateState
-	got.projectList.Detail = dto.Project{ID: "7", Name: "Stale Detail Project"}
+	got.projectList.Detail = dto.Project{ID: 7, Name: "Stale Detail Project"}
 	got, cmd = sendCommand(got, "/cancel")
 	require.NotNil(t, cmd)
 	assert.Equal(t, ProjectDetailsState, got.state)
@@ -1065,13 +1073,13 @@ func TestProjectCreateSavePersistsFetchesDetailsAndDoesNotMutateConfig(t *testin
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	require.NoError(t, saveAppConfig(path, testAppConfig(appConfig{ProjectID: 99})))
 	client := &fakeClient{
-		createdProject: dto.Project{ID: "7"},
+		createdProject: dto.Project{ID: 7},
 		gotProject: dto.Project{
-			ID:          "7",
+			ID:          7,
 			Name:        "New Project",
 			ChangeCount: 0,
-			Created:     "2026-06-29T11:04:59Z",
-			Modified:    "2026-06-29T11:04:59Z",
+			CreatedAt:   projectTime("2026-06-29T11:04:59Z"),
+			UpdatedAt:   projectTime("2026-06-29T11:04:59Z"),
 		},
 	}
 	m := newModelWithConfig(client, testAppConfig(appConfig{ProjectID: 99, ConfigPath: path}))
@@ -1119,18 +1127,18 @@ func TestProjectUpdateSavePersistsFetchesDetailsAndDoesNotMutateConfig(t *testin
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	require.NoError(t, saveAppConfig(path, testAppConfig(appConfig{ProjectID: 99})))
 	client := &fakeClient{
-		updatedProject: dto.Project{ID: "7"},
+		updatedProject: dto.Project{ID: 7},
 		gotProject: dto.Project{
-			ID:          "7",
+			ID:          7,
 			Name:        "Renamed Project",
 			ChangeCount: 2,
-			Created:     "2026-06-29T08:15:00Z",
-			Modified:    "2026-06-29T13:04:59Z",
+			CreatedAt:   projectTime("2026-06-29T08:15:00Z"),
+			UpdatedAt:   projectTime("2026-06-29T13:04:59Z"),
 		},
 	}
 	m := newModelWithConfig(client, testAppConfig(appConfig{ProjectID: 99, ConfigPath: path}))
 	m.state = ProjectDetailsState
-	m.projectList.Detail = dto.Project{ID: "7", Name: "Old Project", ChangeCount: 2}
+	m.projectList.Detail = dto.Project{ID: 7, Name: "Old Project", ChangeCount: 2}
 
 	got, _ := sendCommand(m, "/edit")
 	assert.Equal(t, ProjectUpdateState, got.state)
@@ -1156,13 +1164,13 @@ func TestProjectUpdateSavePersistsFetchesDetailsAndDoesNotMutateConfig(t *testin
 func TestProjectUpdateValidationDoesNotCallBackend(t *testing.T) {
 	tests := []dto.Project{
 		{},
-		{ID: "0", Name: "Zero"},
-		{ID: "-1", Name: "Negative"},
-		{ID: "not-a-number", Name: "Bad"},
+		{ID: 0, Name: "Zero"},
+		{ID: -1, Name: "Negative"},
+		{ID: 0, Name: "Missing ID"},
 	}
 
 	for _, project := range tests {
-		t.Run(project.ID, func(t *testing.T) {
+		t.Run(strconv.Itoa(project.ID), func(t *testing.T) {
 			client := &fakeClient{}
 			m := NewModelWithClient(client)
 			m.state = ProjectUpdateState
@@ -1199,12 +1207,12 @@ func TestProjectSaveBackendFailurePreservesRecoverableFormState(t *testing.T) {
 	assert.Zero(t, client.getCalls)
 
 	client = &fakeClient{
-		updatedProject: dto.Project{ID: "7"},
+		updatedProject: dto.Project{ID: 7},
 		getErr:         errors.New("project not found"),
 	}
 	m = newModelWithOptionCatalog(client)
 	m.state = ProjectUpdateState
-	m.projectList.Detail = dto.Project{ID: "7", Name: "Old Project"}
+	m.projectList.Detail = dto.Project{ID: 7, Name: "Old Project"}
 	m.input.SetValue("Renamed Project")
 
 	updated, cmd = m.executeCommandFrom(ProjectUpdateState, "/save")
@@ -1212,8 +1220,9 @@ func TestProjectSaveBackendFailurePreservesRecoverableFormState(t *testing.T) {
 	require.NotNil(t, cmd)
 	got = applyMsg(got, cmd())
 
-	assert.Equal(t, ProjectUpdateState, got.state)
-	assert.Equal(t, "Renamed Project", got.input.Value())
+	assert.Equal(t, ProjectDetailsState, got.state)
+	assert.Equal(t, "Renamed Project", got.projectList.Detail.Name)
+	assert.Contains(t, got.status, "saved project; refresh failed")
 	assert.Equal(t, "project not found", got.err)
 	assert.Equal(t, 1, client.updateCalls)
 	assert.Equal(t, 1, client.getCalls)
@@ -1233,7 +1242,7 @@ func TestProjectCancelDoesNotCallPersistence(t *testing.T) {
 
 	m = newModelWithOptionCatalog(client)
 	m.state = ProjectUpdateState
-	m.projectList.Detail = dto.Project{ID: "7", Name: "Old Project"}
+	m.projectList.Detail = dto.Project{ID: 7, Name: "Old Project"}
 	m.input.SetValue("Renamed Project")
 
 	got, _ = sendKey(m, tea.KeyEsc)
@@ -2064,11 +2073,11 @@ func TestProjectsTableNarrowWidthDoesNotOverflow(t *testing.T) {
 	m.state = ProjectsListState
 	m.width = 24
 	m.projectList.Rows = []dto.Project{{
-		ID:          "777777",
+		ID:          777777,
 		Name:        "Very Long Project Name That Must Be Truncated",
 		ChangeCount: 123,
-		Created:     "2026-06-29T08:15:00Z",
-		Modified:    "2026-06-29T10:45:00Z",
+		CreatedAt:   projectTime("2026-06-29T08:15:00Z"),
+		UpdatedAt:   projectTime("2026-06-29T10:45:00Z"),
 	}}
 
 	for _, line := range strings.Split(stripANSI(projects.TableView(m.projectList, 24)), "\n") {
@@ -2890,7 +2899,7 @@ func TestUnavailableEpicActionsNeverClaimSuccess(t *testing.T) {
 		assert.NotEmpty(t, next.(Model).err)
 	}
 	assert.NotContains(t, commandsByState[EpicsListState], "/new-epic")
-	assert.NotContains(t, commandsByState[ProjectDetailsState], "/delete")
+	assert.Contains(t, commandsByState[ProjectDetailsState], "/delete")
 }
 
 func TestCreateUpdateSaveCancelTransitions(t *testing.T) {
@@ -3084,7 +3093,8 @@ func TestSelectorDropdownsLoadAndReturn(t *testing.T) {
 	require.Equal(t, SelectProjectDropDown, got.state)
 	require.NotNil(t, cmd)
 	got = applyMsg(got, cmd())
-	got, _ = sendKey(got, tea.KeyEnter)
+	got, cmd = sendKey(got, tea.KeyEnter)
+	got = applyCommand(got, cmd)
 	assert.Equal(t, MainState, got.state)
 	assert.Equal(t, "7", got.currentProject.ID)
 
@@ -3096,7 +3106,7 @@ func TestSelectorDropdownsLoadAndReturn(t *testing.T) {
 	require.NotNil(t, cmd)
 	got = applyMsg(got, cmd())
 	assert.Equal(t, ChangeDetailsState, got.state)
-	assert.Zero(t, client.phaseCalls)
+	assert.Equal(t, 1, client.phaseCalls)
 	assert.Equal(t, []string{"backlog"}, client.changePhaseUpdates)
 
 	got, cmd = sendCommand(got, "/types")
@@ -3107,7 +3117,7 @@ func TestSelectorDropdownsLoadAndReturn(t *testing.T) {
 	require.NotNil(t, cmd)
 	got = applyMsg(got, cmd())
 	assert.Equal(t, ChangeDetailsState, got.state)
-	assert.Zero(t, client.typeCalls)
+	assert.Equal(t, 1, client.typeCalls)
 	assert.Equal(t, [][]string{{"feature"}}, client.changeTypesUpdates)
 
 	got, cmd = sendCommand(got, "/epic")
@@ -3435,7 +3445,7 @@ func TestCommandDropdownPreservesUnderlyingScreenForEveryCommandState(t *testing
 func TestProjectsCommandMenuPreservesListTitle(t *testing.T) {
 	m := NewModelWithClient(&fakeClient{})
 	m.state = ProjectsListState
-	m.projectList.Rows = []dto.Project{{ID: "7", Name: "Project Seven"}}
+	m.projectList.Rows = []dto.Project{{ID: 7, Name: "Project Seven"}}
 
 	got, _ := sendRune(m, '/')
 
@@ -3598,7 +3608,18 @@ func applyMsg(m Model, msg tea.Msg) Model {
 }
 
 func applyCommand(m Model, cmd tea.Cmd) Model {
+	if cmd == nil {
+		return m
+	}
 	msg := cmd()
+	// Bubble Tea's ordered sequence message is private but has a slice of commands.
+	value := reflect.ValueOf(msg)
+	if value.Kind() == reflect.Slice && value.Type().Elem() == reflect.TypeOf(tea.Cmd(nil)) {
+		for i := 0; i < value.Len(); i++ {
+			m = applyCommand(m, value.Index(i).Interface().(tea.Cmd))
+		}
+		return m
+	}
 	if batch, ok := msg.(tea.BatchMsg); ok {
 		for _, next := range batch {
 			if next == nil {
@@ -3638,4 +3659,23 @@ func stripANSI(value string) string {
 		b.WriteRune(r)
 	}
 	return b.String()
+}
+
+func projectTime(value string) time.Time {
+	result, _ := time.Parse(time.RFC3339Nano, value)
+	return result
+}
+func (f *fakeClient) DeleteProject(context.Context, int) error { return f.err }
+func (f *fakeClient) GetProjectConfig(context.Context, int) (dto.ProjectConfig, error) {
+	f.phaseCalls++
+	f.typeCalls++
+	cfg := dto.ProjectConfig{Slug: "test", ProjectDocs: []string{}, EpicDocs: []string{}, ChangeDocs: []string{}, ChangePhases: []string{}, ChangeColors: []string{}, ChangeTypes: []string{}}
+	for _, o := range f.phases {
+		cfg.ChangePhases = append(cfg.ChangePhases, o.ID)
+		cfg.ChangeColors = append(cfg.ChangeColors, o.Color)
+	}
+	for _, o := range f.types {
+		cfg.ChangeTypes = append(cfg.ChangeTypes, o.ID)
+	}
+	return cfg, f.err
 }

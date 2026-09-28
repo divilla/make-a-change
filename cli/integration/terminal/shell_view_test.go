@@ -119,14 +119,15 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		var value any
 		switch r.URL.Path {
-		case "/api/v1/options/change-phases-list":
-			value = []map[string]any{{"slug": "backlog", "color": "12"}}
-		case "/api/v1/options/change-types-list":
-			value = []any{}
-		case "/api/v1/project/get", "/api/v1/project/create":
-			value = map[string]any{"id": 7, "name": "PTY Project"}
+		case "/api/v1/project/config":
+			value = map[string]any{"slug": "pty", "project_docs": []string{}, "epic_docs": []string{}, "change_docs": []string{}, "change_phases": []string{"backlog"}, "change_colors": []string{"12"}, "change_types": []string{}}
+		case "/api/v1/project/create":
+			w.WriteHeader(201)
+			value = map[string]any{"id": 7}
+		case "/api/v1/project/details":
+			value = terminalProject()
 		case "/api/v1/project/list":
-			value = []map[string]any{{"id": 7, "name": "PTY Project"}}
+			value = []any{terminalProject()}
 		case "/api/v1/change/list":
 			rows := []map[string]any{}
 			for i := 1; i <= 30; i++ {
@@ -211,4 +212,8 @@ func (c *terminalCapture) waitForAfter(marker string, offset int, timeout time.D
 			return fmt.Errorf("timed out waiting for %q; terminal output: %q", marker, c.after(offset))
 		}
 	}
+}
+
+func terminalProject() map[string]any {
+	return map[string]any{"id": 7, "name": "PTY Project", "config": "pty", "last_ref": 0, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T10:00:00Z", "change_count": 0}
 }

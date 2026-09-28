@@ -1,105 +1,86 @@
 package app
 
 import (
-    "fmt"
-    "strconv"
-    "strings"
+	"cli/internal/dto"
+	"cli/internal/projects"
+	"context"
+	"strconv"
 
-    "cli/internal/dto"
-
-    tea "github.com/charmbracelet/bubbletea"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func (m Model) saveProjectCreate() (tea.Model, tea.Cmd) {
-    return m.saveProjectCreateValue(m.input.Value())
+	return m.saveProjectCreateValue(m.input.Value())
 }
 
 func (m Model) saveProjectCreateValue(name string) (tea.Model, tea.Cmd) {
-    if strings.TrimSpace(name) == "" {
-        m.err = "project name is required"
-        m.status = "validation failed"
-        return m, nil
-    }
-    m.status = "saving"
-    return m, projectCreateCommand(m.client, name)
+	return m.beginProject(projects.Create, 0, name)
 }
 
 func (m Model) saveProjectUpdate() (tea.Model, tea.Cmd) {
-    return m.saveProjectUpdateValue(m.input.Value())
+	return m.saveProjectUpdateValue(m.input.Value())
 }
 
 func (m Model) saveProjectUpdateValue(name string) (tea.Model, tea.Cmd) {
-    if strings.TrimSpace(name) == "" {
-        m.err = "project name is required"
-        m.status = "validation failed"
-        return m, nil
-    }
-    id, err := projectNumericID(m.projectList.Detail)
-    if err != nil {
-        m.err = err.Error()
-        m.status = "validation failed"
-        return m, nil
-    }
-    m.status = "saving"
-    return m, projectUpdateCommand(m.client, id, name)
+	return m.beginProject(projects.Edit, m.projectList.Detail.ID, name)
 }
 
-func projectCreateCommand(client appClient, name string) tea.Cmd {
-    return func() tea.Msg {
-        created, err := client.CreateProject(name)
-        if err != nil {
-            return projectSavedMsg{source: ProjectCreateState, err: err}
-        }
-        id, err := projectNumericID(created)
-        if err != nil {
-            return projectSavedMsg{source: ProjectCreateState, err: err}
-        }
-        project, err := client.GetProject(id)
-        return projectSavedMsg{source: ProjectCreateState, project: project, err: err}
-    }
+func (m Model) beginProject(op projects.Operation, id int, name string) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.projectList, cmd = m.projectList.Begin(m.ctx, m.client, op, id, name)
+	m.status = m.projectList.Status
+	m.err = ""
+	if m.projectList.Err != nil {
+		m.err = m.projectList.Err.Error()
+	}
+	return m, cmd
 }
 
-func projectUpdateCommand(client appClient, id int, name string) tea.Cmd {
-    return func() tea.Msg {
-        updated, err := client.UpdateProject(id, name)
-        if err != nil {
-            return projectSavedMsg{source: ProjectUpdateState, err: err}
-        }
-        updatedID, err := projectNumericIDWithFallback(updated, id)
-        if err != nil {
-            return projectSavedMsg{source: ProjectUpdateState, err: err}
-        }
-        project, err := client.GetProject(updatedID)
-        return projectSavedMsg{source: ProjectUpdateState, project: project, err: err}
-    }
+func currentProjectCommand(ctx context.Context, client appClient, id int, generation uint64) tea.Cmd {
+	return func() tea.Msg {
+		project, err := client.GetProject(ctx, id)
+		return currentProjectLoadedMsg{id: id, generation: generation, project: project, err: err}
+	}
 }
 
-func projectGetCommand(client appClient, id int) tea.Cmd {
-    return func() tea.Msg {
-        project, err := client.GetProject(id)
-        return projectLoadedMsg{id: id, project: project, err: err}
-    }
-}
-
-func currentProjectCommand(client appClient, id int) tea.Cmd {
-    return func() tea.Msg {
-        project, err := client.GetProject(id)
-        return currentProjectLoadedMsg{id: id, project: project, err: err}
-    }
-}
-
-func projectNumericID(project dto.Project) (int, error) {
-    return projectNumericIDWithFallback(project, 0)
-}
-
-func projectNumericIDWithFallback(project dto.Project, fallback int) (int, error) {
-    value := strings.TrimSpace(project.ID)
-    if value == "" && fallback > 0 {
-        return fallback, nil
-    }
-    id, err := strconv.Atoi(value)
-    if err != nil || id <= 0 {
-        return 0, fmt.Errorf("project ID must be a valid positive number")
-    }
-    return id, nil
+func (m Model) applyProjectResult(r projects.Result) (tea.Model, tea.Cmd) {
+	next, accepted := m.projectList.Apply(r)
+	if !accepted {
+		return m, nil
+	}
+	m.projectList = next
+	m.status = next.Status
+	m.err = ""
+	if next.Err != nil {
+		m.err = next.Err.Error()
+	}
+	if r.Err == nil {
+		switch r.Operation {
+		case projects.Config:
+			if r.ID == m.appConfig.ProjectID {
+				// Keep the shared load valid until its replacement succeeds; screen
+				// navigation can cancel or invalidate the manual read at any time.
+				m.catalogGeneration++
+				phases, types := projects.CatalogOptions(r.Config)
+				m.optionCatalog = optionCatalog{phases: phases, types: types, loaded: true}
+			}
+		case projects.Create, projects.Edit:
+			m.state = ProjectDetailsState
+			if m.currentProject.ID == strconv.Itoa(r.Project.ID) {
+				m.currentProject.Label = r.Project.Name
+			}
+			m = m.setPromptValue("")
+		case projects.Delete:
+			m.state = ProjectsListState
+			if m.appConfig.ProjectID == r.ID {
+				m.currentProject = dto.Option{}
+				m.appConfig.ProjectID = 0
+				m.selectionGeneration++
+				m.catalogGeneration++
+				m.optionCatalog = optionCatalog{}
+				return m.persistCurrentProject()
+			}
+		}
+	}
+	return m, nil
 }

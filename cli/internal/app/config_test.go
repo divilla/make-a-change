@@ -216,7 +216,7 @@ func TestProjectSelectionSaveIsAsynchronousAndKeepsPartialSuccess(t *testing.T) 
 			assert.Contains(t, readTestFile(t, path), "project_id: 7", "Update and View must not write config")
 			_ = m.View()
 			assert.Contains(t, readTestFile(t, path), "project_id: 7")
-			msg := save().(configSavedMsg)
+			msg := save().(tea.BatchMsg)[0]().(configSavedMsg)
 			if fail {
 				require.ErrorIs(t, msg.err, os.ErrNotExist)
 			}

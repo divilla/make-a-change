@@ -3,6 +3,8 @@ package app
 import (
 	"cli/internal/changes"
 	"cli/internal/dto"
+	"cli/internal/projects"
+	"context"
 	"fmt"
 	"strings"
 
@@ -132,28 +134,30 @@ func selectorSourceForState(state State) selectorSource {
 	}
 }
 
-func optionCatalogCommand(client appClient) tea.Cmd {
+func optionCatalogCommand(ctx context.Context, client appClient, id int, generation uint64) tea.Cmd {
 	return func() tea.Msg {
-		phases, err := client.ListPhases()
-		if err != nil {
-			return optionCatalogLoadedMsg{err: err}
-		}
-		types, err := client.ListTypes()
-		if err != nil {
-			return optionCatalogLoadedMsg{err: err}
-		}
-		return optionCatalogLoadedMsg{phases: phases, types: types}
+		cfg, err := client.GetProjectConfig(ctx, id)
+		phases, types := projects.CatalogOptions(cfg)
+		return optionCatalogLoadedMsg{id: id, generation: generation, config: cfg, phases: phases, types: types, err: err}
 	}
 }
 
 func (m Model) selectorCommand(source selectorSource) tea.Cmd {
+	var cmd tea.Cmd
 	switch source {
 	case selectorPhases:
-		return cachedSelectorCommand(source, m.optionCatalog.phases, m.optionCatalog.loaded)
+		cmd = cachedSelectorCommand(source, m.optionCatalog.phases, m.optionCatalog.loaded)
 	case selectorTypes:
-		return cachedSelectorCommand(source, m.optionCatalog.types, m.optionCatalog.loaded)
+		cmd = cachedSelectorCommand(source, m.optionCatalog.types, m.optionCatalog.loaded)
 	default:
-		return selectorCommand(m.client, source, m.currentProject.ID)
+		cmd = selectorCommand(m.ctx, m.client, source, m.currentProject.ID)
+	}
+	generation, projectID := m.selectorGeneration, m.currentProject.ID
+	return func() tea.Msg {
+		r := cmd().(selectorLoadedMsg)
+		r.generation = generation
+		r.projectID = projectID
+		return r
 	}
 }
 
@@ -166,7 +170,7 @@ func cachedSelectorCommand(source selectorSource, options []dto.Option, loaded b
 	}
 }
 
-func selectorCommand(client appClient, source selectorSource, projectID string) tea.Cmd {
+func selectorCommand(ctx context.Context, client appClient, source selectorSource, projectID string) tea.Cmd {
 	return func() tea.Msg {
 		var (
 			options []dto.Option
@@ -174,18 +178,13 @@ func selectorCommand(client appClient, source selectorSource, projectID string) 
 		)
 		switch source {
 		case selectorProjects:
-			options, err = client.ListProjects()
+			var rows []dto.Project
+			rows, err = client.ListProjectRows(ctx)
+			options = projects.Options(rows)
 		case selectorEpics:
 			options, err = client.ListEpics(projectID)
 		}
 		return selectorLoadedMsg{source: source, options: options, err: err}
-	}
-}
-
-func projectListCommand(client appClient) tea.Cmd {
-	return func() tea.Msg {
-		projects, err := client.ListProjectRows()
-		return projectListLoadedMsg{projects: projects, err: err}
 	}
 }
 
