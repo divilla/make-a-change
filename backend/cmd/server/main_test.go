@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/require"
 )
@@ -85,6 +86,10 @@ func TestStartFailures(t *testing.T) {
 	require.Error(t, err)
 	_, err = start(context.Background(), &config.Config{ConnectionString: ":invalid"})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "connect database:")
+	var parseErr *pgconn.ParseConfigError
+	require.ErrorAs(t, err, &parseErr)
+	require.NotNil(t, errors.Unwrap(err))
 	listener, err := net.Listen("tcp", ":0")
 	require.NoError(t, err)
 	defer func() { require.NoError(t, listener.Close()) }()

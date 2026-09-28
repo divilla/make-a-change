@@ -27,7 +27,6 @@ func New() {
 	if err := config.LoadFiles("config/dev.yaml"); err != nil {
 		panic(apperror.Wrap(err, "configuration"))
 	}
-	//fmt.Printf("config data: \n %#v\n", config.Data()["db-ws"])
 	if err := config.Decode(&cfg); err != nil {
 		panic(apperror.Wrap(err, "configuration"))
 	}

@@ -1,10 +1,43 @@
-# P4 route, schema and error ledger
+# R1 route, schema and error ledger
 
 Authority: read-only `../../docs/backend-architecture.md`, `../../db/init.sql`
 and `../../db/seed.sql`. The inventory is **34 registered method/path pairs**:
 32 after P2 plus documents and set-document. APIHydra exercises all 16 change,
 11 project/epic, five testcase and two health operations successfully (34/34).
 No authentication middleware or invented authentication contract exists.
+
+## R1 removal audit and retained contracts
+
+Audited clean specification HEAD `12ae35ac5d1cbbc77e9460e1fae1e0476bb199b8`
+over merged P4 `b9f630f0466d93381cf8e8935563672c92c0f6b1` before editing.
+Local dev and origin/dev both identify that P4 commit; HEAD adds only spec010.
+Backend production/test symbol and import inspection, route registration,
+`go list -json ./cmd/... ./internal/... ./pkg/...`, test dependencies and server
+dependencies establish the following bounded removals:
+
+| Candidate | Fresh evidence and disposition |
+| --- | --- |
+| Private `API.e` in change, testcase, project, epic and health | Each has exactly one constructor assignment and no reads; API literals occur only in their constructors. Removed only field and assignment. Echo constructor arguments, `API.g`, service injection and every registration remain unchanged, including direct `e.GET("/api/health", a.check)`. |
+| Config `config.Data()["db-ws"]` print | Already commented out; removed this obsolete comment only. Global config, defaults, environment and startup flags remain unchanged. |
+| `pkg/db.Pool` and `TestPoolCreationAndPanicCause` | No production or external-test import, absent from server dependencies, and only two calls in its own test. No init/registration, ignored Go files/build variants, generator/linkname/plugin/unsafe use or documented backend consumer. Backend reflection is limited to test row scans and domain.TestCase field inspection. Removed the obsolete wrapper and its sole wrapper-specific test; no coverage exclusion added. |
+| Prior migration removals | Options, legacy domain.Change, RenderChange/RenderMutation and testcase transaction/history/reload paths are already absent in P4. They are not R1 deletions. |
+| Retained seams and error paths | `API.g` registers routes; Renderer/parser/sanitizer, repository pool interfaces and server application lifecycle callbacks all have live callers/tests. Defensive errors, SQL operations and startup/config behavior stay. No additional removal candidates selected. |
+
+`cmd/server.start` still calls `pgxpool.New` directly, returns wrapped errors,
+closes pools on listener/CORS failures, and owns listener/server/pool shutdown.
+`TestStartFailures` now checks the retained pgconn.ParseConfigError cause and
+unwrap chain; `TestLifecycle`, `TestStartCancelRealServer`,
+`TestHTTPServerPreservesReadTimeout`, `TestConfigurationPanicCausesAndPrecedence`
+and centralized error tests remain. Removing the unused panic wrapper does not
+change server failure handling. No shared contract or dependency is introduced.
+
+`TestAPIConstructorRouteInventory` adds an exact runtime assertion of all 34
+method/path pairs; the existing source/ledger tooling audit is unchanged.
+Existing module handler tests retain service/context/error/JSON assertions,
+including ID-only201, empty204, explicit project config and document operations.
+The full unchanged APIHydra campaign passes all 408 requests. See the
+[R1 checkpoint](backend-refactor-checkpoint.md) for criterion mapping, fresh
+statement counts, baseline lint debt and the factory/R2 handoff.
 
 | Method | Path | Current behavior / database source | Target and deferred pass | APIHydra |
 | --- | --- | --- | --- | --- |
@@ -226,3 +259,15 @@ See [checkpoint](backend-refactor-checkpoint.md) for criterion/test mapping and
 actual verification, and [API coverage](../apih-tests/coverage.md) for assertions
 and tool limitations. All five testcase successful operations are now measured separately from
 negative/boundary scenarios.
+
+## R2 duplicate-path reassessment
+
+After merged P4 and reviewed R1, no actionable duplicate paths remain from the
+original candidates. P1 centralized errors; P3/P4 removed duplicate change scans,
+testcase mutation completion/recalculation/rendering and transaction/state paths.
+Specialized change document operations already share SetDocument. Retain clear
+SQL/scan/affected-row repetition with distinct DTOs, ordering and causes, local
+repository test fakes, and the different owned-process/tool-command runners. No
+generic helper or empty R2 branch is warranted. All retained parity tests and
+408 APIHydra requests pass. The separate011 validation-cause repair precedes
+planned012 startup boundaries and does not represent a duplicate cleanup.

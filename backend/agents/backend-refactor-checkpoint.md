@@ -1,79 +1,76 @@
-# Backend testcase alignment checkpoint — P4 reviewed
+# Backend dead-code checkpoint — R1 reviewed; R2 no action
 
-2026-09-28; `change/009-backend-testcase-alignment` over freshly fetched merged
-P3 `b626dd528362c355ebc33d5c8134069a88c23377` (branch specification commit
-`8f057b9`). Factory implementation `5583ded` is published. Native review against
-the pinned P3 base completed with no actionable findings or fixes. The supervisor
-is publishing this checkpoint before the authorized squash merge to dev.
-Both numerical coverage gates pass. No transient retry was needed.
-**Overall verification remains incomplete because baseline lint still fails.**
-No R1 work or stage/production promotion occurred.
+2026-09-28; `change/010-backend-dead-code` over freshly fetched P4
+`b9f630f0466d93381cf8e8935563672c92c0f6b1`. Specification `12ae35a` and factory
+implementation `146346b` are published. Native review against the pinned P4
+base passed on its first pass without findings or fixes. The supervisor is
+publishing this checkpoint before the authorized squash merge to dev.
+Both coverage gates pass; baseline lint remains the only overall-check failure.
+No transient retry was needed, and no stage/production promotion occurred.
+The implementation child's sandbox-only remote-query failure did not block
+supervisor freshness/publication checks, which succeeded with authorized access.
 
-Next: supervisor merge-to-dev, then R1 deadcode audit under the authorized sequence.
-Factory/review transcripts: `/tmp/mch-p4-code-spec.log` and
-`/tmp/mch-p4-review-loop.log`. The
-[ledger](backend-contracts.md) records current contracts, precise non-atomic
-read limitations and every removed obsolete assertion's replacement evidence.
+R2 reassessment found no actionable duplicate paths after P3/P4/R1, so no empty
+R2 implementation branch is created. Next is the separately scoped
+`011-backend-validation-causes` error-contract repair, then `012-backend-startup-boundaries`
+(R3), R4 config, R5 lint/local patterns and R6 compact-code reassessment.
+Factory/review logs: `/tmp/mch-r1-code-spec.log` and
+`/tmp/mch-r1-review-loop.log`. No production change followed final measurements.
 
-## Implemented contract
+## Removal evidence and scope
 
-All five testcase routes remain. List returns current six-column rows ordered
-by ID after a live-parent check. Create performs one FK-backed INSERT and returns
-only {id}/201. Scenario/done updates and delete each perform one statement and
-return empty204, with zero affected rows404. Direct services validate positive
-IDs and trim scenarios; omitted/null done remains false. Errors preserve causes
-through central APIs. No transaction, procedure, history/version, parent count
-write, mutation reread or renderer coupling remains. Legacy domain.Change and
-RenderChange/RenderMutation are gone; explicit document rendering stays intact.
+The [ledger](backend-contracts.md#r1-removal-audit-and-retained-contracts) records
+each removal, current callers and retained candidates. Before editing,
+production/test symbol searches and Go package/test/server dependency inventories
+confirmed five unread private API.e fields and an unlinked pkg/db.Pool wrapper
+with only its own test calls. No ignored files/build tags, generators, linkname,
+registration, production reflection or documented supported backend consumer
+uses those candidates. Removed only those fields/assignments, the obsolete
+config debug comment, and db.go/db_test.go. API.g and every route stay intact.
 
-The new serial APIHydra flow creates its own project/epic/change and captures
-all IDs. Independent reads prove 0/0/0 → 0/2/0 → 1/2/50 → 2/2/100 → 1/2/50 →
-0/1/0 → 0/0/0 counts, text edits, defaults, order and both bool values. FK409
-preserves the parent/children/documents; explicit child removal allows parent
-deletion, followed by read/write404. Negative cases include all applicable
-invalid/blank/malformed/wrong-type/large-missing/missing/repeated-delete paths.
-P2/P3 fixtures are unchanged, including all 50,000 wide-count testcase rows.
+Already resolved by P3/P4: options, legacy domain.Change, mutation renderer
+adapters, and obsolete testcase transaction/history/reload paths. No R1 credit
+is claimed for those migrations. Retained: parser/sanitizer and renderer,
+repository pool and lifecycle seams, defensive errors and independent SQL.
+No dependency/schema/transaction/shared API/configuration behavior changed.
+Only backend paths and the official plan's top status are changed.
 
-The complete retained HTTP campaign passes, including seven project/epic/change
-tests, health and two migrated testcase tests. It additionally proves same-value
-timestamp advancement, stable created/unrelated fields and unchanged parent
-modified timestamps. Retained SQL proves three append-only document rows with
-two historic/one current, exact IDs/bodies/flags after deletion, and actual parent
-and child absence. Its counters never enter APIHydra coverage.
+Two meaningful parity gaps are addressed: an exact runtime 34-route inventory
+and pgconn.ParseConfigError/unwrap assertions on the real startup error path.
+All existing retained unit and integration assertions remain. The deleted
+wrapper test covered only its obsolete panic contract, not server startup.
 
-## Verification and failures
+## Final verification
 
-Logs: `/tmp/mch-p4-*.log`. Required commands were run on the final source;
-coverage is based on real statement counts, not package percentage averages.
+Logs are `/tmp/mch-r1-*.log`; fresh profiles, block/source/package inventories,
+provenance and results are under `backend/.coverage/unit/` and `.coverage/api/`.
+Final production source hashes match both inventories. Unit and legacy profiles
+were never merged into APIHydra coverage. The runner owns/removes its disposable
+PostgreSQL cluster and server; no external database was reset.
 
 | Command actually run | Exit and evidence |
 | --- | --- |
-| Backend: `golangci-lint fmt --no-config --enable gofumpt --enable goimports` on touched testcase/domain/change/server and testcase/change HTTP packages | 0; diff inspected |
-| Backend: `go test -short ./internal/testcase ./internal/change ./cmd/server` | 0; targeted tests; final testcase additions also pass |
-| Backend: `go test -run '^$' ./api-tests/...` | 0; migrated harness compiles |
-| Backend: `GOLANGCI_LINT_CACHE=/tmp/mch-p4-lint-cache golangci-lint run --no-config --default standard --enable revive --timeout 5m ./internal/testcase/... ./internal/change/... ./internal/domain/... ./cmd/server/...` | 0; touched production packages clean |
-| `GOLANGCI_LINT_CACHE=/tmp/mch-p4-lint-cache make -C backend check` | 2; format passes, baseline lint fails |
-| `GOLANGCI_LINT_CACHE=/tmp/mch-p4-lint-cache make -k -C backend check` | 2; format/vet/race/tooling pass, baseline lint fails; 45 Python tooling tests and Go validator pass |
-| `make -C backend coverage` | 0; 914/932 = 98.0687%, strict >95% passes |
+| Backend: `go list -json ./cmd/... ./internal/... ./pkg/...`; `go list -deps -test ./cmd/... ./internal/... ./pkg/...`; `go list -deps ./cmd/server` | 0 each before editing; db has no importer and is absent from server closure |
+| Backend: `go test -short -count=1 ./cmd/server ./internal/project ./internal/epic ./internal/change ./internal/testcase ./internal/health ./pkg/config ./pkg/db` | 0 baseline |
+| `GOLANGCI_LINT_CACHE=/tmp/mch-r1-lint-cache make -k -C backend check` before editing | 2; baseline lint11, formatting/vet/race/tooling pass |
+| Backend: `golangci-lint fmt --no-config --enable gofumpt --enable goimports cmd/server/main_test.go cmd/server/routes_test.go internal/change/api.go internal/testcase/api.go internal/project/api.go internal/epic/api.go internal/health/api.go pkg/config/config.go` | 0; only touched files; diff inspected |
+| Backend: `go test -short -count=1 ./cmd/server ./internal/project ./internal/epic ./internal/change ./internal/testcase ./internal/health ./pkg/config` | 0 final targeted tests |
+| `make -C backend check` | 2; formatting passes, baseline lint11; default lint cache also reports read-only writes |
+| `GOLANGCI_LINT_CACHE=/tmp/mch-r1-lint-cache make -k -C backend check` final | 2; writable cache resolves cache warnings; formatting/vet/race pass; 45 Python tooling tests and Go validator pass; only baseline lint fails |
+| `make -C backend coverage` | 0; 910/928 = 98.0603%, strict >95% passes |
 | `make -C backend deps-audit` | 0; no vulnerabilities found |
-| `make -C backend api-test` | 0; 408 requests and owned server pass; 843/932 = 90.4506%, >=90% passes |
-| `make -C backend legacy-api-test` | 0; all retained HTTP/SQL tests pass against its owned disposable cluster |
+| `make -C backend api-test` | 0; all 408 requests / 34 operations; 843/928 = 90.8405%, >=90% passes |
+| `python3 -B -m unittest discover -s backend/scripts -p 'contracts_test.py' -v` | 0; both contract checks pass after documentation updates |
 | `git diff --check` | 0 |
 
-First APIHydra attempt failed (make2, runner101): the new P4 file omitted its
-JSON Content-Type default. Added that header; all assertions were retained and
-the complete campaign rerun successfully. Failed-run diagnostics are preserved
-in `/tmp/mch-p4-api-runner-first.log`; that run establishes no valid coverage.
-A focused lint run exposed a missing testcase package comment; repaired before
-final verification. No application scenarios remain failed/skipped/blocked.
-Docker/benchmarks and the later owned-DB outage campaign are outside this pass.
-
-Known untouched baseline lint: three unchecked shared HTTP Body.Close calls,
-shared package/five exported comments and other existing package comments
-(11 reported issues: 3 errcheck, 8 revive). Final `check` reports epic/markdown;
-final `make -k check` reports health/markdown; an earlier run reported db/markdown.
-Revive report limiting varies the selected existing package-comment diagnostics. No failure is suppressed or gate
-weakened. Refactor policy permits review/merge with documented baseline debt.
+Final lint reports three unchecked shared HTTP Body.Close calls, the shared
+package comment and five exported comments, and config/markdown package
+comments (3 errcheck, 8 revive). All predate R1; revive report limiting changes
+which missing package comments appear (baseline included db/markdown). No new
+lint issue is introduced or suppressed. Repair this known debt in R5.
+No final application tests/scenarios failed, skipped or were blocked.
+Legacy SQL/HTTP was not rerun in R1; its retained P4 evidence remains historical.
+Docker/benchmarks and the later outage campaign were not run in this pass.
 
 ## Fresh statement counts and gaps
 
@@ -88,34 +85,46 @@ weakened. Refactor policy permits review/merge with documented baseline debt.
 | internal/project | 117/117 | 110/117 |
 | internal/testcase | 108/108 | 99/108 |
 | pkg/config | 30/30 | 21/30 |
-| pkg/db | 4/4 | 0/4 |
 | pkg/markdown | 10/10 | 8/10 |
-| **Aggregate** | **914/932** | **843/932** |
+| **Aggregate** | **910/928** | **843/928** |
 
-P3 denominator1021 → P4 denominator932 reflects removal of obsolete testcase
-transactions/reloads/rendering and the legacy renderer, plus API validation and
-current SQL. No packages, defensive paths or source statements were excluded.
-Unit gaps are the existing 18 server main/start/error-handler statements. API
-gaps (89 statements) include query/scan/iteration/Exec failures, UUID entropy,
-concurrent FK/parent races, startup/config, degraded health and Markdown failure
-branches; pkg/db is unlinked structural zero. Testcase's nine API gaps are DB
-failure arms. No fault endpoints, outage campaign, artificial tests or merged
-profiles were used. Domain has zero executable statements.
+The only denominator change from P4's 932 is the four executable statements in
+the proven unused db wrapper. API fields and a comment have no statements.
+Coverage was not the basis for deletion; no retained source/package is excluded.
+Unit gaps remain 18 server main/start/error-handler statements. API gaps total85:
+server15, change20, epic8, error10, health5, project7, testcase9, config9,
+markdown2. They cover startup/config/shutdown/error branches, SQL query/scan/
+iteration/Exec failures, entropy, concurrent FK/parent failures, degraded health
+and Markdown failures. Domain has no executable statements. No artificial
+HTTP trigger, runtime switch, weakened assertion or profile mixing was added.
 
-Fresh ignored artifacts are `backend/.coverage/unit/`, `.coverage/api/` and
-`.coverage/legacy/`; each retains separate provenance/logs/profiles. The
-[API report](../apih-tests/coverage.md) records 34/34 successful operations,
-installed manual revision, tool limitations and rerun command.
+## Acceptance and handoff
 
-## Acceptance evidence
-
-| Criterion and individual behavior | Named unit and real integration evidence |
+| Criterion | Evidence for retained behavior |
 | --- | --- |
-| P4-01 six fields, domain list request, parent/empty/order/closure/query-scan-iterator causes, read race | `TestRepositoryCurrentSixColumnList`, `TestCurrentTestcaseArchitecture`, `TestTestCaseListExactCurrentFields`, `TestServiceNormalizesAndDelegatesOnce`; P4 ordered/empty/missing independent lists; non-atomic race documented, empty-after-positive test |
-| P4-02 trim/positive create, one INSERT/defaults/ID-only, FK404 and unknown cause | `TestRepositoryCreateOnlyID`, `TestRepositoryTranslationKeepsExternalCauses`, `TestServiceRejectsInvalidTestCaseInput`, `TestServiceNormalizesAndDelegatesOnce`, `TestTestCaseAPIExactContracts`, `TestTestCaseHandlerErrorContracts`; P4 creates/default false/trimmed rows and missing-parent404 |
-| P4-03 one statement/error-only/affected rows/204/same-value/no parent or unrelated writes | `TestRepositorySingleStatementMutations`, service and API exact tests; P4 lifecycle; `TestTestCaseCurrentStateAndSameValueTimestamps` checks actual timestamps, created/unrelated/parent invariance |
-| P4-04 central bind/400/404/500 and causes, direct validation, zero/negative/large IDs, done false/true/omitted/null, route removal | `TestTestCaseHandlerErrorContracts`, `TestTestCaseAPIInvalidPayloads`, `TestTestCaseAPIExactContracts`, service tests, `TestRepositoryTranslationKeepsExternalCauses`, `TestTestCaseMoveRouteRemoved`; P4 negative cases and retained HTTP invalid/missing test |
-| P4-05 remove legacy types/helpers/transactions/renderer, retain explicit sanitization | `TestCurrentTestcaseArchitecture`, `TestChangeArchitectureAndP4Boundary` absence checks; `TestRendererExplicitSource` and retained P3 `TestServiceSanitizesExplicitReads`; P3 current-document/artifact API suite unchanged |
-| P4-06 independent workflow, ordered state, full count progression/delete-last, repeated same-value and negative operations | All repository/service/API tests above; retained P2/P3 completion unit tests; 96-request dependent P4 suite and migrated timestamp/lifecycle HTTP test |
-| P4-07 FK409/readable survivor, explicit child removal/delete204, removed-parent404, historic+current docs retained | Retained P3 `TestRepositorySingleStatementMutations`, central `TestChangeDatabaseContracts`, testcase single-statement tests; P4 FK/document workflow; adapted `TestChangeDeletionRetainsAppendOnlyDocuments` actually runs SQL retention and parent/child absence assertions |
-| P4-08 meaningful SQL/call/scan/cause tests, legacy migration, full route denominator, fresh validation/handoff | Tests above plus `ContractsTest.test_all_registered_routes_remain_in_ledger_denominator`; all 408 API requests and complete owned legacy campaign pass; ledger records obsolete assertion reasons and preserved guarantees |
+| R1-01 evidence-backed removal | Ledger audit, pre-edit Go dependency inventories, retained startup and API tests, final compile/race checks; comment deletion has no executable test |
+| R1-02 exact routes, service/context/status/JSON/middleware parity | New TestAPIConstructorRouteInventory; retained project/epic TestAPIRegisteredContracts, TestChangeAPIContracts, TestDocumentAPIShapeAndExplicitBooleans, TestTestCaseAPIExactContracts, TestHealthAliasExactContracts and handler error tests; unchanged route-ledger tooling test and full APIHydra campaign |
+| R1-03 startup/config/database ownership and causes | Strengthened TestStartFailures; retained TestLifecycle, TestStartCancelRealServer, TestHTTPServerPreservesReadTimeout, TestConfigurationPanicCausesAndPrecedence, TestInstalledJSONErrorContracts and central error tests; unchanged startup/flag/middleware code and owned real-server run |
+| R1-04 honest checks and bounded scope | Actual exits/counts/package gaps above; final diff and source-hash audit; no tooling/denominator/dependency changes |
+| R1-05 compact handoff | This checkpoint, ledger audit, refreshed API measurement and plan top status; parity/coverage evidence supports the documentation, with no prose-only unit test |
+
+## R2 duplicate-path reassessment
+
+Read-only review after P4/R1 inspected change/testcase services/repositories and
+rendering, project/epic CRUD, central errors and process runners. P1 centralized
+error handling; P3/P4 removed the duplicate testcase change scans, mutation
+completion/recalculation, transaction/state paths and renderer coupling. Change's
+specialized document writes already delegate to SetDocument. No remaining
+maintenance defect justifies a shared abstraction.
+
+Repeated Query/Scan/Close/Err and Exec/RowsAffected paths retain distinct SQL,
+DTOs, ordering and error semantics. Local test fakes pin those separate contracts;
+three-line completion arithmetic is clear in its owning services. Runner.execute
+owns process groups/timeouts/cleanup while coverage.command handles short checked
+tool commands: these are not equivalent operations. Preserve the architecture's
+explicit simple SQL instead of inventing generic CRUD/helpers or a fake framework.
+R2 outcome: **no actionable findings; no production diff or branch**.
+
+Supervisor next action: publish this checkpoint, run `scripts/merge-to-dev.pl`,
+verify clean local/remote dev, then proceed to the explicit011 validation-cause
+repair already scoped separately. No stage or production promotion.

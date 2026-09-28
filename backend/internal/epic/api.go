@@ -11,7 +11,6 @@ import (
 
 // API defines API values.
 type API struct {
-	e *echo.Echo
 	g *echo.Group
 	s *Service
 }
@@ -19,7 +18,6 @@ type API struct {
 // NewAPI initializes or executes NewAPI behavior.
 func NewAPI(e *echo.Echo, s *Service) *API {
 	a := &API{
-		e: e,
 		g: e.Group("/api").Group("/v1").Group("/epic"),
 		s: s,
 	}
