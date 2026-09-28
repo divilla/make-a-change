@@ -261,8 +261,10 @@ order, followed by an `=== Implementation ===` heading and the rendered Codex
 command. In a color-capable terminal, labels remain white while repository,
 specification, and branch values are blue, magenta, and green respectively.
 
-The implementation runs as
-`codex exec --json -o <temporary-result> '$change-code <specification>'` with
+The implementation runs as `codex exec --json` with `gpt-6-sol`, high reasoning,
+and the standard (`default`) service tier set explicitly on its command line.
+It writes the final response with `-o <temporary-result>` and invokes
+`$change-code <specification>` with
 the same elapsed-time, output-marker, activity-marker, success, failure, and
 interrupt behavior as `codex-review-loop.pl`. Raw JSON output is suppressed on
 success and printed on failure. When Codex succeeds, the script requires both a
@@ -285,7 +287,10 @@ passes. It uses the default remote branch from `origin/HEAD` unless
 `--base BRANCH` is supplied; arguments after the specification are forwarded
 to Codex. Every review pass uses the native `codex exec review --base` target,
 with the base resolved to a pinned commit before the loop begins. The
-specification is supplied only to the subsequent `$change-fix-findings` fixer
+review and every fresh findings-fix session explicitly select `gpt-6-sol`, high
+reasoning, and the standard (`default`) service tier. An explicit review model
+option still overrides the review default. The specification is supplied only
+to the subsequent `$change-fix-findings` fixer
 because Codex treats a custom review prompt and `--base` as conflicting review
 targets.
 Custom review instructions from the caller are therefore rejected, whether

@@ -62,21 +62,22 @@ assert_equal(
 
 assert_equal(
 	join("\0", parse_review_options('--base', 'develop')),
-	join("\0", 'develop', '--model', 'gpt-6-sol'),
-	'reviews default to GPT-6 Sol',
+	join("\0", 'develop', '--model', 'gpt-6-sol',
+		'-c', 'model_reasoning_effort="high"', '-c', 'service_tier="default"'),
+	'reviews default to GPT-6 Sol, high reasoning and standard speed',
 );
 
 for my $model_options (['--model=gpt-6-astra'], ['-m', 'gpt-6-astra'], ['-mgpt-6-astra']) {
 	assert_equal(
 		join("\0", parse_review_options(@$model_options)),
-		join("\0", '', @$model_options),
+		join("\0", '', @$model_options, codex_settings()),
 		'explicit model options override the default without duplicate flags',
 	);
 }
 
 assert_equal(
 	join("\0", parse_review_options('--model', 'gpt-5', '--title', 'Review title', '--base', 'develop')),
-	join("\0", 'develop', '--model', 'gpt-5', '--title', 'Review title'),
+	join("\0", 'develop', '--model', 'gpt-5', '--title', 'Review title', codex_settings()),
 	'option values remain distinct from positional review prompts',
 );
 

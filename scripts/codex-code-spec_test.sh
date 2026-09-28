@@ -35,10 +35,14 @@ set -euo pipefail
 [[ ${2-} == --json ]]
 [[ ${3-} == --model ]]
 [[ ${4-} == gpt-6-sol ]]
-[[ ${5-} == -o ]]
-result=${6-}
-prompt=${7-}
-[[ $# -eq 7 ]]
+[[ ${5-} == -c ]]
+[[ ${6-} == 'model_reasoning_effort="high"' ]]
+[[ ${7-} == -c ]]
+[[ ${8-} == 'service_tier="default"' ]]
+[[ ${9-} == -o ]]
+result=${10-}
+prompt=${11-}
+[[ $# -eq 11 ]]
 
 printf '%s\n' '{"type":"started"}'
 if [[ ${CODEX_TEST_FAIL-} == 1 ]]; then
@@ -134,7 +138,7 @@ $0 == "Repository: " repo {
 }
 END { if (!found) exit 1 }
 ' "$first_output"
-grep -Eq '^codex exec --json --model gpt-6-sol -o /.+/implementation-result.md ' "$first_output"
+grep -Fq "codex exec --json --model gpt-6-sol -c 'model_reasoning_effort=\"high\"' -c 'service_tier=\"default\"' -o " "$first_output"
 grep -Fq "'\$change-code agent/specs/000-domain-types.md'" "$first_output"
 awk '
 /^-+$/ {

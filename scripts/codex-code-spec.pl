@@ -319,7 +319,11 @@ sub main {
 	});
 	print "\n=== Implementation ===\n";
 	my $prompt = '$change-code ' . $specification;
-	my $status = run_codex('codex', 'exec', '--json', '--model', 'gpt-6-sol', '-o', $result_file, $prompt);
+	my $status = run_codex(
+		'codex', 'exec', '--json', '--model', 'gpt-6-sol',
+		'-c', 'model_reasoning_effort="high"', '-c', 'service_tier="default"',
+		'-o', $result_file, $prompt,
+	);
 	exit $status if $status != 0;
 	-f $result_file or fail('implementation did not write a final response');
 	print_file_block($result_file);

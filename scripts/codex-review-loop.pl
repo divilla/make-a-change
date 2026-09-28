@@ -308,6 +308,10 @@ sub commit_review_fix {
 	exit $status if $status != 0;
 }
 
+sub codex_settings {
+	return ('-c', 'model_reasoning_effort="high"', '-c', 'service_tier="default"');
+}
+
 sub parse_review_options {
 	my (@arguments) = @_;
 	my $review_base = '';
@@ -351,6 +355,7 @@ sub parse_review_options {
 		}
 	}
 	unshift @review_arguments, '--model', 'gpt-6-sol' unless $has_model;
+	push @review_arguments, codex_settings();
 	return ($review_base, @review_arguments);
 }
 
@@ -439,7 +444,10 @@ sub main {
 		$before_fix =~ s/\s+\z//;
 		unlink $fix_result_file;
 		printf "=== Fix findings %02d ===\n", $fix_number;
-		$status = run_codex($findings_file, 'codex', 'exec', '--json', '--model', 'gpt-6-sol', '-o', $fix_result_file, $fix_prompt);
+		$status = run_codex(
+			$findings_file, 'codex', 'exec', '--json', '--model', 'gpt-6-sol',
+			codex_settings(), '-o', $fix_result_file, $fix_prompt,
+		);
 		exit $status if $status != 0;
 		my ($after_fix, $after_status) = capture_command(0, 'git', 'rev-parse', 'HEAD');
 		$after_status == 0 or exit $after_status;
