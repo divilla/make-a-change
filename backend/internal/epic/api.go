@@ -85,8 +85,7 @@ func (a *API) updateEpic(c *echo.Context) error {
 	if v := validate.Struct(req); !v.Validate() {
 		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrEpicInvalidInput))
 	}
-	err := a.s.UpdateEpic(c.Request().Context(), req)
-	if err != nil {
+	if err := a.s.UpdateEpic(c.Request().Context(), req); err != nil {
 		return apperror.HTTP(err)
 	}
 	return c.NoContent(http.StatusNoContent)

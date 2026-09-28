@@ -336,3 +336,17 @@ All408 APIHydra requests and full legacy HTTP/SQL parity pass. Fresh gates pass
 925/939 unit and851/939 integration. Normal lint displays11 baseline diagnostics;
 repeated-message limits mean this is not a total unique inventory. R5 will audit
 without diagnostic caps, repair the actual debt and retain normal Make checks.
+
+## R6 scoped mutation errors
+
+Spec015 scopes14 one-use service errors into their immediate conditionals:
+project update, epic update, nine specialized change writes and testcase
+update/update-done/delete. Exact service calls, domain requests, contexts,
+validation/cause chains, status/envelope behavior and empty204 remain unchanged.
+Existing API test tables now also assert missing request/context/cause/call-order
+parity; no syntax test, generic helper or result-variable rewrite was added.
+All34 operations/408 APIHydra requests and full legacy parity pass. Required
+Make checks are green; fresh unit911/925 and integration837/925 both pass.
+The14-statement denominator change is Go instrumentation of scoped declarations,
+not removed behavior or excluded production. Separate016 retains final audit
+and owned-DB-outage scope.

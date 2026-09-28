@@ -1,6 +1,7 @@
 package testcase
 
 import (
+	"context"
 	"mch_api/internal/domain"
 	"net/http"
 	"net/http/httptest"
@@ -43,13 +44,17 @@ func TestTestCaseAPIExactContracts(t *testing.T) {
 			r := &fakeTestCaseRepository{}
 			e := echo.New()
 			NewAPI(e, NewService(r))
-			req := httptest.NewRequest("POST", "/api/v1/test-case/"+tc.name, strings.NewReader(tc.body))
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			req := httptest.NewRequest("POST", "/api/v1/test-case/"+tc.name, strings.NewReader(tc.body)).WithContext(ctx)
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
 			e.ServeHTTP(rec, req)
 			require.Equal(t, tc.status, rec.Code)
 			require.Equal(t, tc.want, rec.Body.String())
 			require.Equal(t, []any{tc.request}, r.calls)
+			require.Len(t, r.contexts, 1)
+			require.Same(t, ctx, r.contexts[0])
 		})
 	}
 }

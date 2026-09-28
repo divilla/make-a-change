@@ -70,8 +70,7 @@ func (a *API) updateTestCase(c *echo.Context) error {
 	if v := validate.Struct(req); !v.Validate() {
 		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrTestCaseInvalidInput))
 	}
-	err := a.s.UpdateTestCase(c.Request().Context(), req)
-	if err != nil {
+	if err := a.s.UpdateTestCase(c.Request().Context(), req); err != nil {
 		return apperror.HTTP(err)
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -85,8 +84,7 @@ func (a *API) updateTestCaseDone(c *echo.Context) error {
 	if v := validate.Struct(req); !v.Validate() {
 		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrTestCaseInvalidInput))
 	}
-	err := a.s.UpdateTestCaseDone(c.Request().Context(), req)
-	if err != nil {
+	if err := a.s.UpdateTestCaseDone(c.Request().Context(), req); err != nil {
 		return apperror.HTTP(err)
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -100,8 +98,7 @@ func (a *API) deleteTestCase(c *echo.Context) error {
 	if v := validate.Struct(req); !v.Validate() {
 		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrTestCaseInvalidInput))
 	}
-	err := a.s.DeleteTestCase(c.Request().Context(), req)
-	if err != nil {
+	if err := a.s.DeleteTestCase(c.Request().Context(), req); err != nil {
 		return apperror.HTTP(err)
 	}
 	return c.NoContent(http.StatusNoContent)

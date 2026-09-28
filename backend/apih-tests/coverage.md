@@ -1,26 +1,26 @@
-# APIHydra R4 measurement
+# APIHydra R6 measurement
 
-Measured 2026-09-28 on `change/013-backend-config-isolation`, published
-implementation `7686129` over merged dev `b48efed`; native review passed clean.
-**All 408 requests pass**: 96 P4 in
-[p4/steps.yaml](p4/steps.yaml), 212 P3, 91 P2, 7 errors and 2 health aliases.
-APIHydra and the owned instrumented server exit0. The isolated runner loads
-unchanged root init/seed and [fixtures.sql](fixtures.sql), then stops/removes
-its own private PostgreSQL cluster and server. No external database is reset.
+Measured 2026-09-28 on `change/015-backend-compact-handlers`, published
+implementation `7446652` over merged R5 dev `bbde3fe`; native review passed clean.
+All408 requests in the five unchanged suites pass:96 P4,212 P3,91 P2,7 errors,
+and2 health aliases. The owned instrumented server and APIHydra exit0. The
+runner loads unchanged init/seed and fixtures into its private PostgreSQL
+cluster, then stops/removes only its owned resources.
 
-`make -C backend api-test` exits **0**: **851/939 = 90.6283%** production
-statement coverage, passing >=90%. Independent unit coverage is
-**925/939 = 98.5091%**, passing strict >95%. Testcase is 108/108 unit and 99/108
-API statements. Unit and legacy profiles are never merged into integration.
-R1 previously removed the audited unused pkg/db wrapper; 011 added seven real
-validation-cause statements and R3 adds four composition-boundary statements.
-R4 adds local configuration construction while removing the separate main Get
-call; the production denominator remains 939. Config is 31/31 unit and 22/31
-API statements; main is 77/91 unit and 75/91 API. Domain has no executable statements. No
-retained production package is excluded. All router/lifecycle statements are
-unit-covered; process-only main statements remain honestly uncovered.
-The [checkpoint](../agents/backend-refactor-checkpoint.md) lists every package,
-command exit, named acceptance evidence and remaining baseline lint failures.
+`make -C backend api-test` exits0 with **837/925 = 90.4865%**, passing>=90%.
+Independent unit coverage is **911/925 = 98.4865%**, passing strict>95%.
+All other required Make targets, including the complete legacy HTTP/SQL suite,
+pass. Legacy and unit counters never enter APIHydra coverage.
+
+R6 scopes14 one-use mutation errors into their immediate conditionals without
+changing calls, validation, error causes or responses. Go instrumentation reports
+14 fewer statements for those declarations; no retained behavior, production
+package, defensive path or profile is excluded. Domain has no executable
+statements. Unit gaps remain14 process-only main statements; API gaps remain88
+SQL/external-error/startup/config/health/Markdown branches. The
+[checkpoint](../agents/backend-refactor-checkpoint.md) records package counts,
+commands, parity evidence and remaining behavior gaps. Separate016 owns the
+final failure-integration campaign and combined audit.
 
 ## Operation inventory and scenarios
 

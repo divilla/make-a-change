@@ -108,8 +108,7 @@ func (a *API) updateEpic(c *echo.Context) error {
 	if v := validate.Struct(req); !v.Validate() {
 		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
-	err := a.s.UpdateEpic(c.Request().Context(), req)
-	if err != nil {
+	if err := a.s.UpdateEpic(c.Request().Context(), req); err != nil {
 		return apperror.HTTP(err)
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -123,8 +122,7 @@ func (a *API) updateChangeTypes(c *echo.Context) error {
 	if v := validate.Struct(req); !v.Validate() {
 		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
-	err := a.s.UpdateChangeTypes(c.Request().Context(), req)
-	if err != nil {
+	if err := a.s.UpdateChangeTypes(c.Request().Context(), req); err != nil {
 		return apperror.HTTP(err)
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -138,8 +136,7 @@ func (a *API) updateTitle(c *echo.Context) error {
 	if v := validate.Struct(req); !v.Validate() {
 		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
-	err := a.s.UpdateTitle(c.Request().Context(), req)
-	if err != nil {
+	if err := a.s.UpdateTitle(c.Request().Context(), req); err != nil {
 		return apperror.HTTP(err)
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -153,8 +150,7 @@ func (a *API) updateBrief(c *echo.Context) error {
 	if v := validate.Struct(req); !v.Validate() {
 		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
-	err := a.s.UpdateBrief(c.Request().Context(), req)
-	if err != nil {
+	if err := a.s.UpdateBrief(c.Request().Context(), req); err != nil {
 		return apperror.HTTP(err)
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -168,8 +164,7 @@ func (a *API) updateSpec(c *echo.Context) error {
 	if v := validate.Struct(req); !v.Validate() {
 		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
-	err := a.s.UpdateSpec(c.Request().Context(), req)
-	if err != nil {
+	if err := a.s.UpdateSpec(c.Request().Context(), req); err != nil {
 		return apperror.HTTP(err)
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -183,8 +178,7 @@ func (a *API) updatePR(c *echo.Context) error {
 	if v := validate.Struct(req); !v.Validate() {
 		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
-	err := a.s.UpdatePR(c.Request().Context(), req)
-	if err != nil {
+	if err := a.s.UpdatePR(c.Request().Context(), req); err != nil {
 		return apperror.HTTP(err)
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -198,8 +192,7 @@ func (a *API) updatePRUrl(c *echo.Context) error {
 	if v := validate.Struct(req); !v.Validate() {
 		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
-	err := a.s.UpdatePRUrl(c.Request().Context(), req)
-	if err != nil {
+	if err := a.s.UpdatePRUrl(c.Request().Context(), req); err != nil {
 		return apperror.HTTP(err)
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -213,8 +206,7 @@ func (a *API) updatePhase(c *echo.Context) error {
 	if v := validate.Struct(req); !v.Validate() {
 		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
-	err := a.s.UpdatePhase(c.Request().Context(), req)
-	if err != nil {
+	if err := a.s.UpdatePhase(c.Request().Context(), req); err != nil {
 		return apperror.HTTP(err)
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -228,8 +220,7 @@ func (a *API) updateOpen(c *echo.Context) error {
 	if v := validate.Struct(req); !v.Validate() {
 		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrChangeInvalidInput))
 	}
-	err := a.s.UpdateOpen(c.Request().Context(), req)
-	if err != nil {
+	if err := a.s.UpdateOpen(c.Request().Context(), req); err != nil {
 		return apperror.HTTP(err)
 	}
 	return c.NoContent(http.StatusNoContent)

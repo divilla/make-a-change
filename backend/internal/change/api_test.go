@@ -1,6 +1,7 @@
 package change
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"mch_api/internal/domain"
@@ -27,6 +28,20 @@ func TestRemovedChangeRoutes(t *testing.T) {
 }
 
 func TestChangeAPIContracts(t *testing.T) {
+	mutations := map[string]struct {
+		calls   []string
+		request any
+	}{
+		"update-epic":         {[]string{"Project", "EpicProject", "UpdateEpic"}, domain.ChangeUpdateEpicRequest{ID: 7, EpicID: intPtr(4)}},
+		"update-phase":        {[]string{"Project", "UpdatePhase"}, domain.ChangeUpdatePhaseRequest{ID: 7, ChangePhase: "review"}},
+		"update-open":         {[]string{"UpdateOpen"}, domain.ChangeUpdateOpenRequest{ID: 7, Open: boolPtr(false)}},
+		"update-change-types": {[]string{"Project", "UpdateChangeTypes"}, domain.ChangeUpdateChangeTypesRequest{ID: 7, ChangeTypes: []string{"fix"}}},
+		"update-title":        {[]string{"Exists", "UpdateTitle"}, domain.ChangeUpdateTitleRequest{ID: 7, Title: "Title"}},
+		"update-brief":        {[]string{"Project", "SetDocument"}, domain.ChangeDocumentSetRequest{ID: 7, DocType: "brief", Body: "Brief", AgentEdit: boolPtr(false)}},
+		"update-spec":         {[]string{"Project", "SetDocument"}, domain.ChangeDocumentSetRequest{ID: 7, DocType: "spec", Body: "Spec", AgentEdit: boolPtr(true)}},
+		"update-pr":           {[]string{"Project", "SetDocument"}, domain.ChangeDocumentSetRequest{ID: 7, DocType: "pr", Body: "PR", AgentEdit: boolPtr(false)}},
+		"update-pr-url":       {[]string{"UpdatePRUrl"}, domain.ChangeUpdatePRUrlRequest{ID: 7, PRUrl: "https://pr"}},
+	}
 	cases := []struct {
 		path, body string
 		status     int
@@ -58,12 +73,38 @@ func TestChangeAPIContracts(t *testing.T) {
 			for _, input := range inputs {
 				t.Run(input.name, func(t *testing.T) {
 					repo := &fakeChangeRepository{projectID: 9, epicProjectID: 9, err: input.err, details: domain.ChangeDetails{ChangeListItem: domain.ChangeListItem{ID: 7, ChangeTypes: []string{}}}}
+					mutation, isMutation := mutations[tc.path]
 					e := echo.New()
-					NewAPI(e, NewService(repo, Renderer{}, defaultConfig()))
-					req := httptest.NewRequest("POST", "/api/v1/change/"+tc.path, strings.NewReader(input.body))
+					config := defaultConfig()
+					NewAPI(e, NewService(repo, Renderer{}, config))
+					var returned error
+					e.HTTPErrorHandler = func(c *echo.Context, err error) {
+						returned = err
+						echo.DefaultHTTPErrorHandler(false)(c, err)
+					}
+					ctx, cancel := context.WithCancel(context.Background())
+					defer cancel()
+					req := httptest.NewRequest("POST", "/api/v1/change/"+tc.path, strings.NewReader(input.body)).WithContext(ctx)
 					req.Header.Set("Content-Type", "application/json")
 					rec := httptest.NewRecorder()
 					e.ServeHTTP(rec, req)
+					if input.err != nil {
+						require.ErrorIs(t, returned, input.err)
+					}
+					if isMutation && input.body == tc.body {
+						if input.err == nil {
+							require.Equal(t, mutation.calls, repo.calls)
+							require.Equal(t, mutation.request, repo.requests[len(repo.requests)-1])
+						} else {
+							require.Equal(t, mutation.calls[:1], repo.calls)
+						}
+						for _, got := range repo.contexts {
+							require.Same(t, ctx, got)
+						}
+						for _, got := range config.contexts {
+							require.Same(t, ctx, got)
+						}
+					}
 					require.Equal(t, input.status, rec.Code, rec.Body.String())
 					if input.status == 204 {
 						require.Zero(t, rec.Body.Len())

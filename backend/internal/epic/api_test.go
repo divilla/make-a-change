@@ -36,6 +36,9 @@ func TestAPIRegisteredContracts(t *testing.T) {
 			case "update", "delete":
 				require.Equal(t, 204, rec.Code)
 				require.Zero(t, rec.Body.Len())
+				if op == "update" {
+					require.Equal(t, domain.EpicUpdateRequest{ID: 7, Name: "Name"}, r.req)
+				}
 			default:
 				require.Equal(t, 200, rec.Code)
 				expected := `{"id":7,"project_id":7,"name":"Name","done_tc":1,"total_tc":2,"completed":50,"change_count":70000,"created":"2026-09-28T00:00:00Z","modified":"2026-09-28T00:00:00Z"}`

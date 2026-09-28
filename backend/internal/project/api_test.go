@@ -36,6 +36,9 @@ func TestAPIRegisteredContracts(t *testing.T) {
 			case "update", "delete":
 				require.Equal(t, 204, rec.Code)
 				require.Zero(t, rec.Body.Len())
+				if op == "update" {
+					require.Equal(t, domain.ProjectUpdateRequest{ID: 7, Name: "Name"}, r.req)
+				}
 			default:
 				require.Equal(t, 200, rec.Code)
 				expected := `{"id":7,"name":"Name","config":"custom","last_ref":42,"change_count":70000,"created":"2026-09-28T00:00:00Z","modified":"2026-09-28T00:00:00Z"}`

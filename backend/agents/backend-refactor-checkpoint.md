@@ -1,122 +1,114 @@
-# Backend refactor checkpoint — 014 local patterns (R5 reviewed)
+# Backend refactor checkpoint — 015 compact handlers (R6 reviewed)
 
-2026-09-28; `change/014-backend-local-patterns`, specification HEAD `99c9b8a`
-over merged R4 `d35ea6852fecc0d6a518bdb37ab188ffa127e2a7`. Factory implementation `1df4646` is published. Native review against the pinned
-R4 base passed on its first pass without findings or fixes. All required checks
+2026-09-28; `change/015-backend-compact-handlers` over freshly fetched R5
+`bbde3fee7476bb05267fd778611228b47d27bb67`. Factory implementation `7446652`
+and fresh contract/coverage report `ae1318f` are published. Native review against
+the pinned R5 base passed on its first pass without findings or fixes; the
+reviewer repeated backend unit and whitespace checks. All five validation targets
 and both strict coverage gates pass. The supervisor is publishing this checkpoint
 before the authorized squash merge to dev. No stage/production promotion occurred.
-The first native-review launch was rejected before execution because automatic
-approval review timed out; after verifying the clean published state and that
-no review had started, one permitted retry succeeded. No implementation retry
-or duplicate review process occurred. Transcripts: `/tmp/mch-r5-code-spec.log`
-and `/tmp/mch-r5-review-loop.log`.
 
-Next: complete the authorized014 merge, then audit R6 compact-handler candidates
-for015; keep the separate016 final
-failure-integration campaign out of this pass.
+The initial branch/spec creation was rejected before process creation because
+automatic approval review timed out. The supervisor verified clean dev, no015
+branch/spec/factory log, then one permitted retry succeeded. No command was
+repeated after a partial Git mutation and no duplicate factory process started.
+Transcripts: `/tmp/mch-r6-code-spec.log` and `/tmp/mch-r6-review-loop.log`.
 
-## Fresh baseline and repaired owners
+Next after merge: separate016 final verification, owned-DB-outage campaign and
+combined architecture review. No additional R6 compression is included.
 
-The checkout was clean on the expected branch. Before editing, repeated normal
-format/check plus uncapped lint matched the supervisor's baseline. Logs:
-`/tmp/mch-r5-implementation-baseline-{format,check,uncapped}.log`.
+## Bounded audit and acceptance evidence
 
-| Actual finding at baseline | Owner and repair |
+| Criterion | Scope and evidence |
 | --- | --- |
-| Three errcheck findings at shared/client.go:43,96,117 | NewClient/Get/Post each retain one immediate deferred close; private closeResponseBody reports Close errors with nonfatal testify assertion and method/path context. |
-| Missing shared package comment at shared/client.go:1 | One package comment describes legacy HTTP client/fixture cleanup. |
-| Five exported-comment findings at shared/client.go:19,28,61,88,105 | Client, NewClient, CleanupProject, Get and Post now describe their actual responsibilities. Existing BaseURL comment remains. |
-| Four missing package comments at epic/api.go:1, health/api.go:1, project/api.go:1, markdown/markdown.go:1 | One concise package comment at each owning source location. |
-| No formatter findings | Pinned formatting applied only to the six edited/new Go files; no unrelated mechanical diff. Domain already has its package comment and was not edited. |
+| R6-01 | Fresh source inspection found exactly14 separate single-error service assignments, each read only by the immediately following conditional/error return. Actual handlers: project.updateProject; epic.updateEpic; change.updateEpic, updateChangeTypes, updateTitle, updateBrief, updateSpec, updatePR, updatePRUrl, updatePhase, updateOpen; testcase.updateTestCase, updateTestCaseDone, deleteTestCase. Base SHA is above. Adjacent delete/set-document handlers already use this idiom. |
+| R6-02 | Exact call, context/request expressions, validation/binding, centralized error return and empty204 success return remain unchanged. Existing meaningful tests are mapped below; missing API-boundary request/context/call/cause assertions were added to existing matrices. No new public/shared type or contract. |
+| R6-03 | Manually inspected all14 production hunks: only two-line declaration/conditional pairs became scoped if initializers. Four api.go files, +14/-28 production lines. Result-returning handlers, routes, lower layers, SQL and configuration untouched. No helper or formatting sweep. |
+| R6-04 | Affected baseline/final tests, normal check, fresh independent unit/APIHydra measurement, vulnerability audit and complete owned legacy campaign all pass. Same production inventory, strict thresholds and retained scenarios; no tooling, runner, fixture or ownership edits. |
+| R6-05 | This checkpoint, only the official plan's top status, and backend/implementation-log.md record the handoff. The log location follows spec015's explicit backend-only scope. |
 
-Uncapped lint reported **13 issues: 3 errcheck, 10 revive**. Normal check displayed
-11 because repeated diagnostics are capped; epic/project/health/markdown account
-for the full four-package inventory. This resolves the earlier checkpoint's
-candidate debt without assuming that its displayed subset was exhaustive.
+### Behavioral test mapping
 
-## Scope and acceptance evidence
-
-Only shared harness close-error reporting changes runtime behavior. API/domain/
-SQL, status/envelope shapes, ID-only201/empty204, configuration selection,
-append-only documents, ordering/nullability and resource ownership remain.
-Timeout, environment base URL, payloads, status returns, original require/assert
-calls, decode diagnostics and project fixture cleanup order are unchanged.
-No dependencies, tools, thresholds, suites, server hooks or DB fixtures changed.
-
-| Criterion | Evidence |
-| --- | --- |
-| R5-01 baseline and clean check | Fresh capped/uncapped inventory above; final normal check passes formatting, zero lint issues, vet, uncached race tests, all45 Python tooling tests and Go suite-validator tests. No suppression/configuration changes. |
-| R5-02 owned response cleanup | TestClientResponseCleanup proves NewClient health method/path, five-second timeout and base-URL override; GET/POST each close once with nil output or decoded JSON, retaining status/payload/header behavior. Each successful acquisition registers its defer before subsequent reads/assertions. |
-| R5-03 failure verification | TestCloseResponseBody records genuine Close errors through testify's testing interface, checks useful context, one close and continuing defers. TestClientCleanupFailures launches the real test executable: health Close failure, GET decode failure, POST decode failure and POST read failure all produce exit1, a close diagnostic and exactly one close; primary errors/POST body text and other registered cleanup remain visible. Deliberately failing children are asserted by passing parent tests. Complete legacy HTTP/SQL suite passes. |
-| R5-04 comments/formatting | Pinned formatter and unchanged revive checks pass; retained behavioral suites pass. No comment-text tests or unrelated comment rewrites. |
-| R5-05 contract parity | Existing production unit/race tests and all five unchanged APIHydra suites pass; all408 requests/34 operations retained. Existing route-ledger tooling audit passes. Source audit finds no Go transaction APIs or prohibited service imports, and error constructors remain confined to internal/error. |
-| R5-06 compact delivery | This checkpoint, only the official plan's top status, and backend/implementation-log.md record results and review/R6 handoff. Log location follows spec014's explicit backend-only override. |
-
-The focused harness tests remain under api-tests/shared and outside production
-coverage. Private recording bodies/transports test the existing client without
-changing its public surface. Test-only default-transport substitution is scoped
-to sequential tests and restored by cleanup. No real external service is used
-by these focused tests. Existing integration runners retain owned resources.
+- Project/epic: TestAPIRegisteredContracts proves exact one repository call,
+  context identity and truly empty204; its update case now also checks the
+  domain request. TestProjectHandlerErrorContracts/TestEpicHandlerErrorContracts
+  retain direct/wrapped error identity and exact status/body messages.
+- Change: TestChangeAPIContracts retains all original success, malformed,
+  wrong-type, invalid, missing and failure scenarios. It now checks returned
+  cause identity and, for the nine edited mutations, exact successful repository
+  operation sequences, final domain requests and context identity. Failed calls
+  retain the original first-operation failure injection and now assert no extra
+  call and context identity. Existing service tests cover collaborator failure
+  at later steps and specialized document mapping. Empty204 assertions remain.
+- Testcase: TestTestCaseAPIExactContracts retains exact requests, one call,
+  wide IDs, explicit/omitted/null booleans and empty204 bodies; it now checks
+  request-context identity. TestTestCaseHandlerErrorContracts retains centralized
+  error/cause and exact response assertions for all three edited mutations.
+- TestAPIValidationCauses in all four modules retains actual validator field/rule
+  causes, bind wrapping, public400 bodies and no collaborator calls on rejection.
+  TestUpdatePRURLValidationCauses retains URL parser cause identity. The server's
+  TestAPIConstructorRouteInventory and tooling ledger checks retain all34 routes.
+- Reference/diff inspection establishes R6-01/R6-03 scope; no syntax/AST or
+  prose-only tests were added. All assertions are behavioral and use existing
+  repository fakes and real services; no test seam was added to production.
 
 ## Commands and results
 
-Commands run from root except those marked backend. Every final command below
-exited0. Final logs are `/tmp/mch-r5-{targeted,check-final,coverage-final,
-deps-audit-final,api-test-final,legacy-api-test}.log`.
+Commands run from root unless marked backend. All final validation exits are0.
+Logs: `/tmp/mch-r6-{baseline,targeted,check,coverage,deps-audit,api-test,legacy-api-test}.log`.
 
 | Command actually run | Exit/result |
 | --- | --- |
-| `GOLANGCI_LINT_CACHE=/tmp/mch-r5-lint-cache make -C backend format-check` (baseline) | 0, no differences |
-| `GOLANGCI_LINT_CACHE=/tmp/mch-r5-lint-cache make -C backend check` (baseline) | 2 at lint; 11 displayed issues |
-| Backend: `GOLANGCI_LINT_CACHE=/tmp/mch-r5-lint-cache golangci-lint run --no-config --default standard --enable revive --timeout 5m --max-same-issues=0 --max-issues-per-linter=0 ./cmd/... ./internal/... ./pkg/... ./api-tests/...` (baseline) | 1; complete13-finding inventory |
-| Backend: `golangci-lint fmt --no-config --enable gofumpt --enable goimports api-tests/shared/client.go api-tests/shared/client_test.go internal/epic/api.go internal/health/api.go internal/project/api.go pkg/markdown/markdown.go` | 0; diff inspected |
-| Backend: `go test -short -count=1 -race ./api-tests/shared` | 0, focused harness cleanup/parity tests |
-| `GOLANGCI_LINT_CACHE=/tmp/mch-r5-lint-cache make -C backend check` | 0; normal unchanged checks all enabled and green |
-| `make -C backend coverage` | 0; 925/939, >95% gate passes |
+| `git ls-remote origin refs/heads/dev` | 128: host SSH configuration ownership error; no remote operation executed |
+| `GIT_SSH_COMMAND='ssh -F /dev/null' git ls-remote origin refs/heads/dev` | 0; remote dev equals the R5 base above, using a process-local config override |
+| Backend: `go test -short -count=1 ./internal/project ./internal/epic ./internal/change ./internal/testcase` | 0 baseline and final; all four affected modules pass |
+| Backend: `golangci-lint fmt --no-config --enable gofumpt --enable goimports internal/project/api.go internal/epic/api.go internal/change/api.go internal/testcase/api.go internal/project/api_test.go internal/epic/api_test.go internal/change/api_test.go internal/testcase/api_test.go` | 0; touched-file diff inspected; final change/api_test.go adjustment formatted again with the same flags |
+| `GOLANGCI_LINT_CACHE=/tmp/mch-r6-lint-cache make -C backend check` | 0: formatting, zero lint findings, vet, race tests, all45 Python tooling tests and Go suite-validator tests |
+| `make -C backend coverage` | 0; 911/925 statements, >95% gate passes |
 | `make -C backend deps-audit` | 0; no vulnerabilities |
-| `make -C backend api-test` | 0; five APIHydra suites pass, 851/939, >=90% gate passes |
-| `make -C backend legacy-api-test` | 0; change/epic/health/project/shared/testcase packages pass |
+| `make -C backend api-test` | 0; all five unchanged APIHydra suites pass, 837/925 statements, >=90% gate passes |
+| `make -C backend legacy-api-test` | 0; change/epic/health/project/shared/testcase HTTP/SQL packages pass |
+| `scripts/codex-review-loop.pl agent/specs/015-backend-compact-handlers.md --base origin/dev` | 0; native pass1 clean, no fixes |
 | `git diff --check` | 0; tracked/untracked scope inspected |
 
-No failed implementation attempts, unavailable prerequisites, unrun required
-commands, or skipped retained scenarios remain. The intentional child-process
-failures prove failure propagation; tooling's expected simulated cleanup-error
-messages also belong to passing regression tests. Native review remains the
-factory's next step. No performance/toolchain change requires benchmarks/Docker.
+No failing, skipped or blocked required scenarios remain. APIHydra retains
+all408 requests/34 operations. Both integration runners used their own disposable
+PostgreSQL cluster and server, then stopped them. Legacy counters never enter
+APIHydra coverage. APIHydra version remains c3947513e2a4. No benchmark or Docker
+check is required for this local change without performance/toolchain effects.
 
 ## Fresh production statement counts and gaps
 
 | Production package | Unit covered/total | APIHydra covered/total |
 | --- | --- | --- |
 | cmd/server | 77/91 | 75/91 |
-| internal/change | 398/398 | 378/398 |
+| internal/change | 389/389 | 369/389 |
 | internal/domain | 0/0 | 0/0 |
-| internal/epic | 115/115 | 107/115 |
+| internal/epic | 114/114 | 106/114 |
 | internal/error | 48/48 | 36/48 |
 | internal/health | 21/21 | 16/21 |
-| internal/project | 117/117 | 110/117 |
-| internal/testcase | 108/108 | 99/108 |
+| internal/project | 116/116 | 109/116 |
+| internal/testcase | 105/105 | 96/105 |
 | pkg/config | 31/31 | 22/31 |
 | pkg/markdown | 10/10 | 8/10 |
-| **Aggregate** | **925/939 (98.5091%)** | **851/939 (90.6283%)** |
+| **Aggregate** | **911/925 (98.4865%)** | **837/925 (90.4865%)** |
 
-All14 unit gaps are main.go process orchestration, lines15–33. All other
-statement-bearing production packages have full unit statement coverage; domain
-has no executable statements. Existing ordinary-executable tests assert startup
-behavior without injecting subprocess counters into production profiles.
+Normal Go instrumentation counts one fewer statement for each scoped initializer:
+14 fewer total/covered statements than R5 in both suites. No production package,
+behavior or defensive branch was removed to affect the denominator. Unit gaps
+remain14 main.go process-orchestration statements at lines15–33. Domain has no
+executable statements; every other production package has full unit coverage.
 
-APIHydra retains88 gaps: server16, change20, epic8, error12, health5, project7,
-testcase9, config9, markdown2. Server gaps cover acquisition/CORS/serve/shutdown,
-main error exit and error-write diagnostics. Config gaps cover load/decode panic,
-defaults, explicit environment overrides and leading-colon address handling.
-Other gaps include SQL query/scan/iteration/Exec errors, entropy/concurrent parent
-failures, degraded health, Markdown conversion errors and central nil helpers.
-These are retained for the separate final failure-integration reassessment;
-neither aggregate target is unmet in R5.
+APIHydra retains88 uncovered statements: server16, change20, epic8, error12,
+health5, project7, testcase9, config9, markdown2. These cover startup/shutdown and
+HTTP error-write failures, configuration load/decode/default/override paths,
+SQL query/scan/iteration/Exec failures, entropy/concurrent parent failures,
+degraded health, Markdown conversion errors and central nil helpers. Final016
+will reassess these retained failures; neither R6 aggregate target is unmet.
 
-Fresh profiles, structural denominator, reports, counters and provenance are in
-`backend/.coverage/unit` and `backend/.coverage/api`; legacy results are only in
-`backend/.coverage/legacy`. Go source/test hashes recorded by both measured runs
-match the final implementation, including the untracked new harness test. Each
-integration runner stopped its own server and disposable PostgreSQL cluster;
-no shared database reset, unit/legacy profile mixing or package exclusions.
+Fresh reports, structural denominators, raw counters and provenance remain in
+`backend/.coverage/unit` and `backend/.coverage/api`; legacy evidence remains in
+`backend/.coverage/legacy`. All three provenance records' Go source/test hashes
+match the final implementation. Documentation is updated after measurement.
+Exact uncovered blocks are also saved under `/tmp/mch-r6-{unit,api}-gaps.txt`;
+unit repeated profile blocks were combined before classifying uncovered code.

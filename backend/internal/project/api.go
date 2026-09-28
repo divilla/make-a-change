@@ -89,8 +89,7 @@ func (a *API) updateProject(c *echo.Context) error {
 		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrProjectInvalidInput))
 	}
 
-	err := a.s.UpdateProject(ctx, req)
-	if err != nil {
+	if err := a.s.UpdateProject(ctx, req); err != nil {
 		return apperror.HTTP(err)
 	}
 
