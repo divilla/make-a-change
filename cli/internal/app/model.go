@@ -2,9 +2,11 @@ package app
 
 import (
 	"cli/internal/changes"
+	"cli/internal/configurations"
 	"cli/internal/documents"
 	"cli/internal/dto"
 	"cli/internal/epics"
+	"cli/internal/health"
 	"cli/internal/projects"
 	"cli/internal/styles"
 	"cli/internal/testcases"
@@ -155,6 +157,7 @@ type Model struct {
 	ctx                 context.Context
 	selectionGeneration uint64
 	catalogGeneration   uint64
+	configCatalogCancel context.CancelFunc
 	selectorGeneration  uint64
 	input               textarea.Model
 	editorDraft         *string
@@ -172,6 +175,9 @@ type Model struct {
 	pendingAltO         bool
 	changesFilters      changesFilters
 	optionCatalog       optionCatalog
+	selectedConfigSlug  string
+	configurations      configurations.Model
+	health              health.Model
 	changeList          changes.Model
 	changeDetailLoaded  bool
 	currentProject      dto.Option

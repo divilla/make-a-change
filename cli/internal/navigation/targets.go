@@ -3,18 +3,23 @@ package navigation
 // ReturnTargets maps returnable states to their target state.
 func ReturnTargets() map[State]State {
 	return map[State]State{
-		ChangesListState:     MainState,
-		ChangeDetailsState:   ChangesListState,
-		TestCaseDetailsState: ChangeDetailsState,
-		EpicsListState:       MainState,
-		EpicDetailsState:     EpicsListState,
-		ProjectsListState:    MainState,
-		ProjectDetailsState:  ProjectsListState,
-		MainHelpState:        MainState,
-		ChangesHelpState:     ChangesListState,
-		EpicsHelpState:       EpicsListState,
-		ProjectsHelpState:    ProjectsListState,
-		ConfigState:          MainState,
+		ChangesListState:          MainState,
+		ChangeDetailsState:        ChangesListState,
+		TestCaseDetailsState:      ChangeDetailsState,
+		EpicsListState:            MainState,
+		EpicDetailsState:          EpicsListState,
+		ProjectsListState:         MainState,
+		ProjectDetailsState:       ProjectsListState,
+		MainHelpState:             MainState,
+		ChangesHelpState:          ChangesListState,
+		EpicsHelpState:            EpicsListState,
+		ProjectsHelpState:         ProjectsListState,
+		ConfigState:               MainState,
+		BackendConfigListState:    MainState,
+		BackendConfigDetailsState: BackendConfigListState,
+		BackendConfigFormState:    BackendConfigListState,
+		BackendConfigDeleteState:  BackendConfigDetailsState,
+		HealthState:               MainState,
 	}
 }
 

@@ -2,9 +2,11 @@ package app
 
 import (
 	"cli/internal/changes"
+	"cli/internal/configurations"
 	"cli/internal/documents"
 	"cli/internal/dto"
 	"cli/internal/epics"
+	"cli/internal/health"
 	"cli/internal/navigation"
 	"cli/internal/projects"
 	"cli/internal/testcases"
@@ -98,6 +100,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case changes.Result:
 		return m.applyChangeResult(msg)
+	case configurations.Result:
+		return m.applyConfigurationResult(msg)
+	case health.Result:
+		return m.applyHealthResult(msg)
 	case testcases.Result:
 		return m.applyTestCaseResult(msg)
 	case documents.Result:
@@ -155,10 +161,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.id != m.appConfig.ProjectID || msg.generation != m.catalogGeneration {
 			return m, nil
 		}
+		m.configCatalogCancel = nil
 		if msg.err != nil {
 			m.optionCatalog = optionCatalog{err: msg.err}
 			if m.status == "config save failed" {
 				m.err += "; project configuration unavailable: " + msg.err.Error()
+			} else if m.configurations.Committed != "" && m.configurations.CommittedOperation == configurations.Update && m.selectedConfigurationMayBe(m.configurations.CommittedSlug) {
+				m.err = "committed configuration; project catalog refresh failed: " + msg.err.Error()
+				m.status = m.configurations.Committed + "; project catalog refresh failed — /retry reads only"
 			} else {
 				m.err = msg.err.Error()
 				m.status = "option catalog failed"
@@ -166,6 +176,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.optionCatalog = optionCatalog{config: msg.config, phases: msg.phases, types: msg.types, loaded: true}
+		m.selectedConfigSlug = msg.config.Slug
+		if strings.Contains(m.err, "project catalog refresh failed") {
+			m.err = ""
+			m.status = m.configurations.Committed + "; project catalog refreshed"
+		}
 		return m, nil
 	case currentProjectLoadedMsg:
 		currentID, err := strconv.Atoi(m.currentProject.ID)
@@ -181,8 +196,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.currentProject = dto.Option{ID: m.currentProject.ID, Label: strings.TrimSpace(msg.project.Name)}
+		m.selectedConfigSlug = msg.project.Config
 		return m, nil
 	case editorFinishedMsg:
+		if m.state == BackendConfigFormState && msg.source == BackendConfigFormState {
+			return m.applyConfigurationEditor(msg)
+		}
 		if m.state == DocumentState && m.documentForm && msg.source == DocumentState {
 			if msg.err != nil {
 				m.err = msg.err.Error()
@@ -236,6 +255,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		if m.state == BackendConfigFormState {
+			m = m.keepConfigurationFieldVisible()
+		}
 		return m, nil
 	case tea.KeyMsg:
 		return m.handleKey(msg)
@@ -272,11 +294,17 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	key := msg.String()
-	m.err = ""
-
 	if m.isDropdownState() {
+		m.err = ""
 		return m.handleDropdownKey(key, msg)
 	}
+	if isConfigurationState(m.state) {
+		return m.configurationKey(msg)
+	}
+	if m.state == HealthState {
+		return m.healthKey(msg)
+	}
+	m.err = ""
 	if m.state == FindInputState {
 		return m.handleFindKey(key, msg)
 	}
@@ -591,6 +619,9 @@ func (m Model) handlePromptCancel() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) requestQuit() (tea.Model, tea.Cmd) {
+	m.configurations = m.configurations.Invalidate()
+	m = m.cancelConfigurationCatalogRefresh()
+	m.health = m.health.Invalidate()
 	m.testCase = m.testCase.Invalidate()
 	m.document = m.document.Invalidate()
 	m.changeList = m.changeList.Invalidate()
@@ -738,6 +769,12 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 	if source == DocumentState {
 		return m.documentCommand(command)
 	}
+	if isConfigurationState(source) {
+		return m.configurationCommand(source, command)
+	}
+	if source == HealthState {
+		return m.healthCommand(command)
+	}
 	switch command {
 	case "/documents":
 		return m.openDocuments(source)
@@ -753,6 +790,19 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		return m.arrive(EpicsListState, string(EpicsListState))
 	case "/projects":
 		return m.arrive(ProjectsListState, string(ProjectsListState))
+	case "/backend-configs":
+		m.state = BackendConfigListState
+		m.configurations = m.configurations.Invalidate()
+		m.configurations.Form = false
+		m.configurations.Confirm = false
+		m.configurations.Editing = false
+		m.configurations.Committed = ""
+		m.configurations.Refresh = ""
+		return m.beginConfiguration(configurations.List, "")
+	case "/health":
+		m.state = HealthState
+		m.health = m.health.SelectRoute("/api/v1/health")
+		return m.beginHealth()
 	case "/select-project":
 		return m.beginSelector(SelectProjectDropDown)
 	case "/project-config":
@@ -973,6 +1023,24 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 }
 
 func (m Model) arrive(state State, status string) (tea.Model, tea.Cmd) {
+	var catalog tea.Cmd
+	if isConfigurationState(m.state) && !isConfigurationState(state) {
+		m.configurations = m.configurations.Invalidate()
+		refreshCanceled := m.configCatalogCancel != nil
+		m = m.cancelConfigurationCatalogRefresh()
+		if refreshCanceled && m.appConfig.ProjectID > 0 {
+			catalog = optionCatalogCommand(m.ctx, m.client, m.appConfig.ProjectID, m.catalogGeneration)
+		}
+	}
+	withCatalog := func(next tea.Model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+		if catalog == nil {
+			return next, cmd
+		}
+		return next, tea.Batch(cmd, catalog)
+	}
+	if m.state == HealthState && state != HealthState {
+		m.health = m.health.Invalidate()
+	}
 	if state != ChangeDetailsState && state != TestCaseCreateState && state != TestCaseUpdateState {
 		m.testCase = m.testCase.Invalidate()
 	}
@@ -993,26 +1061,26 @@ func (m Model) arrive(state State, status string) (tea.Model, tea.Cmd) {
 	}
 	switch state {
 	case EpicsListState:
-		return m.beginEpic(epics.List, 0, "")
+		return withCatalog(m.beginEpic(epics.List, 0, ""))
 	case EpicDetailsState:
-		return m.beginEpic(epics.Details, m.epicList.Detail.ID, "")
+		return withCatalog(m.beginEpic(epics.Details, m.epicList.Detail.ID, ""))
 	case ChangesListState:
-		return m.beginChange(changes.List, 0, changes.Input{})
+		return withCatalog(m.beginChange(changes.List, 0, changes.Input{}))
 	case ChangeDetailsState:
 		m.changeDetailLoaded = false
 		id, err := changeNumericID(m.changeList.Detail)
 		if err != nil {
 			m.err = err.Error()
-			return m, nil
+			return withCatalog(m, nil)
 		}
 		m.status = "loading change"
-		return m.beginChange(changes.Details, id, changes.Input{})
+		return withCatalog(m.beginChange(changes.Details, id, changes.Input{}))
 	case ProjectsListState:
-		return m.beginProject(projects.List, 0, "")
+		return withCatalog(m.beginProject(projects.List, 0, ""))
 	case ProjectDetailsState:
-		return m.beginProject(projects.Details, m.projectList.Detail.ID, "")
+		return withCatalog(m.beginProject(projects.Details, m.projectList.Detail.ID, ""))
 	default:
-		return m, nil
+		return withCatalog(m, nil)
 	}
 }
 

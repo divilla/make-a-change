@@ -25,7 +25,11 @@
       "TestCLIProgramDocumentAppendAndRecovery",
       "TestCLIProgramDocumentMalformedAndStaleScope",
       "TestCLIProgramDocumentNavigationCancelsRequest",
-      "TestCLIProgramDocumentShutdownCancelsRequest"
+      "TestCLIProgramDocumentShutdownCancelsRequest",
+      "TestCLIProgramHealthRoutesAndDegradedStatus",
+      "TestCLIProgramConfigurationCRUDAndCatalogRefresh",
+      "TestCLIProgramConfigurationSelectedProjectCatalogRefresh",
+      "TestCLIProgramConfigurationStaleResponseIsolation"
     ]
   },
   "pty": {

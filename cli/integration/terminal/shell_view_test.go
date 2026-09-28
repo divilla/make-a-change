@@ -85,6 +85,15 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, capture.waitForAfter(marker, offset, 5*time.Second))
 	}
+	send("/health\r", "HTTP 200")
+	send("/health-legacy\r", "HTTP 503")
+	send("/return\r", "MainScreen")
+	send("/backend-configs\r", "BackendConfigListScreen")
+	send("\r", "Configuration: pty")
+	send("\x1b[6~", "change_types:")
+	send("/delete\r", "Delete configuration pty?")
+	send("\r", "No configurations loaded.")
+	send("/return\r", "MainScreen")
 	send("/projects\r", "ProjectsListScreen")
 	send("/new-project\r", "ProjectCreateScreen")
 	send("/editor\r", "ProjectDetailsScreen")
@@ -146,6 +155,8 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 	var mu sync.Mutex
 	epicName := "PTY Epic"
 	changeTitle := "PTY Change"
+	backendConfigExists := true
+	backendConfig := map[string]any{"slug": "pty", "project_docs": []string{strings.Repeat("very-long-document-name-", 12)}, "epic_docs": []string{}, "change_docs": []string{"brief", "spec"}, "change_phases": []string{"backlog"}, "change_colors": []string{"12"}, "change_types": []string{"feature"}}
 	var testCases []map[string]any
 	docs := make([]map[string]any, 0, 20)
 	for id := 90; id >= 71; id-- {
@@ -158,6 +169,29 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		var value any
 		switch r.URL.Path {
+		case "/api/v1/health":
+			require.Equal(t, http.MethodGet, r.Method)
+			value = map[string]string{"status": "ok", "api": "ok", "database": "ok"}
+		case "/api/health":
+			require.Equal(t, http.MethodGet, r.Method)
+			w.WriteHeader(503)
+			value = map[string]string{"status": "degraded", "api": "ok", "database": "error", "error": "database unavailable"}
+		case "/api/v1/config/list":
+			value = []any{}
+			if backendConfigExists {
+				value = []any{backendConfig}
+			}
+		case "/api/v1/config/details":
+			value = backendConfig
+		case "/api/v1/config/delete":
+			var body struct {
+				Slug string `json:"slug"`
+			}
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			require.Equal(t, "pty", body.Slug)
+			backendConfigExists = false
+			w.WriteHeader(204)
+			return
 		case "/api/v1/project/config":
 			value = map[string]any{"slug": "pty", "project_docs": []string{"notes"}, "epic_docs": []string{}, "change_docs": []string{"brief", "spec"}, "change_phases": []string{"backlog"}, "change_colors": []string{"12"}, "change_types": []string{}}
 		case "/api/v1/project/create":

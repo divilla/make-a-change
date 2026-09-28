@@ -66,7 +66,7 @@ func (c HTTPClient) projectRequest(ctx context.Context, path string, input any, 
 		return wrap(errors.Join(fmt.Errorf("unexpected status: %s", data), readErr), resp.StatusCode)
 	}
 	if status == http.StatusNoContent {
-		if !strings.HasPrefix(path, "/api/v1/test-case/") {
+		if !strings.HasPrefix(path, "/api/v1/test-case/") && !strings.HasPrefix(path, "/api/v1/config/") {
 			return nil
 		}
 		data, readErr := io.ReadAll(io.LimitReader(resp.Body, 1))
@@ -76,7 +76,7 @@ func (c HTTPClient) projectRequest(ctx context.Context, path string, input any, 
 		return nil
 	}
 	decoder := json.NewDecoder(resp.Body)
-	if strings.HasPrefix(path, "/api/v1/doc/") {
+	if strings.HasPrefix(path, "/api/v1/doc/") || strings.HasPrefix(path, "/api/v1/config/") {
 		decoder.DisallowUnknownFields()
 	}
 	if err := decoder.Decode(output); err != nil {

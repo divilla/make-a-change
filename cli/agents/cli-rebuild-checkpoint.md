@@ -1,5 +1,468 @@
 # CLI rebuild checkpoint
 
+## P7 review fix 08 (2026-09-28)
+
+Leaving configuration management after an update still cancels its in-flight
+selected-project catalog read and invalidates the old result. Navigation now
+starts a separate read-only `/project/config` request with the new generation,
+so the selected project's document, phase and type options reload on the main
+screen. Quitting starts no replacement. The unit regression holds the first
+request open, observes cancellation, rejects the late result, and verifies the
+replacement's options. No live backend or database was used; this child made
+no commit or push.
+
+| Command on `a0d30a90a9992c722a055b3f5dcb620540438ce9` plus review diff | Exit | Evidence |
+| --- | ---: | --- |
+| `go test -count=1 ./internal/app -run '^TestP703ConfigurationExitCancelsCatalogRefreshAndIgnoresLateResult$' -v` | 0 | Return and quit cases pass; the return case observes two catalog reads and restored options. |
+| `make -C cli check` | 2 | Vet, unit race, architecture and tooling pass. Existing format failures remain in `cmd/mch/main.go` and `internal/app/clipboard.go`; untouched package-comment lint remains in `internal/help/commands.go`, `internal/styles/styles.go` and `internal/ui/layout.go`. |
+| `make -C cli coverage` | 2 | Complete unit campaign **4184/4763 (87.8438%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete-program and startup suite passes. |
+| `make -C cli integration-coverage` | 2 | Complete program plus real PTY campaign **3642/4763 (76.4644%)**; strict >90% gate fails. |
+
+Both coverage campaigns report `complete: true`. The terminal campaign ran all
+28 program scenarios and its real PTY scenario; no scenario failed or skipped.
+Unit leaves 579 statements and terminal leaves 1121. Both raw profiles,
+uncovered statements/functions, per-source SHA256 hashes, source revision,
+scenario results, and command journals are under `cli/.coverage/{unit,integration}`.
+The measured `internal/app/update.go` SHA256 is
+`716be681c86edc0e954675f7923b8ae5823559cd829a3a7e22a0d297a2de2dac`;
+the regression test SHA256 is
+`f7b3e726275f334dcfcc3ec150a383c1a91a37bdc7c5708065e75e16a4c2c4c8`.
+The covered child binary SHA256 is
+`8582fef674783149dd009c206c226472eff6c4c7bc4cbcd69466955b64bea32b`.
+Toolchain: Go `go1.26.8-X:nodwarf5`, golangci-lint `2.13.1`, govulncheck
+`v1.7.0`; socat was present for the PTY campaign. Documentation updates
+followed measurement; the measured Go source did not change.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cmd/mch` | 0/3 | 1/3 |
+| `internal/app` | 1990/2364 | 1716/2364 |
+| `internal/changes` | 732/869 | 666/869 |
+| `internal/configurations` | 170/183 | 167/183 |
+| `internal/documents` | 268/273 | 223/273 |
+| `internal/dto` | 0/0 | 0/0 |
+| `internal/epics` | 214/214 | 187/214 |
+| `internal/health` | 48/50 | 47/50 |
+| `internal/help` | 6/6 | 6/6 |
+| `internal/navigation` | 25/40 | 18/40 |
+| `internal/projects` | 217/227 | 196/227 |
+| `internal/styles` | 0/0 | 0/0 |
+| `internal/testcases` | 130/132 | 112/132 |
+| `internal/ui` | 8/8 | 8/8 |
+| `pkg/client` | 376/394 | 295/394 |
+| **Total** | **4184/4763** | **3642/4763** |
+
+The final CLI rebuild still requires the documented static-baseline repairs
+and coverage thresholds. The caller owns publication and the dev merge.
+
+## P7 review fixes 07 (2026-09-28)
+
+The selected-project catalog refresh started by a configuration update or
+read-only retry now owns a cancelable request. Leaving configuration management
+or quitting cancels it and invalidates its generation, so a late result cannot
+change another screen's status or error. A unit regression holds the request
+open, observes cancellation on return and quit, and injects a stale result.
+The complete-program CRUD scenario now checks every insert and update field,
+including ordered and explicit empty arrays and the fixed slug. It attempts a
+slug change through keyboard navigation and verifies no update is sent.
+No live backend or database was used; this child made no commit or push.
+
+| Command on `49ecc9efd9dd25b820963e1e67f8ec160f08af78` plus review diff | Exit | Evidence |
+| --- | ---: | --- |
+| Targeted `go test -count=1 ./internal/app -run '^TestP703ConfigurationExitCancelsCatalogRefreshAndIgnoresLateResult$'` and `go test -count=1 ./integration -run '^TestCLIProgramConfigurationCRUDAndCatalogRefresh$' -v` | 0 each | Cancellation and exact keyboard payload regressions pass. |
+| `make -C cli check` | 2 | Vet, unit race, architecture and tooling pass. Existing format failures remain in `cmd/mch/main.go` and `internal/app/clipboard.go`; package-comment lint remains in untouched packages, with nondeterministic reporting order. No touched-file static finding remains. |
+| `make -C cli coverage` | 2 | Complete unit campaign **4176/4755 (87.8233%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete-program and startup suite passes. |
+| `make -C cli integration-coverage` | 2 | Complete program plus real PTY campaign **3636/4755 (76.4669%)**; strict >90% gate fails. |
+| `python3 -B -m unittest discover -s scripts -p documentation_test.py -v` (from `cli/`) | 0 | Ledger links, routes and documented commands pass after the documentation update. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+Both coverage campaigns report `complete: true`; the terminal campaign ran all
+28 program scenarios and its real PTY scenario without skips or failures. Unit
+leaves 579 statements and terminal leaves 1119. The largest gaps are
+`internal/app` (374 unit, 646 terminal) and `internal/changes` (137 unit,
+203 terminal). The raw profiles, exact source SHA256 inventory, uncovered
+statements/functions, scenario results, command journals and package totals
+are in `cli/.coverage/{unit,integration}`. The covered child binary SHA256 is
+`4649fa61c04f718dd685e9471201a1d3e2f7ce3de49a8d04bbc68a7b8d4d0fed`.
+Toolchain: Go `go1.26.8-X:nodwarf5`, golangci-lint `2.13.1`, govulncheck
+`v1.7.0`, socat `1.8.1.1`. Documentation updates followed measurement; the
+measured Go source did not change.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cmd/mch` | 0/3 | 1/3 |
+| `internal/app` | 1982/2356 | 1710/2356 |
+| `internal/changes` | 732/869 | 666/869 |
+| `internal/configurations` | 170/183 | 167/183 |
+| `internal/documents` | 268/273 | 223/273 |
+| `internal/dto` | 0/0 | 0/0 |
+| `internal/epics` | 214/214 | 187/214 |
+| `internal/health` | 48/50 | 47/50 |
+| `internal/help` | 6/6 | 6/6 |
+| `internal/navigation` | 25/40 | 18/40 |
+| `internal/projects` | 217/227 | 196/227 |
+| `internal/styles` | 0/0 | 0/0 |
+| `internal/testcases` | 130/132 | 112/132 |
+| `internal/ui` | 8/8 | 8/8 |
+| `pkg/client` | 376/394 | 295/394 |
+| **Total** | **4176/4755** | **3636/4755** |
+
+Final CLI rebuild completion still requires the documented static baseline
+repairs and coverage thresholds. The caller owns publication and intermediate
+dev merge.
+
+## P7 review fixes 05 (2026-09-28)
+
+Configuration form and details scrolling now clamp the stored offset to the
+last rendered page, using the same wrapped lines and viewport dimensions as
+the view. Repeated PageDown at the bottom no longer delays PageUp. Feature and
+app regression tests cover long values, both screens, short content and a
+previously oversized offset. No live backend or database was used; this child
+made no commit or push.
+
+| Command on `f3d5b38a16082edee24d490df34e9c23a8edbc00` plus review diff | Exit | Evidence |
+| --- | ---: | --- |
+| Targeted `go test ./internal/configurations ./internal/app -run 'TestP702ConfigScrollClampsStoredOffsetToLastPage\|TestP702ConfigurationPageUpRespondsAfterRepeatedPageDown\|TestP702ConfigurationFormKeepsActiveFieldVisibleAndPages' -count=1` | 0 | All targeted regressions pass. |
+| `make -C cli check` | 2 | Vet, unit race, architecture and tooling pass; pre-existing format failures in `cmd/mch/main.go`, `internal/app/clipboard.go`, and package-comment lint in `internal/help/commands.go`, `internal/styles/styles.go`, `internal/ui/layout.go`. |
+| `make -C cli coverage` | 2 | Complete unit campaign **4136/4726 (87.5159%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete-program and startup suite passes. |
+| `make -C cli integration-coverage` | 2 | Complete program plus real PTY campaign **3605/4726 (76.2802%)**; strict >90% gate fails. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+Both coverage status files report `complete: true`. All 28 selected program
+scenarios and the PTY scenario completed without skips or failures. Unit leaves
+590 statements and terminal leaves 1121. The largest gaps are `internal/app`
+(385 unit, 647 terminal) and `internal/changes` (137 unit, 203 terminal).
+Raw profiles, per-source SHA256 hashes, source revision, exact uncovered ranges
+and functions, scenario results and command journals are in
+`cli/.coverage/{unit,integration}`. The covered child binary SHA256 is
+`30b5aac0ece62507030e5c8f5a6560c5ae6881feef999e509ea385b66e3da00c`.
+Toolchain: `go1.26.8-X:nodwarf5`. Documentation updates followed measurement;
+the measured Go source did not change.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cmd/mch` | 0/3 | 1/3 |
+| `internal/app` | 1942/2327 | 1680/2327 |
+| `internal/changes` | 732/869 | 666/869 |
+| `internal/configurations` | 170/183 | 166/183 |
+| `internal/documents` | 268/273 | 223/273 |
+| `internal/dto` | 0/0 | 0/0 |
+| `internal/epics` | 214/214 | 187/214 |
+| `internal/health` | 48/50 | 47/50 |
+| `internal/help` | 6/6 | 6/6 |
+| `internal/navigation` | 25/40 | 18/40 |
+| `internal/projects` | 217/227 | 196/227 |
+| `internal/styles` | 0/0 | 0/0 |
+| `internal/testcases` | 130/132 | 112/132 |
+| `internal/ui` | 8/8 | 8/8 |
+| `pkg/client` | 376/394 | 295/394 |
+| **Total** | **4136/4726** | **3605/4726** |
+
+Final CLI rebuild completion still requires the documented static baseline
+repairs and coverage thresholds. The caller owns publication and intermediate
+dev merge.
+
+## P7 review fixes 04 (2026-09-28)
+
+Configuration form navigation now scrolls to the active field after Tab,
+Shift+Tab, form entry and terminal resize. PageUp/PageDown scroll the form.
+The list adapter preserves the backend's database-collation order and rejects
+duplicate slugs without imposing Go string order. Fake-server and form
+regressions cover both findings. The P7 spec and assertion ledger reflect the
+backend's actual ordering contract. No live backend or database was used, and
+this child made no commit or push.
+
+| Command on `85896495bcd7dae345ae625dcd4ad5a830d6bcef` plus review diff | Exit | Evidence |
+| --- | ---: | --- |
+| Targeted `go test ./internal/app ./internal/configurations ./pkg/client -run 'TestP702ConfigurationFormKeepsActiveFieldVisibleAndPages\|TestP701SixArraysExplicitEmptyAndMalformedResponses' -count=1` | 0 | Both regressions pass; feature package had no matching named test. |
+| `make -C cli check` | 2 | Vet, unit race, architecture and tooling pass. Existing format baseline: `cmd/mch/main.go`, `internal/app/clipboard.go`; package-comment lint: `internal/help/commands.go`, `internal/styles/styles.go`, `internal/ui/layout.go`. |
+| `make -C cli coverage` | 2 | Complete unit campaign **4124/4718 (87.4099%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete-program and startup suite passes. |
+| `make -C cli integration-coverage` | 2 | Complete program plus real PTY campaign **3595/4718 (76.1975%)**; strict >90% gate fails. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+Both coverage status files report `complete: true`; the 28 selected program
+scenarios and one PTY scenario completed. Unit leaves 594 statements and
+terminal leaves 1123. The largest gaps are `internal/app` (389 unit, 648
+terminal) and `internal/changes` (137 unit, 203 terminal). Raw profiles,
+per-source SHA256 hashes, scenario results, exact uncovered ranges/functions,
+package totals and command journals are in `cli/.coverage/{unit,integration}`.
+The covered child binary SHA256 is
+`494a14ae5bd2439bf6c84cdaefb0f343ea92b886de4233fbdecc9c165c459c91`.
+Toolchain: `go1.26.8-X:nodwarf5`. Documentation updates followed measurement;
+the measured Go source did not change.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cmd/mch` | 0/3 | 1/3 |
+| `internal/app` | 1936/2325 | 1677/2325 |
+| `internal/changes` | 732/869 | 666/869 |
+| `internal/configurations` | 164/177 | 159/177 |
+| `internal/documents` | 268/273 | 223/273 |
+| `internal/dto` | 0/0 | 0/0 |
+| `internal/epics` | 214/214 | 187/214 |
+| `internal/health` | 48/50 | 47/50 |
+| `internal/help` | 6/6 | 6/6 |
+| `internal/navigation` | 25/40 | 18/40 |
+| `internal/projects` | 217/227 | 196/227 |
+| `internal/styles` | 0/0 | 0/0 |
+| `internal/testcases` | 130/132 | 112/132 |
+| `internal/ui` | 8/8 | 8/8 |
+| `pkg/client` | 376/394 | 295/394 |
+| **Total** | **4124/4718** | **3595/4718** |
+
+Final CLI rebuild completion still requires the documented static baseline
+repairs and coverage thresholds. The caller owns publication and intermediate
+dev merge.
+
+## P7 review fixes 02 (2026-09-28)
+
+Re-entering backend configurations after canceling an in-flight save or delete
+now opens the list rather than the old editor or confirmation. When the selected
+project's slug is still loading, a committed update conservatively refreshes its
+resolved catalog and invalidates the pending startup catalog result. The create
+form accepts `/` as the first slug character; Ctrl+G opens its command menu.
+Three new unit tests cover these cases, and the shared command-menu test now uses
+the form's shortcut. The [ledger](cli-contracts.md) maps the assertions. No live
+backend or database was used, and this child made no commit or push.
+
+| Command on `d1d3ce65fa2f4538b55a0ea647ffead6562a5003` plus review diff | Exit | Evidence |
+| --- | ---: | --- |
+| Targeted `go test ./internal/app -run 'TestP703UpdateRefreshesCatalogWhileProjectIdentityLoads\|TestP702ReentryClearsCanceledConfigurationModals\|TestP702CreateSlugAcceptsLeadingSlashAndKeepsCommands' -count=1` | 0 | All three regressions pass. |
+| `go test ./internal/app -count=1` | 0 | All app tests pass after the shared test update. |
+| `make -C cli check` | 2 | Vet, race, architecture and tooling pass. Existing format baseline: `cmd/mch/main.go`, `internal/app/clipboard.go`; package-comment lint: `internal/help/commands.go`, `internal/styles/styles.go`, `internal/ui/layout.go`. |
+| `make -C cli coverage` | 2 | Complete unit campaign **4050/4657 (86.9659%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete-program and startup suite passes. |
+| `make -C cli integration-coverage` | 2 | Complete program plus real PTY campaign **3554/4657 (76.3152%)**; strict >90% gate fails. |
+
+Both campaign status files report `complete: true`; all 28 selected program
+scenarios and the one PTY scenario finished without a skip or failed assertion.
+Unit leaves 607 statements and terminal leaves 1103. The largest gaps remain
+`internal/app` (402 unit, 636 terminal) and `internal/changes` (137 unit,
+203 terminal). The 69 production Go inputs have sorted path/hash SHA256
+`e64b4980394b081cdd49869ab8d452bf4df8eb866295bfbfffbfe981229f35ed`;
+raw profiles, individual source hashes, exact uncovered ranges and functions,
+package totals, scenario results and command journals are in
+`cli/.coverage/{unit,integration}`. The covered child binary SHA256 is
+`a4072fb2f183a513d452c0e009985dfc0c2c71a326527199e7c87d75ed646d54`.
+Toolchain: `go1.26.8-X:nodwarf5`. Documentation updates followed measurement;
+the measured Go source did not change.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cmd/mch` | 0/3 | 1/3 |
+| `internal/app` | 1891/2293 | 1657/2293 |
+| `internal/changes` | 732/869 | 666/869 |
+| `internal/configurations` | 135/148 | 138/148 |
+| `internal/documents` | 268/273 | 223/273 |
+| `internal/dto` | 0/0 | 0/0 |
+| `internal/epics` | 214/214 | 187/214 |
+| `internal/health` | 48/50 | 47/50 |
+| `internal/help` | 6/6 | 6/6 |
+| `internal/navigation` | 25/40 | 18/40 |
+| `internal/projects` | 217/227 | 196/227 |
+| `internal/styles` | 0/0 | 0/0 |
+| `internal/testcases` | 130/132 | 112/132 |
+| `internal/ui` | 8/8 | 8/8 |
+| `pkg/client` | 376/394 | 295/394 |
+| **Total** | **4050/4657** | **3554/4657** |
+
+Final CLI rebuild completion still requires the documented static baseline
+repairs and coverage thresholds. The caller owns publication and intermediate
+dev merge.
+
+## P7 review fixes 01 (2026-09-28)
+
+Separate `/`, arrow and Enter key events now reach the command dropdown on
+backend configuration and health screens. The configuration form supports
+Shift+Tab to move backward and wraps forward/backward among editable fields;
+editing never selects the immutable slug. Field switches retain the current
+value, so a rejected draft can be corrected without reopening it. Regression
+tests exercise configuration edit/delete, both health routes and correction of
+an earlier invalid array. The existing complete-program scenarios now send
+separate dropdown keystrokes for configuration edit and both health routes.
+The P7 ledger maps these assertions. No live
+backend or database was used, and this child made no commit or push.
+
+| Command on `6e77505619dc83c1b48d0a75e032910ade57793f` plus review diff | Exit | Evidence |
+| --- | ---: | --- |
+| Targeted `go test ./internal/app -run 'TestP702ConfigurationDropdownKeysReachActions\|TestP704HealthDropdownKeysSelectBothRoutes\|TestP702ConfigurationDraftCanRevisitEarlierFields' -count=1` | 0 | All three regressions pass. |
+| `make -C cli check` | 2 | Vet, race, architecture and tooling pass. Existing format baseline: `cmd/mch/main.go`, `internal/app/clipboard.go`; package-comment lint: `internal/help/commands.go`, `internal/styles/styles.go`, `internal/ui/layout.go`. |
+| `make -C cli coverage` | 2 | Complete unit campaign **4034/4653 (86.6968%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete program/startup suite passes. |
+| `make -C cli integration-coverage` | 2 | Complete program plus real PTY campaign **3550/4653 (76.2949%)**; strict >90% gate fails. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+Both coverage status files report `complete: true`; no required scenario failed
+or skipped. The nonzero coverage exits are numerical gate failures. Unit leaves
+619 statements and terminal leaves 1103. The largest gaps are `internal/app`
+(407 unit, 636 terminal) and `internal/changes` (137 unit, 203 terminal).
+The 126 measured inputs share sorted path/hash SHA256
+`099f4a1e2f8f9984984fe9b208ae90b7570b23b7d13442b525276d7ff6751a89`;
+the covered child binary SHA256 is
+`fa93cf9b76731bdc75c821e951df4cab2420fd196652497d37c28208353ccdbd`.
+Toolchain: `go1.26.8-X:nodwarf5`. Raw profiles, source hashes, exact uncovered
+ranges, package totals, scenario results and command journals are in
+`cli/.coverage/{unit,integration}`. This checkpoint, ledger and implementation
+log were updated after the measured source and tests.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cmd/mch` | 0/3 | 1/3 |
+| `internal/app` | 1882/2289 | 1653/2289 |
+| `internal/changes` | 732/869 | 666/869 |
+| `internal/configurations` | 128/148 | 138/148 |
+| `internal/documents` | 268/273 | 223/273 |
+| `internal/dto` | 0/0 | 0/0 |
+| `internal/epics` | 214/214 | 187/214 |
+| `internal/health` | 48/50 | 47/50 |
+| `internal/help` | 6/6 | 6/6 |
+| `internal/navigation` | 25/40 | 18/40 |
+| `internal/projects` | 217/227 | 196/227 |
+| `internal/styles` | 0/0 | 0/0 |
+| `internal/testcases` | 130/132 | 112/132 |
+| `internal/ui` | 8/8 | 8/8 |
+| `pkg/client` | 376/394 | 295/394 |
+| **Total** | **4034/4653** | **3550/4653** |
+
+Final CLI rebuild completion remains blocked by the documented static baseline
+and coverage thresholds. The caller owns publication and intermediate dev merge.
+
+## P7 implementation awaiting review (2026-09-28)
+
+[Spec 027](../../agent/specs/027-cli-configuration-health.md) is implemented on
+`change/027-cli-configuration-health` from P6 dev
+`5aba38f60c3a3fe364c7921029609be2cd1d5668`. The implementation checkout
+is at `10da1a82e5e2a8868247d2b55ca8ba66ba4d36bb` plus its uncommitted P7
+changes. The caller owns the implementation commit/push, native review with
+`--base origin/dev`, fixes and dev merge; this child made no Git publication.
+
+The backend configuration screen provides keyboard list, exact-slug details,
+create, complete-array update and confirmed delete independently of local
+`/config` and project `/project-config`. It retains committed write feedback
+through separate read-only refreshes, blocks stale rows, refreshes the selected
+project's catalog after update, and retries catalog read failures. Health
+checks both GET routes, presents healthy/degraded status and preserves the last
+valid result across a failed refresh. State and presentation are owned by
+`internal/configurations` and `internal/health`; the shell composes navigation.
+The [ledger](cli-contracts.md) maps P7-01–P7-06 to named unit and terminal
+assertions. No live backend or database was used. The complete-program suite
+uses fake HTTP servers and the PTY child uses an owned process and fake server.
+
+| Command from repository root on final production/test inputs | Exit | Evidence |
+| --- | ---: | --- |
+| `make -C cli check` | 2 | Vet, unit race, architecture and tooling pass. Only untouched formatting baseline in `cmd/mch/main.go` and `internal/app/clipboard.go`; sampled package-comment lint in `cmd/mch/main.go`, `internal/help/commands.go`, `internal/styles/styles.go` and `internal/ui/layout.go`. No new static/test regression. |
+| `make -C cli coverage` | 2 | Complete unit campaign **4000/4646 (86.0956%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete program/startup suite passes. |
+| `make -C cli integration-coverage` | 2 | Complete 28-program plus real PTY campaign **3539/4646 (76.1731%)**; strict >90% gate fails. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+Both `cli/.coverage/{unit,integration}/status.json` files report
+`complete: true`; no required scenario failed or skipped. The nonzero coverage
+exits are numerical gate failures, not incomplete profiles. All 126 measured
+input paths in each provenance manifest share a sorted JSON path/hash SHA256
+digest `a54171d3913ca2e98f080d5354286bf93e325103610704344d4f69f29595d8cf`.
+The toolchain is `go1.26.8-X:nodwarf5`; covered child binary SHA256 is
+`5d4c0314b391861e3aeece3a808dffc5fc020e0c2be6e8db095521edf0191c68`.
+Raw profiles, exact uncovered statements/functions, package inventory, scenario
+results and command journals are under `cli/.coverage/{unit,integration}`.
+This checkpoint, plan and implementation log are documentation updates after
+the measured source and tests.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cmd/mch` | 0/3 | 1/3 |
+| `internal/app` | 1848/2282 | 1642/2282 |
+| `internal/changes` | 732/869 | 666/869 |
+| `internal/configurations` | 128/148 | 138/148 |
+| `internal/documents` | 268/273 | 223/273 |
+| `internal/dto` | 0/0 | 0/0 |
+| `internal/epics` | 214/214 | 187/214 |
+| `internal/health` | 48/50 | 47/50 |
+| `internal/help` | 6/6 | 6/6 |
+| `internal/navigation` | 25/40 | 18/40 |
+| `internal/projects` | 217/227 | 196/227 |
+| `internal/styles` | 0/0 | 0/0 |
+| `internal/testcases` | 130/132 | 112/132 |
+| `internal/ui` | 8/8 | 8/8 |
+| `pkg/client` | 376/394 | 295/394 |
+| **Total** | **4000/4646** | **3539/4646** |
+
+Unit leaves 646 statements and terminal leaves 1107. The largest remaining
+gaps are `internal/app` (434 unit, 640 terminal), `internal/changes` (137 unit,
+203 terminal), and terminal `pkg/client` (99); exact ranges are in the campaign
+uncovered reports. These are final-rebuild targets, not a reason to hide a gate
+failure in this intermediate pass. P8 brief clarification follows caller-owned
+P7 review and dev merge. No stage or production promotion is authorized.
+
+## P7 review fixes 03 (2026-09-28)
+
+Review of [spec 027](../../agent/specs/027-cli-configuration-health.md) found
+three valid issues. Configuration editor bytes now survive textarea preview,
+field navigation and save, so a slug containing an embedded tab is sent exactly.
+Returning from details clears the detail retry; `/retry` on the list only reads
+the list. List selection remains visible across arrow/page navigation, refresh
+and return, even when an earlier slug wraps; details open at their heading.
+Three named regression tests are mapped in the [contract ledger](cli-contracts.md).
+No backend, database, live server or Git publication was used in this child.
+
+| Command on final production/test inputs | Exit | Result |
+| --- | ---: | --- |
+| Targeted app/configuration regression tests | 0 | All three named tests pass. |
+| `make -C cli check` | 2 | Vet, unit race, architecture and tooling pass; only the existing format baseline in `cmd/mch/main.go`, `internal/app/clipboard.go` and package-comment lint in `internal/help/commands.go`, `internal/styles/styles.go`, `internal/ui/layout.go` fail. |
+| `make -C cli coverage` | 2 | Complete unit campaign **4088/4689 (87.1828%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Complete program/startup suite passes. |
+| `make -C cli integration-coverage` | 2 | Complete 28-program plus real PTY campaign **3576/4689 (76.2636%)**; strict >90% gate fails. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+Both `.coverage/{unit,integration}/status.json` files report `complete: true`;
+all required scenarios and counters finished without test failure or skip. The
+126 measured input path/hash pairs match across campaigns; their sorted JSON
+SHA256 is `4c9ea20948acfe36c16e786d713848fdca16ba13e9b75beacad011d5bf7c677c`.
+Measured checkout revision is `d3f51ae9367265b451d8d04aa2d6e9802deaa191`
+plus the uncommitted review diff. Go is `go1.26.8-X:nodwarf5`; the covered PTY
+child SHA256 is `f271393b3d040a22fe2073f8243cb51bfc10022a7b5981142c184ed38eda0006`.
+Raw profiles, exact uncovered statements/functions, package inventory, scenario
+results and command journals are under `cli/.coverage/{unit,integration}`.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cmd/mch` | 0/3 | 1/3 |
+| `internal/app` | 1917/2312 | 1670/2312 |
+| `internal/changes` | 732/869 | 666/869 |
+| `internal/configurations` | 147/161 | 147/161 |
+| `internal/documents` | 268/273 | 223/273 |
+| `internal/dto` | 0/0 | 0/0 |
+| `internal/epics` | 214/214 | 187/214 |
+| `internal/health` | 48/50 | 47/50 |
+| `internal/help` | 6/6 | 6/6 |
+| `internal/navigation` | 25/40 | 18/40 |
+| `internal/projects` | 217/227 | 196/227 |
+| `internal/styles` | 0/0 | 0/0 |
+| `internal/testcases` | 130/132 | 112/132 |
+| `internal/ui` | 8/8 | 8/8 |
+| `pkg/client` | 376/394 | 295/394 |
+| **Total** | **4088/4689** | **3576/4689** |
+
+Final CLI coverage targets remain unmet: 601 unit and 1113 terminal statements
+are uncovered. The largest package gaps are `internal/app` (395 unit, 642
+terminal) and `internal/changes` (137 unit, 203 terminal); terminal `pkg/client`
+has 99 uncovered statements. The existing static baseline and these strict
+numerical gates remain visible for later passes. The caller owns review-fix
+commit/push and any dev merge; P8 follows that sequence. No stage or production
+promotion is authorized.
+
 ## P6 review fixes 03 (2026-09-28)
 
 The document screen now limits every rendered row to the terminal width before
@@ -590,3 +1053,35 @@ performed no Git publication or nested factory invocation.
 Continue P5 testcases, P6 documents, P7 configs/health, P8 clarification,
 P9 spec review/fix, P10 acceptance and evidence-based R1–R6 cleanup. Never predict
 squash hashes or claim final targets met. User authorization remains active.
+
+## P7 review fixes 06: active configuration field (2026-09-28)
+
+The P7-02 finding was valid: the configuration form's input band always showed
+the start of a long array, hiding newly entered text and the cursor. The band
+now displays a cursor-following, terminal-safe window of the current input.
+`TestP702ConfigurationInputFollowsCursorInLongArray` covers insertion inside a
+long array, Home/End movement, visible redraw, preserved draft bytes and width.
+The P7-02 ledger includes this assertion. No live backend or database was used;
+the caller owns commit/push and dev merge.
+
+| Command on review-fix source | Exit | Result |
+| --- | ---: | --- |
+| Targeted P7-02 app tests | 0 | All pass. |
+| `make -C cli check` | 2 | Vet, race, architecture and tooling pass. Only the established format baseline in `cmd/mch/main.go` and `internal/app/clipboard.go`, and package-comment lint in `internal/help/commands.go`, `internal/styles/styles.go`, `internal/ui/layout.go` fail. Touched Go files have no formatting diff. |
+| `make -C cli coverage` | 2 | Complete unit campaign **4161/4742 (87.7478%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-test` | 0 | Program/startup suite passes. |
+| `make -C cli integration-coverage` | 2 | Complete 28-program plus real PTY campaign **3618/4742 (76.2969%)**; strict >90% gate fails. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+Both campaign status files report `complete: true`; all required scenarios
+finished. The numerical gates account for both nonzero coverage exits. Both
+126-input provenance maps have sorted compact JSON SHA256
+`5066c5e43230ff635f849e58b13bf1152b8b6ba60645d46f172846528c5faf31`.
+The measured checkout revision is `6cd85af406f43497c39cddf73f4d7a0f75419bff`
+plus the uncommitted review diff. Go is `go1.26.8-X:nodwarf5`; the covered
+child binary SHA256 is
+`1131dbed1e3e6754fb936df16b6d3e75b3b461415985fa008f97b28af346fa7a`.
+Raw profiles, package totals, uncovered statements/functions, scenarios and
+command journals are in `.coverage/{unit,integration}`. This checkpoint and
+implementation log are documentation edits after the measured source and tests.

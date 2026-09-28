@@ -31,7 +31,7 @@ func boundaryViolations(root string) ([]string, error) {
 	}
 	features := map[string]bool{
 		"agent": true, "changes": true, "epics": true, "help": true,
-		"projects": true, "testcases": true, "documents": true, "configs": true, "health": true,
+		"projects": true, "testcases": true, "documents": true, "configurations": true, "configs": true, "health": true,
 	}
 	shared := map[string]bool{"dto": true, "navigation": true, "styles": true, "ui": true}
 	var violations []string

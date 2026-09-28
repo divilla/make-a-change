@@ -3420,7 +3420,12 @@ func TestCommandDropdownPreservesUnderlyingScreenForEveryCommandState(t *testing
 			m := NewModel()
 			m.state = state
 
-			got, _ := sendRune(m, '/')
+			var got Model
+			if state == BackendConfigFormState {
+				got, _ = sendKey(m, tea.KeyCtrlG)
+			} else {
+				got, _ = sendRune(m, '/')
+			}
 
 			assert.Equal(t, state, got.state)
 			assert.Equal(t, dropdownCommand, got.dropdown.kind)

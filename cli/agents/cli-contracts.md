@@ -703,3 +703,41 @@ wrong-owner details, malformed list, failed insert followed by draft retry, two 
 and cancellation of an in-flight read when changing owners or shutting down. The
 PTY child pages through long project history, redraws and appends a human
 version. Direct client/model assertions remain outside terminal counters.
+
+## P7 backend configurations and health (027)
+
+[Specification](../../agent/specs/027-cli-configuration-health.md). Backend rows are
+managed by immutable slug through five POST routes; `/config` still displays local
+repository settings and `/project-config` still displays the selected project's
+resolved catalog. `configurations` owns full-row drafts, read/write sequencing,
+committed outcomes, stale-result rejection and bounded rendering. `health` owns
+route selection, valid last-result retention and safe diagnostic rendering. The
+shell composes navigation and selected-project catalog refresh. All HTTP tests
+use fake servers and all program tests use owned processes.
+
+| Criterion | Named unit assertions | Complete-program / PTY evidence |
+| --- | --- | --- |
+| P7-01 transport | `TestP701ConfigRoutesPayloadsStatusesAndSingleRequest`, `TestP701SixArraysExplicitEmptyAndMalformedResponses` (backend collation order and duplicate rejection), `TestP701ConfigErrorsAndCancellation`, `TestP701ConfigIdentityAndUnexpectedSuccessResponses`, `TestP701BothHealthRoutesHealthyDegradedAndMalformed` | Program scenarios assert request method/route/payload and visible results; direct adapter tests provide no terminal counters. |
+| P7-02 reachable management | `TestP702ConfigScreenNavigationAndAllCatalogs`, `TestP702ConfigurationDropdownKeysReachActions`, `TestP702ConfigurationDraftCanRevisitEarlierFields`, `TestP702ReentryClearsCanceledConfigurationModals`, `TestP702CreateSlugAcceptsLeadingSlashAndKeepsCommands`, `TestP702DetailRetryUsesSelectedSlug`, `TestP702EditorSlugKeepsExactBytesThroughSaveAndFieldNavigation`, `TestP702ConfigurationSelectionStaysVisibleAcrossNavigation`, `TestP702ConfigurationFormKeepsActiveFieldVisibleAndPages`, `TestP702ConfigurationInputFollowsCursorInLongArray`, `TestP702ConfigurationPageUpRespondsAfterRepeatedPageDown`, `TestP702CreateUpdateImmutableSlugAndExplicitEmptyArrays`, `TestP702DeleteConfirmationConflictAndDraftRecovery`, `TestP702ConfigViewportAndTerminalSafeValues`, `TestP702ConfigScrollClampsStoredOffsetToLastPage` | `TestCLIProgramConfigurationCRUDAndCatalogRefresh` covers list/detail/create/update/delete, exact seven-field insert and update bodies with explicit empty arrays, a blocked slug-change attempt, repeated read failure and referenced delete conflict; `TestShellNavigationEditorAndScrolling` scrolls long content and deletes a row. |
+| P7-03 committed writes and catalog scope | `TestP703CommittedConfigWriteSurvivesRepeatedFailedRefresh`, `TestP703SelectedProjectCatalogRefreshAndScope`, `TestP703UpdateRefreshesCatalogWhileProjectIdentityLoads`, `TestP703SelectedProjectCatalogFailureAndRetry`, `TestP703ReturnFromFailedDetailRefreshRetriesList`, `TestP703StaleConfigResultsAndShutdownCancellation`, `TestP703ConfigurationExitCancelsCatalogRefreshAndIgnoresLateResult`, `TestP703FailedWriteDraftAndBusyDeduplication` | `TestCLIProgramConfigurationCRUDAndCatalogRefresh` checks read-only retries do not replay update; `TestCLIProgramConfigurationSelectedProjectCatalogRefresh` checks the selected project's new phase appears in the change filter; `TestCLIProgramConfigurationStaleResponseIsolation` leaves a pending details read without displaying it later. |
+| P7-04 health diagnostics | `TestP704HealthRouteSelectionAndDegradedDisplay`, `TestP704HealthDropdownKeysSelectBothRoutes`, `TestP704HealthFailureRetryAndStaleRouteResults`, `TestP704HealthRouteSwitchClearsPriorFailure`, `TestP704HealthTerminalSafePresentation` | `TestCLIProgramHealthRoutesAndDegradedStatus` checks both GET routes, a healthy result retained after a failed refresh, and degraded 503; PTY navigation checks both routes. |
+| P7-05 ownership and preserved behavior | `TestP705LocalConfigAndProjectConfigRemainDistinct`, `TestCLIPackageBoundaries`, retained P1–P6 tests | Complete-program and PTY scenarios start ordinary API access without agent resources. |
+| P7-06 campaign inventory | `TestP706ScenarioManifestIncludesConfigHealthAndPTY`, `CoverageTest.test_scenario_manifest_rejects_scripts_empty_and_unmatched` | Four exact `TestCLIProgram*` scenarios and extended `TestShellNavigationEditorAndScrolling` appear in `scripts/terminal-scenarios.json`. |
+
+The configuration edit and both health route program scenarios now send `/`,
+dropdown navigation and Enter as separate keyboard events. The PTY child executes
+against a fake backend. Configuration and health adapter,
+feature, architecture and tooling tests contribute no terminal counters.
+
+P7 review fixes 02 add modal re-entry, pending project identity/catalog refresh,
+and leading-slash slug unit regressions. Ctrl+G opens the command menu while a
+configuration form is editable; `/` remains slug data. The fresh complete unit
+campaign covers 4050/4657 production statements and the separate complete
+terminal campaign covers 3554/4657; both remain below their strict final gates.
+Package counts, source hashes, scenarios and check exits are in the
+[checkpoint](cli-rebuild-checkpoint.md).
+
+P7 review fix 08 extends `TestP703ConfigurationExitCancelsCatalogRefreshAndIgnoresLateResult`:
+returning to the main screen cancels the owned read, ignores its late result,
+and issues a fresh `/project/config` read that restores document, phase and type
+options. Quitting still cancels without scheduling another read.

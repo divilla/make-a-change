@@ -1,11 +1,11 @@
 # CLI rebuild plan
 
-Status: authorized execution. P0–P5 are merged on dev; P5/spec024 is
-`4d58701ca317ee6f73b5e5443f5112e6c691dd64`, followed by the factory
-settings pass at `4190a427734c14152b6e6882a183ed9f8256edd9`. P6/spec026
-document management is implemented on `change/026-cli-document-management` and
-awaits caller-owned review and dev merge. The [checkpoint](../cli/agents/cli-rebuild-checkpoint.md)
-records fresh P6 checks and numerical shortfalls. P7–P10 and R1–R6 remain.
+Status: authorized execution. P0–P6 are merged on dev; P6/spec026 is
+`5aba38f60c3a3fe364c7921029609be2cd1d5668`. P7/spec027 configuration
+and health is implemented on `change/027-cli-configuration-health` and awaits
+caller-owned review and dev merge. The
+[checkpoint](../cli/agents/cli-rebuild-checkpoint.md) records fresh P7 checks
+and numerical shortfalls. P8–P10 and R1–R6 remain.
 Continue the authorized factory without stage or production promotion.
 
 Reference: [backend refactor plan](backend-refactor-plan.md), especially its

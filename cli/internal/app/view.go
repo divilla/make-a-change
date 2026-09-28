@@ -2,8 +2,10 @@ package app
 
 import (
 	"cli/internal/changes"
+	"cli/internal/configurations"
 	"cli/internal/documents"
 	"cli/internal/epics"
+	"cli/internal/health"
 	"cli/internal/help"
 	"cli/internal/projects"
 	"cli/internal/styles"
@@ -13,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // View renders the root application shell and active screen.
@@ -30,6 +33,8 @@ func (m Model) View() string {
 			lines[epicIndex] = documents.View(m.document, width, height)
 		case EpicDetailsState:
 			lines[epicIndex] = epics.DetailsViewport(m.epicList, width, height)
+		case BackendConfigListState, BackendConfigDetailsState, BackendConfigFormState, BackendConfigDeleteState:
+			lines[epicIndex] = configurations.View(m.configurations, width, height)
 		default:
 			lines[epicIndex] = epics.TableView(m.epicList, width, height)
 		}
@@ -95,6 +100,13 @@ func (m Model) viewLines() ([]string, int) {
 		lines = append(lines, "")
 		lines = append(lines, m.configView(width))
 	}
+	if m.state == BackendConfigListState || m.state == BackendConfigDetailsState || m.state == BackendConfigFormState || m.state == BackendConfigDeleteState {
+		lines = append(lines, "", "")
+		epicIndex = len(lines) - 1
+	}
+	if m.state == HealthState {
+		lines = append(lines, "", health.View(m.health))
+	}
 	if m.state == FindInputState {
 		lines = append(lines, "")
 		lines = append(lines, m.inputBand(width))
@@ -102,6 +114,8 @@ func (m Model) viewLines() ([]string, int) {
 		lines = append(lines, "")
 		lines = append(lines, m.dropdownView(width))
 
+	} else if m.state == BackendConfigFormState {
+		lines = append(lines, "", m.configurationInputBand(width))
 	} else {
 		lines = append(lines, "")
 		lines = append(lines, m.inputBand(width))
@@ -145,6 +159,35 @@ func (m Model) headerRight() string {
 
 func (m Model) configView(width int) string {
 	return styles.Default.InputBand.Width(width).Render(renderResolvedConfig(m.appConfig))
+}
+
+func (m Model) configurationInputBand(width int) string {
+	lines := promptValueLines(m.input.Value())
+	row := min(max(0, m.promptCursorRow), len(lines)-1)
+	col := min(max(0, m.promptCursorCol), runeCount(lines[row]))
+	before := strings.Join(lines[:row], "\n")
+	if row > 0 {
+		before += "\n"
+	}
+	runes := []rune(lines[row])
+	before += string(runes[:col])
+	after := string(runes[col:])
+	if row+1 < len(lines) {
+		after += "\n" + strings.Join(lines[row+1:], "\n")
+	}
+	return styles.Default.InputBand.Width(width).Render("> " + configurationCursorWindow(documents.SafeLine(before), documents.SafeLine(after), max(3, width-4)))
+}
+
+func configurationCursorWindow(before, after string, width int) string {
+	afterRoom := min(ansi.StringWidth(after), width/3)
+	start := max(0, ansi.StringWidth(before)-(width-2-afterRoom))
+	left := ""
+	if start > 0 {
+		left = "…"
+	}
+	visibleBefore := ansi.Cut(before, start, ansi.StringWidth(before))
+	remaining := max(0, width-ansi.StringWidth(left+visibleBefore)-1)
+	return left + visibleBefore + "▏" + ansi.Truncate(after, remaining, "…")
 }
 
 func (m Model) changeFiltersLine(table string) string {
@@ -202,6 +245,16 @@ func (m Model) helpText() string {
 		return "<return> search  |  <ctrl+c> delete prompt  |  <esc> cancel"
 	case ConfigState:
 		return "/return  |  <esc> or <ctrl+c> return"
+	case BackendConfigListState:
+		return "<up/down> select  |  <return> details  |  <ctrl+n> create  |  /retry  |  /return"
+	case BackendConfigDetailsState:
+		return "/edit  |  /delete  |  /retry  |  /return"
+	case BackendConfigFormState:
+		return "<tab/return> next field  |  <shift+tab> previous field  |  <pgup/pgdown> scroll  |  <ctrl+s> save  |  <ctrl+e> editor  |  <ctrl+g> commands  |  <esc> cancel"
+	case BackendConfigDeleteState:
+		return "<return> confirm delete  |  <esc> cancel"
+	case HealthState:
+		return "/health-v1  |  /health-legacy  |  /retry  |  /return"
 	case ProjectsListState, EpicsListState:
 		return "<return> view  |  </> command"
 	case EpicDetailsState:
@@ -342,6 +395,11 @@ func screenTitle(state State) string {
 		EpicsHelpState:             help.EpicsTitle(),
 		ProjectsHelpState:          help.ProjectsTitle(),
 		ConfigState:                "ConfigScreen - Title: Config",
+		BackendConfigListState:     "BackendConfigListScreen - Title: Backend Configurations",
+		BackendConfigDetailsState:  "BackendConfigDetailsScreen - Title: Configuration Details",
+		BackendConfigFormState:     "BackendConfigFormScreen - Title: Configuration Editor",
+		BackendConfigDeleteState:   "BackendConfigDeleteScreen - Title: Confirm Delete",
+		HealthState:                "HealthScreen - Title: Backend Health",
 		FindInputState:             help.FindInputTitle(),
 		CommandDropDownState:       "CommandDropDownScreen - Title: Commands",
 		ListSelectionDropDownState: "ListSelectionDropDownScreen - Title: Select Item",
@@ -375,7 +433,7 @@ func (m Model) changeTableRows() int {
 }
 
 func (m Model) visibleDocumentText(value string) string {
-	if m.state == DocumentState {
+	if m.state == DocumentState || isConfigurationState(m.state) || m.state == HealthState {
 		return documents.SafeLine(value)
 	}
 	return value

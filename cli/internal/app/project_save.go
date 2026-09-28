@@ -63,6 +63,7 @@ func (m Model) applyProjectResult(r projects.Result) (tea.Model, tea.Cmd) {
 				m.catalogGeneration++
 				phases, types := projects.CatalogOptions(r.Config)
 				m.optionCatalog = optionCatalog{config: r.Config, phases: phases, types: types, loaded: true}
+				m.selectedConfigSlug = r.Config.Slug
 			}
 		case projects.Create, projects.Edit:
 			m.state = ProjectDetailsState
@@ -78,6 +79,7 @@ func (m Model) applyProjectResult(r projects.Result) (tea.Model, tea.Cmd) {
 				m.selectionGeneration++
 				m.catalogGeneration++
 				m.optionCatalog = optionCatalog{}
+				m.selectedConfigSlug = ""
 				return m.persistCurrentProject()
 			}
 		}

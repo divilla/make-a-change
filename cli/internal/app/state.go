@@ -29,6 +29,11 @@ const (
 	EpicsHelpState                   = navigation.EpicsHelpState
 	ProjectsHelpState                = navigation.ProjectsHelpState
 	ConfigState                      = navigation.ConfigState
+	BackendConfigListState           = navigation.BackendConfigListState
+	BackendConfigDetailsState        = navigation.BackendConfigDetailsState
+	BackendConfigFormState           = navigation.BackendConfigFormState
+	BackendConfigDeleteState         = navigation.BackendConfigDeleteState
+	HealthState                      = navigation.HealthState
 	FindInputState                   = navigation.FindInputState
 	CommandDropDownState             = navigation.CommandDropDownState
 	ListSelectionDropDownState       = navigation.ListSelectionDropDownState

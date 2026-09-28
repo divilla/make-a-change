@@ -237,6 +237,7 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 		m.selectionGeneration++
 		m.catalogGeneration++
 		m.optionCatalog = optionCatalog{}
+		m.selectedConfigSlug = ""
 		m.changesFilters = changesFilters{}
 		m.changeList = m.changeList.Scope(id)
 		m, save := m.persistCurrentProject()
