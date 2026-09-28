@@ -5,7 +5,7 @@ metadata:
 spec:
   defaults:
     # Installed APIHydra omits curl --retry for negative values; zero inherits 3.
-    # A single request preserves each 500 JSON body and avoids replaying inserts.
+    # Error requests are never replayed.
     retries: -1
     headers:
       Content-Type: application/json
@@ -52,37 +52,6 @@ spec:
       response:
         expected_status: 404
         expected_body: '{"message":"epic not found"}'
-    - request:
-        method: POST
-        path: /api/v1/project/list
-        body: '{}'
-      response:
-        expected_status: 500
-        expected_body: '{"message":"Internal Server Error"}'
-    # The owned cluster starts with config only. These inserts succeed before
-    # their legacy reloads fail. IDs 1 belong only to this disposable campaign.
-    # These are failure contracts, never successful create-operation coverage.
-    - request:
-        method: POST
-        path: /api/v1/project/create
-        body: '{"name":"P1 owned error fixture"}'
-      response:
-        expected_status: 500
-        expected_body: '{"message":"Internal Server Error"}'
-    - request:
-        method: POST
-        path: /api/v1/epic/create
-        body: '{"project_id":1,"name":"P1 blocking child"}'
-      response:
-        expected_status: 500
-        expected_body: '{"message":"Internal Server Error"}'
-    - request:
-        method: POST
-        path: /api/v1/project/delete
-        body: '{"id":1}'
-      response:
-        expected_status: 409
-        expected_body: '{"message":"project has changes and cannot be deleted"}'
     - request:
         method: GET
         path: /api/v1/unknown

@@ -1,11 +1,15 @@
 package project_test
 
 import (
+	"context"
 	"fmt"
 	"mch_api/api-tests/shared"
 	"net/http"
+	"os"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,6 +33,7 @@ func TestProjectCRUD(t *testing.T) {
 	status := client.Post(t, "/api/v1/project/create", map[string]string{"name": name}, &created)
 	require.Equal(t, http.StatusCreated, status)
 	require.NotEmpty(t, created.ID)
+	require.Equal(t, http.StatusOK, client.Post(t, "/api/v1/project/get", map[string]any{"id": created.ID}, &created))
 	assert.Equal(t, name, created.Name)
 	assert.Equal(t, int32(0), created.LastRef)
 	assert.False(t, created.Created.IsZero())
@@ -48,59 +53,22 @@ func TestProjectCRUD(t *testing.T) {
 	assert.Equal(t, created, fetched)
 
 	var updated project
-	status = client.Post(t, "/api/v1/project/update", map[string]any{"id": created.ID, "name": updatedName}, &updated)
-	require.Equal(t, http.StatusOK, status)
+	status = client.Post(t, "/api/v1/project/update", map[string]any{"id": created.ID, "name": updatedName}, nil)
+	require.Equal(t, http.StatusNoContent, status)
+	require.Equal(t, http.StatusOK, client.Post(t, "/api/v1/project/get", map[string]any{"id": created.ID}, &updated))
 	assert.Equal(t, updatedName, updated.Name)
-	assert.False(t, updated.Modified.Before(updated.Created))
+	assert.True(t, updated.Modified.After(created.Modified))
+	// A same-name update must still advance modified.
+	require.Equal(t, http.StatusNoContent, client.Post(t, "/api/v1/project/update", map[string]any{"id": created.ID, "name": updatedName}, nil))
+	var same project
+	require.Equal(t, http.StatusOK, client.Post(t, "/api/v1/project/get", map[string]any{"id": created.ID}, &same))
+	require.True(t, same.Modified.After(updated.Modified))
 
 	status = client.Post(t, "/api/v1/project/delete", map[string]any{"id": created.ID}, nil)
 	require.Equal(t, http.StatusNoContent, status)
 
 	status = client.Post(t, "/api/v1/project/get", map[string]any{"id": created.ID}, nil)
 	assert.Equal(t, http.StatusNotFound, status)
-}
-
-func TestProjectDeleteRejectsProjectsWithChanges(t *testing.T) {
-	client := shared.NewClient(t)
-
-	var created project
-	status := client.Post(t, "/api/v1/project/create", map[string]string{
-		"name": fmt.Sprintf("api-test-project-cascade-%d", time.Now().UnixNano()),
-	}, &created)
-	require.Equal(t, http.StatusCreated, status)
-
-	var createdChange change
-	status = client.Post(t, "/api/v1/change/create", map[string]any{
-		"project_id": created.ID,
-		"title":      fmt.Sprintf("api-test-project-delete-change-%d", time.Now().UnixNano()),
-		"brief":      "Project delete conflict brief",
-	}, &createdChange)
-	require.Equal(t, http.StatusCreated, status)
-
-	t.Cleanup(func() {
-		shared.CleanupProject(t, client, created.ID)
-	})
-
-	createdTestCase := createTestCase(t, client, createdChange.ID)
-
-	status = client.Post(t, "/api/v1/project/delete", map[string]any{"id": created.ID}, nil)
-	require.Equal(t, http.StatusConflict, status)
-
-	var fetched project
-	status = client.Post(t, "/api/v1/project/get", map[string]any{"id": created.ID}, &fetched)
-	require.Equal(t, http.StatusOK, status)
-	assert.Equal(t, created.ID, fetched.ID)
-
-	var fetchedChange changeDetail
-	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": createdChange.ID}, &fetchedChange)
-	require.Equal(t, http.StatusOK, status)
-	assert.Equal(t, createdChange.ID, fetchedChange.Change.ID)
-
-	var testCases []testCase
-	status = client.Post(t, "/api/v1/test-case/list", map[string]any{"change_id": createdChange.ID}, &testCases)
-	require.Equal(t, http.StatusOK, status)
-	require.Len(t, testCases, 1)
-	assert.Equal(t, createdTestCase.ID, testCases[0].ID)
 }
 
 func TestProjectRejectsInvalidInputAndMissingRows(t *testing.T) {
@@ -131,35 +99,30 @@ func TestProjectRejectsInvalidInputAndMissingRows(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, status)
 }
 
-type change struct {
-	ID int `json:"id"`
-}
-
-type changeDetail struct {
-	Change change `json:"change"`
-}
-
-type testCase struct {
-	ID       int    `json:"id"`
-	ChangeID int    `json:"change_id"`
-	Scenario string `json:"scenario"`
-}
-
-type testCaseMutation struct {
-	TestCase *testCase `json:"test_case"`
-}
-
-func createTestCase(t *testing.T, client *shared.Client, changeID int) testCase {
-	t.Helper()
-
-	var created testCaseMutation
-	status := client.Post(t, "/api/v1/test-case/create", map[string]any{
-		"change_id": changeID,
-		"scenario":  "Project delete keeps this test case.",
-	}, &created)
-	require.Equal(t, http.StatusCreated, status)
-	require.NotNil(t, created.TestCase)
-	require.NotEmpty(t, created.TestCase.ID)
-	assert.Equal(t, changeID, created.TestCase.ChangeID)
-	return *created.TestCase
+// This SQL assertion supplements APIHydra: project/epic document read APIs do
+// not exist. The harness supplies only its owned disposable database URL.
+func TestDeletionRetainsAppendOnlyDocuments(t *testing.T) {
+	client := shared.NewClient(t)
+	databaseURL := os.Getenv("API_TEST_DB_URL")
+	require.NotEmpty(t, databaseURL, "API_TEST_DB_URL must identify the disposable API-test database")
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, databaseURL)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, conn.Close(ctx)) }()
+	var parent, child struct {
+		ID int `json:"id"`
+	}
+	require.Equal(t, http.StatusCreated, client.Post(t, "/api/v1/project/create", map[string]any{"name": "Document history parent"}, &parent))
+	require.Equal(t, http.StatusCreated, client.Post(t, "/api/v1/epic/create", map[string]any{"project_id": parent.ID, "name": "Document history epic"}, &child))
+	for table, id := range map[string]int{"project": parent.ID, "epic": child.ID} {
+		_, err = conn.Exec(ctx, `insert into public.doc(ref_id,ref_table,doc_type,body,current) values($1,$2,'brief','historic',false),($1,$2,'brief','current',true)`, id, table)
+		require.NoError(t, err)
+	}
+	require.Equal(t, http.StatusNoContent, client.Post(t, "/api/v1/epic/delete", map[string]any{"id": child.ID}, nil))
+	require.Equal(t, http.StatusNoContent, client.Post(t, "/api/v1/project/delete", map[string]any{"id": parent.ID}, nil))
+	for table, id := range map[string]int{"project": parent.ID, "epic": child.ID} {
+		var bodies []string
+		require.NoError(t, conn.QueryRow(ctx, `select array_agg(body order by id) from public.doc where ref_id=$1 and ref_table=$2`, id, table).Scan(&bodies))
+		require.Equal(t, []string{"historic", "current"}, bodies)
+	}
 }

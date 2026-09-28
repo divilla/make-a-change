@@ -159,9 +159,10 @@ def campaign(runner, port, legacy=False):
             runner.execute(['pg_ctl', '-D', str(data), '-l', str(directory / 'postgres.log'),
                             '-o', shlex.join(['-k', scratch, '-h', '', '-p', '15432']),
                             '-w', '-t', '10', 'start'], 15)
-            for filename in ['init.sql', 'seed.sql']:
+            for sql_file in [BACKEND.parent / 'db/init.sql', BACKEND.parent / 'db/seed.sql',
+                             BACKEND / 'apih-tests/fixtures.sql']:
                 runner.execute(['psql', '-X', '-h', scratch, '-p', '15432', '-U', 'postgres', '-d', 'postgres',
-                                '-v', 'ON_ERROR_STOP=1', '-f', str(BACKEND.parent / 'db' / filename)])
+                                '-v', 'ON_ERROR_STOP=1', '-f', str(sql_file)])
             db_url = 'postgresql://postgres@/postgres?' + urlencode(
                 {'host': scratch, 'port': '15432', 'sslmode': 'disable'}, quote_via=quote)
             with (directory / 'server.log').open('w') as server_log:

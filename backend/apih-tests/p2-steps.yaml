@@ -1,0 +1,654 @@
+app: apihydra
+kind: steps
+metadata:
+  name: project-epic-alignment
+spec:
+  defaults:
+    # Negative disables retries in installed c3947513; zero inherits retries.
+    retries: -1
+    headers:
+      Content-Type: application/json
+  steps:
+    - request:
+        method: POST
+        path: /api/v1/project/list
+        body: '{}'
+      response:
+        expected_status: 200
+        expected_body: '[{"id":1006,"config":"default","last_ref":1,"change_count":1},{"id":1005,"config":"default","last_ref":0,"change_count":0},{"id":1004,"config":"default","last_ref":0,"change_count":0},{"id":1003,"config":"p2-absent","last_ref":0,"change_count":0},{"id":1002,"config":"default","last_ref":0,"change_count":0},{"id":1001,"config":"p2-custom","last_ref":42,"change_count":1}]'
+    - request:
+        method: POST
+        path: /api/v1/project/get
+        body: '{"id":1001}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":1001,"name":"Custom project","config":"p2-custom","last_ref":42,"change_count":1}'
+        expected_types:
+          .created: [string]
+          .modified: [string]
+    - request:
+        method: POST
+        path: /api/v1/project/config
+        body: '{"id":1001}'
+      response:
+        expected_status: 200
+        expected_body: '{"slug":"p2-custom","project_docs":["vision","notes"],"epic_docs":["design","risk"],"change_docs":["analysis","decision"],"change_phases":["discover","ship"],"change_colors":["#123456","#abcdef"],"change_types":["experiment","maintenance"]}'
+    - request:
+        method: POST
+        path: /api/v1/project/config
+        body: '{"id":1002}'
+      response:
+        expected_status: 200
+        expected_body: '{"slug":"default","project_docs":["brief","prd"],"epic_docs":["brief","prd"],"change_docs":["brief","spec","pr","plan","review","comment"],"change_phases":["backlog","todo","in-progress","in-review","in-test","in-prod"],"change_colors":["15","14","10","11","12","13"],"change_types":["feature","fix","refactor","upgrade","chore","docs","test","ci","security","migration","revert","spike"]}'
+    - request:
+        method: POST
+        path: /api/v1/project/config
+        body: '{"id":1003}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"project configuration not found"}'
+    - request:
+        method: POST
+        path: /api/v1/project/config
+        body: '{"id":2147483647}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"project configuration not found"}'
+    - request:
+        method: POST
+        path: /api/v1/project/get
+        body: '{"id":1003}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":1003,"config":"p2-absent"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/list
+        body: '{"project_id":1004}'
+      response:
+        expected_status: 200
+        expected_body: '[]'
+    - request:
+        method: POST
+        path: /api/v1/epic/list
+        body: '{"project_id":2147483647}'
+      response:
+        expected_status: 200
+        expected_body: '[]'
+    - request:
+        method: POST
+        path: /api/v1/epic/list
+        body: '{"project_id":1001}'
+      response:
+        expected_status: 200
+        expected_body: '[{"id":1102,"project_id":1001,"name":"Half complete","done_tc":1,"total_tc":2,"completed":50,"change_count":1},{"id":1103,"project_id":1001,"name":"Zero testcases","done_tc":0,"total_tc":0,"completed":0,"change_count":0}]'
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{"id":1102}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":1102,"project_id":1001,"name":"Half complete","done_tc":1,"total_tc":2,"completed":50,"change_count":1}'
+        expected_types:
+          .created: [string]
+          .modified: [string]
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{"id":1103}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":1103,"project_id":1001,"name":"Zero testcases","done_tc":0,"total_tc":0,"completed":0,"change_count":0}'
+        expected_types:
+          .created: [string]
+          .modified: [string]
+    - request:
+        method: POST
+        path: /api/v1/project/delete
+        body: '{"id":1005}'
+      response:
+        expected_status: 409
+        expected_body: '{"message":"project has dependencies and cannot be deleted"}'
+    - request:
+        method: POST
+        path: /api/v1/project/delete
+        body: '{"id":1006}'
+      response:
+        expected_status: 409
+        expected_body: '{"message":"project has dependencies and cannot be deleted"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/delete
+        body: '{"id":1102}'
+      response:
+        expected_status: 409
+        expected_body: '{"message":"epic has changes and cannot be deleted"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{"id":1102}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":1102,"project_id":1001,"name":"Half complete","done_tc":1,"total_tc":2,"completed":50,"change_count":1}'
+    - request:
+        method: POST
+        path: /api/v1/project/get
+        body: '{"id":1006}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":1006,"change_count":1}'
+    - request:
+        method: POST
+        path: /api/v1/project/delete
+        body: '{"id":1004}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/epic/delete
+        body: '{"id":1101}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/project/delete
+        body: '{"id":1005}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/project/create
+        body: '{"name":" P2 workflow "}'
+      response:
+        expected_status: 201
+        capture:
+          p2_project: .id
+        expected_types:
+          .id: [int]
+    - request:
+        method: POST
+        path: /api/v1/project/get
+        body: '{"id":${p2_project}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p2_project},"name":"P2 workflow","config":"default","last_ref":0,"change_count":0}'
+    - request:
+        method: POST
+        path: /api/v1/project/update
+        body: '{"id":${p2_project},"name":" P2 renamed "}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/project/get
+        body: '{"id":${p2_project}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p2_project},"name":"P2 renamed","config":"default","change_count":0}'
+    - request:
+        method: POST
+        path: /api/v1/project/update
+        body: '{"id":${p2_project},"name":" P2 renamed "}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/project/get
+        body: '{"id":${p2_project}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p2_project},"name":"P2 renamed","config":"default","change_count":0}'
+    - request:
+        method: POST
+        path: /api/v1/epic/create
+        body: '{"project_id":${p2_project},"name":" P2 epic "}'
+      response:
+        expected_status: 201
+        capture:
+          p2_epic: .id
+        expected_types:
+          .id: [int]
+    - request:
+        method: POST
+        path: /api/v1/epic/list
+        body: '{"project_id":${p2_project}}'
+      response:
+        expected_status: 200
+        expected_body: '[{"id":${p2_epic},"project_id":${p2_project},"name":"P2 epic","done_tc":0,"total_tc":0,"completed":0,"change_count":0}]'
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{"id":${p2_epic}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p2_epic},"project_id":${p2_project},"name":"P2 epic","done_tc":0,"total_tc":0,"completed":0,"change_count":0}'
+    - request:
+        method: POST
+        path: /api/v1/epic/update
+        body: '{"id":${p2_epic},"name":" P2 epic renamed "}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{"id":${p2_epic}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p2_epic},"name":"P2 epic renamed","completed":0}'
+    - request:
+        method: POST
+        path: /api/v1/epic/update
+        body: '{"id":${p2_epic},"name":" P2 epic renamed "}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{"id":${p2_epic}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p2_epic},"name":"P2 epic renamed","completed":0}'
+    - request:
+        method: POST
+        path: /api/v1/project/delete
+        body: '{"id":${p2_project}}'
+      response:
+        expected_status: 409
+        expected_body: '{"message":"project has dependencies and cannot be deleted"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/delete
+        body: '{"id":${p2_epic}}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{"id":${p2_epic}}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"epic not found"}'
+    - request:
+        method: POST
+        path: /api/v1/project/delete
+        body: '{"id":${p2_project}}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/project/get
+        body: '{"id":${p2_project}}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"project not found"}'
+    - request:
+        method: POST
+        path: /api/v1/project/get
+        body: '{"id":2147483647,"name":"Missing"}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"project not found"}'
+    - request:
+        method: POST
+        path: /api/v1/project/update
+        body: '{"id":2147483647,"name":"Missing"}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"project not found"}'
+    - request:
+        method: POST
+        path: /api/v1/project/delete
+        body: '{"id":2147483647,"name":"Missing"}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"project not found"}'
+    - request:
+        method: POST
+        path: /api/v1/project/get
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project get payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/get
+        body: '{"id":"bad","project_id":"bad","name":3}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project get payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/get
+        body: '{}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/get
+        body: '{"id":-1,"project_id":-1,"name":""}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/create
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project create payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/create
+        body: '{"id":"bad","project_id":"bad","name":3}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project create payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/create
+        body: '{}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/create
+        body: '{"id":-1,"project_id":-1,"name":""}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/create
+        body: '{"id":1001,"project_id":1001,"name":" \t "}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/update
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project update payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/update
+        body: '{"id":"bad","project_id":"bad","name":3}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project update payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/update
+        body: '{}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/update
+        body: '{"id":-1,"project_id":-1,"name":""}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/update
+        body: '{"id":1001,"project_id":1001,"name":" \t "}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/delete
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project delete payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/delete
+        body: '{"id":"bad","project_id":"bad","name":3}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project delete payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/delete
+        body: '{}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/delete
+        body: '{"id":-1,"project_id":-1,"name":""}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/config
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project config payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/config
+        body: '{"id":"bad","project_id":"bad","name":3}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project config payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/config
+        body: '{}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project payload"}'
+    - request:
+        method: POST
+        path: /api/v1/project/config
+        body: '{"id":-1,"project_id":-1,"name":""}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid project payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{"id":2147483647,"name":"Missing"}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"epic not found"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/update
+        body: '{"id":2147483647,"name":"Missing"}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"epic not found"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/delete
+        body: '{"id":2147483647,"name":"Missing"}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"epic not found"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic get payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{"id":"bad","project_id":"bad","name":3}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic get payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{"id":-1,"project_id":-1,"name":""}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/create
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic create payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/create
+        body: '{"id":"bad","project_id":"bad","name":3}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic create payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/create
+        body: '{}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/create
+        body: '{"id":-1,"project_id":-1,"name":""}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/create
+        body: '{"id":1001,"project_id":1001,"name":" \t "}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/update
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic update payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/update
+        body: '{"id":"bad","project_id":"bad","name":3}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic update payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/update
+        body: '{}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/update
+        body: '{"id":-1,"project_id":-1,"name":""}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/update
+        body: '{"id":1001,"project_id":1001,"name":" \t "}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/delete
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic delete payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/delete
+        body: '{"id":"bad","project_id":"bad","name":3}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic delete payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/delete
+        body: '{}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/delete
+        body: '{"id":-1,"project_id":-1,"name":""}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/list
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic list payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/list
+        body: '{"id":"bad","project_id":"bad","name":3}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic list payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/list
+        body: '{}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/list
+        body: '{"id":-1,"project_id":-1,"name":""}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid epic payload"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/create
+        body: '{"project_id":2147483647,"name":"Missing parent"}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"epic not found"}'
+    - request:
+        method: POST
+        path: /api/v1/options/change-phases-list
+        body: '{}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"Not Found"}'
+    - request:
+        method: POST
+        path: /api/v1/options/change-types-list
+        body: '{}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"Not Found"}'

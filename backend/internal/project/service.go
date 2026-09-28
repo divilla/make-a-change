@@ -27,25 +27,25 @@ func (s *Service) GetProject(ctx context.Context, req domain.ProjectIDRequest) (
 	if req.ID <= 0 {
 		return domain.Project{}, apperror.ErrProjectInvalidInput
 	}
-	return s.repo.Get(ctx, req.ID)
+	return s.repo.Get(ctx, req)
 }
 
 // CreateProject executes CreateProject behavior.
-func (s *Service) CreateProject(ctx context.Context, req domain.ProjectCreateRequest) (domain.Project, error) {
-	name := strings.TrimSpace(req.Name)
-	if name == "" {
-		return domain.Project{}, apperror.ErrProjectInvalidInput
+func (s *Service) CreateProject(ctx context.Context, req domain.ProjectCreateRequest) (domain.ProjectIDRequest, error) {
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" {
+		return domain.ProjectIDRequest{}, apperror.ErrProjectInvalidInput
 	}
-	return s.repo.Create(ctx, name)
+	return s.repo.Create(ctx, req)
 }
 
 // UpdateProject executes UpdateProject behavior.
-func (s *Service) UpdateProject(ctx context.Context, req domain.ProjectUpdateRequest) (domain.Project, error) {
-	name := strings.TrimSpace(req.Name)
-	if req.ID <= 0 || name == "" {
-		return domain.Project{}, apperror.ErrProjectInvalidInput
+func (s *Service) UpdateProject(ctx context.Context, req domain.ProjectUpdateRequest) error {
+	req.Name = strings.TrimSpace(req.Name)
+	if req.ID <= 0 || req.Name == "" {
+		return apperror.ErrProjectInvalidInput
 	}
-	return s.repo.Update(ctx, req.ID, name)
+	return s.repo.Update(ctx, req)
 }
 
 // DeleteProject executes DeleteProject behavior.
@@ -53,5 +53,13 @@ func (s *Service) DeleteProject(ctx context.Context, req domain.ProjectIDRequest
 	if req.ID <= 0 {
 		return apperror.ErrProjectInvalidInput
 	}
-	return s.repo.Delete(ctx, req.ID)
+	return s.repo.Delete(ctx, req)
+}
+
+// Config returns only the selected configuration, without a default fallback.
+func (s *Service) Config(ctx context.Context, req domain.ProjectIDRequest) (domain.Config, error) {
+	if req.ID <= 0 {
+		return domain.Config{}, apperror.ErrProjectInvalidInput
+	}
+	return s.repo.Config(ctx, req)
 }

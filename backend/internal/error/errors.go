@@ -15,7 +15,8 @@ import (
 var (
 	ErrProjectInvalidInput    = errors.New("invalid project input")
 	ErrProjectNotFound        = errors.New("project not found")
-	ErrProjectHasChanges      = errors.New("project has changes")
+	ErrProjectHasChanges      = errors.New("project has dependencies")
+	ErrProjectConfigNotFound  = errors.New("project configuration not found")
 	ErrEpicInvalidInput       = errors.New("invalid epic input")
 	ErrEpicNotFound           = errors.New("epic not found")
 	ErrEpicHasChanges         = errors.New("epic has changes")
@@ -72,7 +73,8 @@ func Interpret(err error) (int, string) {
 	}{
 		{ErrProjectInvalidInput, 400, "invalid project payload"},
 		{ErrProjectNotFound, 404, "project not found"},
-		{ErrProjectHasChanges, 409, "project has changes and cannot be deleted"},
+		{ErrProjectConfigNotFound, 404, "project configuration not found"},
+		{ErrProjectHasChanges, 409, "project has dependencies and cannot be deleted"},
 		{ErrEpicInvalidInput, 400, "invalid epic payload"},
 		{ErrEpicNotFound, 404, "epic not found"},
 		{ErrEpicHasChanges, 409, "epic has changes and cannot be deleted"},

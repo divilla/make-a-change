@@ -1,24 +1,12 @@
 package domain
 
-type (
-	// ChangePhase defines ChangePhase values.
-	ChangePhase struct {
-		Slug     string `json:"slug"`
-		Priority int    `json:"priority"`
-		Color    string `json:"color,omitempty"`
-	}
-
-	// ChangeType defines ChangeType values.
-	ChangeType struct {
-		Slug     string `json:"slug"`
-		Priority int    `json:"priority"`
-	}
-
-	// Config defines global change options.
-	Config struct {
-		Slug         string   `json:"slug"`
-		ChangePhases []string `json:"change_phases"`
-		ChangeTypes  []string `json:"change_types"`
-		ChangeDocs   []string `json:"change_docs"`
-	}
-)
+// Config is the configuration selected by a project's stored slug.
+type Config struct {
+	Slug         string   `json:"slug"`
+	ProjectDocs  []string `json:"project_docs"`
+	EpicDocs     []string `json:"epic_docs"`
+	ChangeDocs   []string `json:"change_docs"`
+	ChangePhases []string `json:"change_phases"`
+	ChangeColors []string `json:"change_colors"`
+	ChangeTypes  []string `json:"change_types"`
+}

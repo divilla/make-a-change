@@ -43,7 +43,7 @@ class APICoverageTest(unittest.TestCase):
         self.meta=dict(packages=[],blocks={},sources={})
         def execute(args, timeout=120):
             self.calls.append(args)
-            if args[0]==fail or (fail=='conversion' and 'textfmt' in args):
+            if args[0]==fail or (fail=='conversion' and 'textfmt' in args) or (fail=='fixtures' and str(args[-1]).endswith('/fixtures.sql')):
                 raise subprocess.CalledProcessError(code,args)
             if args[0]=='apih' and counters:
                 (self.directory/'counters/covmeta.fake').touch()
@@ -84,13 +84,22 @@ class APICoverageTest(unittest.TestCase):
         self.assertIn('-covermode=atomic',build)
         self.assertIn('-coverpkg='+','.join(coverage.PATTERNS),build)
         psql=[args for args in self.calls if args[0]=='psql']
-        self.assertEqual(len(psql),2)
+        self.assertEqual([Path(args[-1]).name for args in psql], ['init.sql','seed.sql','fixtures.sql'])
         for args in psql:
             self.assertIn('ON_ERROR_STOP=1',args)
             self.assertNotIn('5432',args)
         self.assertTrue(Path(self.runner.env['GOCOVERDIR']).is_absolute())
         self.assertTrue(self.reporting.call_args.kwargs['integration'])
         self.assertEqual(self.calls[-1][-1],'stop')
+
+    def test_fixture_failure_stops_before_server_and_suite(self):
+        with self.assertRaises(subprocess.CalledProcessError) as raised:
+            self.campaign('fixtures',23)
+        self.assertEqual(raised.exception.returncode,23)
+        self.assertFalse(any(args[0]=='apih' for args in self.calls))
+        self.assertEqual(self.server.signals,[])
+        self.assertEqual(self.calls[-1][-1],'stop')
+        self.assertIsNone(self.runner.database)
 
     def test_sql_startup_and_conversion_failures_remain_visible(self):
         for failed in ['psql','pg_ctl','conversion']:

@@ -1,28 +1,28 @@
-# P1 route, schema and error ledger
+# P2 route, schema and error ledger
 
 Authority: read-only `../../docs/backend-architecture.md`, `../../db/init.sql`
-and `../../db/seed.sql`. All **33 registered method/path pairs** remain in the
-denominator. P1 APIHydra reaches **9/33** pairs: two health successes and seven
-error-only routes. Successful operation coverage remains **2/33**. The table
-separates error-path evidence from successful business operation support.
-There is no authentication middleware; no authentication contract is invented.
+and `../../db/seed.sql`. The inventory is **32 registered method/path pairs**:
+33 after P1, plus project/config, minus two options routes. APIHydra includes all
+11 P2 operations and both health aliases. Remaining change/testcase successes
+await P3/P4; those operations stay in the denominator. There is no authentication
+middleware or invented authentication contract. See the checkpoint for actual
+campaign exits and measurements.
 
 | Method | Path | Current behavior / database source | Target and deferred pass | APIHydra |
 | --- | --- | --- | --- | --- |
 | GET | /api/v1/health | 200 health JSON after pool ping; 503 degraded JSON on ping error | Retain; exact body unit tested | pass |
 | GET | /api/health | Same health alias and database ping | Retain | pass |
-| POST | /api/v1/project/list | 200 list intended; selects last_ref absent from vw_project | P2: join project.last_ref; retain view count/timestamps | 500 pass; success blocked |
-| POST | /api/v1/project/get | 200 entity intended; same invalid view projection | P2: current-schema details | 400 pass; details blocked |
-| POST | /api/v1/project/create | Inserts project then broken details read; intended 201 entity | P2: 201 ID only; no reload | 500 pass; insert then reload fails |
-| POST | /api/v1/project/update | Updates name/modified then broken details read; intended 200 entity | P2: empty 204; error-only methods | blocked |
-| POST | /api/v1/project/delete | Guarded project delete against change/epic children; empty 204 | P2: preserve constraints/errors | 404/409 pass; success untested |
-| POST | /api/v1/epic/list | Selects obsolete version/completed from vw_epic; intended 200 list | P2: view fields/counts; derived completion if retained | blocked |
-| POST | /api/v1/epic/get | Same obsolete epic projection; intended 200 entity | P2: current-schema details | blocked |
-| POST | /api/v1/epic/create | Insert epic then obsolete details projection; intended 201 entity | P2: 201 ID only | 404/500 pass; success blocked |
-| POST | /api/v1/epic/update | Transaction/history path; intended 200 entity | P2: name/modified update, empty 204, no Go transaction | blocked |
-| POST | /api/v1/epic/delete | Guarded epic delete; empty 204 | P2: preserve child integrity | untested |
-| POST | /api/v1/options/change-phases-list | Reads removed change_phase; hardcoded color cases | P2: remove; project configuration from config.change_phases/change_colors | blocked |
-| POST | /api/v1/options/change-types-list | Reads removed change_type | P2: remove; project-selected config.change_types | blocked |
+| POST | /api/v1/project/list | 200 array; current view columns; explicit deterministic ordering | P2 aligned | pass (p2-steps.yaml) |
+| POST | /api/v1/project/get | 200 database-backed details | P2 aligned | pass (p2-steps.yaml) |
+| POST | /api/v1/project/config | 200 selected config slug and all six ordered arrays; unavailable join 404 | P2 aligned, no fallback | pass (p2-steps.yaml) |
+| POST | /api/v1/project/create | 201 {id}; one INSERT returning ID | P2 aligned | pass (p2-steps.yaml) |
+| POST | /api/v1/project/update | 204 empty; one name/modified UPDATE, including same name | P2 aligned | pass (p2-steps.yaml) |
+| POST | /api/v1/project/delete | 204 empty; one DELETE, FK conflict 409, missing 404 | P2 aligned | pass (p2-steps.yaml) |
+| POST | /api/v1/epic/list | 200 array; current view columns; explicit deterministic ordering | P2 aligned | pass (p2-steps.yaml) |
+| POST | /api/v1/epic/get | 200 database-backed details | P2 aligned | pass (p2-steps.yaml) |
+| POST | /api/v1/epic/create | 201 {id}; one INSERT returning ID | P2 aligned | pass (p2-steps.yaml) |
+| POST | /api/v1/epic/update | 204 empty; one name/modified UPDATE, including same name | P2 aligned | pass (p2-steps.yaml) |
+| POST | /api/v1/epic/delete | 204 empty; one DELETE, FK conflict 409, missing 404 | P2 aligned | pass (p2-steps.yaml) |
 | POST | /api/v1/change/list | 200 list from vw_change_list; P0 fixed total_tc scan and derived completion | P3: review count widths/domain; preserve ordering/nullability | untested |
 | POST | /api/v1/change/get | P0: 200 flat ChangeDetails from vw_change_details; missing row maps to 404 | P3: separate document and testcase reads | 400/404 pass; success untested |
 | POST | /api/v1/change/rendered-artifacts | Reads obsolete change.brief/spec/pr and renders | P3: explicit reads of current doc rows, safe rendering | blocked |
@@ -42,6 +42,7 @@ There is no authentication middleware; no authentication contract is invented.
 | POST | /api/v1/test-case/update | Removed sp_test_case_update and old state | P4: testcase.scenario; 204 | blocked |
 | POST | /api/v1/test-case/update-done | Removed procedure, old history/composite response | P4: testcase.done; 204 | blocked |
 | POST | /api/v1/test-case/delete | Removed sp_test_case_delete; composite response | P4: testcase delete; 204, independent reads | blocked |
+
 
 ## Limited P0 field correction
 
@@ -74,8 +75,8 @@ Go transaction, authentication behavior, or dependency is introduced.
 The authorized P1 relocation replaces those Go symbols with module-prefixed
 central symbols; no module aliases or example APIs remain. `Wrap`, `Database`,
 `InvalidPayload`, `Interpret`, `HTTP` and `ServerShutdown` serve existing callers.
-Private repository pool interfaces are unit-test seams; public constructors,
-SQL, request/domain types, route registration and mutation payloads are retained.
+Private repository pool interfaces are unit-test seams; P2 retains constructors
+and migrates project/epic SQL, requests, routes and mutation responses as below.
 
 | Condition | Retained public interpretation | Cause handling |
 | --- | --- | --- |
@@ -83,7 +84,10 @@ SQL, request/domain types, route registration and mutation payloads are retained
 | Bind failure | 400 operation-specific existing payload message | Original Echo/decoder error retained |
 | Missing entity | 404 `{module} not found` | pgx no-row cause retained where present |
 | Invalid change reference | 400 `invalid change reference` | Existing reference checks retained |
-| Project/epic child conflict | 409 `{module} has changes and cannot be deleted` | Distinct central sentinels |
+| Project child conflict | 409 `project has dependencies and cannot be deleted` | Existing ErrProjectHasChanges; SQLSTATE 23503 cause retained |
+| Epic child conflict | 409 `epic has changes and cannot be deleted` | SQLSTATE 23503 cause retained |
+| Missing project or selected config on project/config | 404 `project configuration not found` | ErrProjectConfigNotFound with pgx cause; one inner join |
+| Epic create missing/concurrently deleted parent | 404 `epic not found` | INSERT SELECT no-row or FK failure |
 | Testcase insert SQLSTATE 23503 | 404 `test case not found` | Original nested `*pgconn.PgError` retained |
 | Unexpected internal failure | 500 `Internal Server Error` | Full cause remains inspectable/loggable |
 | Router not found / method mismatch | 404 `Not Found` / 405 `Method Not Allowed` | Direct and wrapped router errors interpreted centrally |
@@ -95,11 +99,46 @@ Higher layers pass handled errors unchanged unless adding context or HTTP
 interpretation. HTTP output remains in API/startup, never in services/repositories.
 Configuration/db panic values remain errors with inspectable underlying causes.
 
-Real P1 error fixtures use the owned empty cluster's first project/epic inserts,
-assert their existing reload 500s, then assert project-delete 409. They are not
-successful create claims. Epic-delete 409 remains blocked by obsolete epic
-projection; testcase FK integration remains blocked by removed insertion SQL.
-Project-get missing-row and change phase-reference integrations also await their
-SQL migrations. All have unit-level semantic proof. P2 owns project/epic/config
-alignment; see [the checkpoint](backend-refactor-checkpoint.md) for exact fresh
-counts, failures and criterion mapping.
+## P2 retained and changed contracts
+
+- Project List/Get join vw_project to project for stored config and last_ref;
+  counts/timestamps retain view authority. List order is modified DESC, id DESC.
+  Empty lists serialize as [].
+- Epic List/Get scan id, project_id, name, done_tc, total_tc, change_count,
+  created and modified. Version is removed. Counters are int64 (change_count
+  remains int); service derives completed = 100 * done_tc / total_tc, or 0
+  for zero total. List order is created ASC, id ASC, scoped to positive project
+  ID; an absent project produces []. No mapping lives in the repository.
+- Creates return existing domain ID request DTOs as ID-only responses. Updates
+  and deletes return error only and HTTP 204 with no body. No mutation rereads.
+  The same domain request crosses API/service/repository; services trim names
+  and independently reject invalid IDs/blank names. Echo binding and validate
+  enforce API format. Context and classified causes are preserved.
+- Config returns exactly project.config = config.slug, including project_docs,
+  epic_docs, change_docs, change_phases, change_colors and change_types in stored
+  order. Create keeps the database default; update remains name-only. No config
+  mutation endpoint was added. Missing selected config and missing project both
+  mean unavailable config (404); the default row is never a fallback.
+- Parent deletion uses one direct DELETE. Actual project/epic/change FKs decide
+  conflicts, including concurrent inserts. No child deletion, history call,
+  transaction or check-then-delete workflow remains in these two modules.
+  public.doc deliberately has no parent FK and is append-only: historical rows
+  remain on parent deletion. No new delete-blocking constraint is invented.
+- All configured project/epic document types are exposed, but neither module
+  previously exposed document APIs. No unused document CRUD is introduced;
+  P3 owns existing change/document operations. This removes no supported
+  project/epic document operation.
+- Options module, startup wiring, routes and options-only ChangePhase/ChangeType
+  DTOs are removed after reference checks. Both former routes return 404.
+- P1's intentionally broken project/epic 500 setup requests are removed. P2
+  uses captured IDs and reserved SQL fixtures >=1000. Parent/child conflicts,
+  custom/default/missing config, counts, zero completion and absent lists are
+  independent of broken P3/P4 APIs. Legacy conflict scenarios are ported here;
+  retained Go HTTP CRUD uses separate reads, including modified advancement.
+  Its SQL document-retention test confirms both historical and current records
+  survive project and epic deletion, separately from APIHydra counters.
+
+See [checkpoint](backend-refactor-checkpoint.md) for criterion/test mapping and
+actual verification, and [API coverage](../apih-tests/coverage.md) for assertions
+and tool limitations. Error-only change/testcase scenarios remain diagnostic;
+they are not successful operation coverage.

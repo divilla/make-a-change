@@ -19,10 +19,11 @@ type (
 	// Repository defines Repository values.
 	Repository interface {
 		List(ctx context.Context) ([]domain.Project, error)
-		Get(ctx context.Context, id int) (domain.Project, error)
-		Create(ctx context.Context, name string) (domain.Project, error)
-		Update(ctx context.Context, id int, name string) (domain.Project, error)
-		Delete(ctx context.Context, id int) error
+		Get(ctx context.Context, req domain.ProjectIDRequest) (domain.Project, error)
+		Create(ctx context.Context, req domain.ProjectCreateRequest) (domain.ProjectIDRequest, error)
+		Update(ctx context.Context, req domain.ProjectUpdateRequest) error
+		Delete(ctx context.Context, req domain.ProjectIDRequest) error
+		Config(ctx context.Context, req domain.ProjectIDRequest) (domain.Config, error)
 	}
 )
 
@@ -31,13 +32,14 @@ func NewRepo(pool *pgxpool.Pool) *Repo {
 	return &Repo{pool: pool}
 }
 
-const projectColumns = "id, name, last_ref, created, modified, change_count"
+const projectColumns = "v.id, v.name, p.config, p.last_ref, v.created, v.modified, v.change_count"
 
 // List executes List behavior.
 func (r *Repo) List(ctx context.Context) ([]domain.Project, error) {
 	rows, err := r.pool.Query(ctx, `
 		select `+projectColumns+`
-		from public.vw_project
+		from public.vw_project v join public.project p on p.id = v.id
+ order by v.modified desc, v.id desc
 	`)
 	if err != nil {
 		return nil, apperror.Database(err, nil, nil)
@@ -55,80 +57,52 @@ func (r *Repo) List(ctx context.Context) ([]domain.Project, error) {
 }
 
 // Get executes Get behavior.
-func (r *Repo) Get(ctx context.Context, id int) (domain.Project, error) {
+func (r *Repo) Get(ctx context.Context, req domain.ProjectIDRequest) (domain.Project, error) {
 	project, err := scanProject(r.pool.QueryRow(ctx, `
 		select `+projectColumns+`
-		from public.vw_project
-		where id = $1
-	`, id))
+		from public.vw_project v join public.project p on p.id = v.id
+		where v.id = $1
+	`, req.ID))
 	if err != nil {
 		return domain.Project{}, apperror.Database(err, apperror.ErrProjectNotFound, nil)
 	}
 	return project, nil
 }
 
-// Create executes Create behavior.
-func (r *Repo) Create(ctx context.Context, name string) (domain.Project, error) {
-	var id int
-	if err := r.pool.QueryRow(ctx, "insert into public.project (name) values ($1) returning id", name).Scan(&id); err != nil {
-		return domain.Project{}, apperror.Database(err, nil, nil)
-	}
-	return r.Get(ctx, id)
+// Create inserts one project and returns only its ID.
+func (r *Repo) Create(ctx context.Context, req domain.ProjectCreateRequest) (domain.ProjectIDRequest, error) {
+	var result domain.ProjectIDRequest
+	err := r.pool.QueryRow(ctx, "insert into public.project (name) values ($1) returning id", req.Name).Scan(&result.ID)
+	return result, apperror.Database(err, nil, nil)
 }
 
-// Update executes Update behavior.
-func (r *Repo) Update(ctx context.Context, id int, name string) (domain.Project, error) {
-	tag, err := r.pool.Exec(ctx, `
-		update public.project
-		set name = $2,
-		    modified = now()
-		where id = $1
-	`, id, name)
+// Update changes the name and timestamp, including same-name updates.
+func (r *Repo) Update(ctx context.Context, req domain.ProjectUpdateRequest) error {
+	tag, err := r.pool.Exec(ctx, "update public.project set name = $2, modified = now() where id = $1", req.ID, req.Name)
 	if err != nil {
-		return domain.Project{}, apperror.Database(err, nil, nil)
+		return apperror.Database(err, nil, nil)
 	}
 	if tag.RowsAffected() == 0 {
-		return domain.Project{}, apperror.ErrProjectNotFound
-	}
-	return r.Get(ctx, id)
-}
-
-// Delete executes Delete behavior.
-func (r *Repo) Delete(ctx context.Context, id int) error {
-	tag, err := r.pool.Exec(ctx, `
-		delete from public.project
-		where id = $1
-		  and not exists (
-		    select 1
-		    from public.change
-		    where change.project_id = project.id
-		  )
-		  and not exists (
-		    select 1
-		    from public.epic
-		    where epic.project_id = project.id
-		  )
-	`, id)
-	if err != nil {
-		return apperror.Database(err, nil, nil)
-	}
-	if tag.RowsAffected() > 0 {
-		return nil
-	}
-
-	var exists bool
-	if err := r.pool.QueryRow(ctx, "select exists(select 1 from public.project where id = $1)", id).Scan(&exists); err != nil {
-		return apperror.Database(err, nil, nil)
-	}
-	if !exists {
 		return apperror.ErrProjectNotFound
 	}
-	return apperror.ErrProjectHasChanges
+	return nil
+}
+
+// Delete lets PostgreSQL enforce parent dependencies in one statement.
+func (r *Repo) Delete(ctx context.Context, req domain.ProjectIDRequest) error {
+	tag, err := r.pool.Exec(ctx, "delete from public.project where id = $1", req.ID)
+	if err != nil {
+		return apperror.Database(err, nil, apperror.ErrProjectHasChanges)
+	}
+	if tag.RowsAffected() == 0 {
+		return apperror.ErrProjectNotFound
+	}
+	return nil
 }
 
 func scanProject(row pgx.Row) (domain.Project, error) {
 	var project domain.Project
-	err := row.Scan(&project.ID, &project.Name, &project.LastRef, &project.Created, &project.Modified, &project.ChangeCount)
+	err := row.Scan(&project.ID, &project.Name, &project.Config, &project.LastRef, &project.Created, &project.Modified, &project.ChangeCount)
 	return project, apperror.Database(err, nil, nil)
 }
 
@@ -136,4 +110,15 @@ type projectPool interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
 	QueryRow(context.Context, string, ...any) pgx.Row
 	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}
+
+// Config resolves exactly the project's stored slug. Missing joins never fall back.
+func (r *Repo) Config(ctx context.Context, req domain.ProjectIDRequest) (domain.Config, error) {
+	var result domain.Config
+	err := r.pool.QueryRow(ctx, `select c.slug, c.project_docs, c.epic_docs, c.change_docs,
+ c.change_phases, c.change_colors, c.change_types
+ from public.project p join public.config c on c.slug = p.config where p.id = $1`, req.ID).Scan(
+		&result.Slug, &result.ProjectDocs, &result.EpicDocs, &result.ChangeDocs,
+		&result.ChangePhases, &result.ChangeColors, &result.ChangeTypes)
+	return result, apperror.Database(err, apperror.ErrProjectConfigNotFound, nil)
 }

@@ -18,10 +18,11 @@ func TestProjectHandlerErrorContracts(t *testing.T) {
 		handler             func(*API, *echo.Context) error
 		success             int
 	}{
+		{"config", `{"id":1}`, "config", (*API).config, 200},
 		{"list", `{}`, "", (*API).listProjects, 200},
 		{"get", `{"id":1}`, "get", (*API).getProject, 200},
 		{"create", `{"name":"Name"}`, "create", (*API).createProject, 201},
-		{"update", `{"id":1,"name":"Name"}`, "update", (*API).updateProject, 200},
+		{"update", `{"id":1,"name":"Name"}`, "update", (*API).updateProject, 204},
 		{"delete", `{"id":1}`, "delete", (*API).deleteProject, 204},
 	} {
 		t.Run(op.name, func(t *testing.T) {
@@ -33,10 +34,11 @@ func TestProjectHandlerErrorContracts(t *testing.T) {
 				message string
 			}{
 				{"success", nil, op.success, ""},
+				{"config missing", apperror.ErrProjectConfigNotFound, 404, "project configuration not found"},
 				{"missing", apperror.ErrProjectNotFound, 404, "project not found"},
 				{"wrapped missing", fmt.Errorf("outer: %w", apperror.ErrProjectNotFound), 404, "project not found"},
 				{"invalid", apperror.ErrProjectInvalidInput, 400, "invalid project payload"},
-				{"conflict", apperror.ErrProjectHasChanges, 409, "project has changes and cannot be deleted"},
+				{"conflict", apperror.ErrProjectHasChanges, 409, "project has dependencies and cannot be deleted"},
 				{"unknown", unknown, 500, "Internal Server Error"},
 			} {
 				t.Run(tc.name, func(t *testing.T) {

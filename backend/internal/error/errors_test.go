@@ -75,7 +75,8 @@ func TestHTTPContractsAndCauses(t *testing.T) {
 	}{
 		{ErrProjectInvalidInput, 400, "invalid project payload"},
 		{ErrProjectNotFound, 404, "project not found"},
-		{ErrProjectHasChanges, 409, "project has changes and cannot be deleted"},
+		{ErrProjectConfigNotFound, 404, "project configuration not found"},
+		{ErrProjectHasChanges, 409, "project has dependencies and cannot be deleted"},
 		{ErrEpicInvalidInput, 400, "invalid epic payload"},
 		{ErrEpicNotFound, 404, "epic not found"},
 		{ErrEpicHasChanges, 409, "epic has changes and cannot be deleted"},

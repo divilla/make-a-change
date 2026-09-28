@@ -15,11 +15,11 @@ type (
 
 	// Repository defines Repository values.
 	Repository interface {
-		List(ctx context.Context, projectID int) ([]domain.Epic, error)
-		Get(ctx context.Context, id int) (domain.Epic, error)
-		Create(ctx context.Context, req domain.EpicCreateRequest) (domain.Epic, error)
-		Update(ctx context.Context, req domain.EpicUpdateRequest) (domain.Epic, error)
-		Delete(ctx context.Context, id int) error
+		List(ctx context.Context, req domain.EpicListRequest) ([]domain.Epic, error)
+		Get(ctx context.Context, req domain.EpicIDRequest) (domain.Epic, error)
+		Create(ctx context.Context, req domain.EpicCreateRequest) (domain.EpicIDRequest, error)
+		Update(ctx context.Context, req domain.EpicUpdateRequest) error
+		Delete(ctx context.Context, req domain.EpicIDRequest) error
 	}
 )
 
@@ -33,7 +33,14 @@ func (s *Service) ListEpics(ctx context.Context, req domain.EpicListRequest) ([]
 	if req.ProjectID <= 0 {
 		return nil, apperror.ErrEpicInvalidInput
 	}
-	return s.repo.List(ctx, req.ProjectID)
+	items, err := s.repo.List(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		items[i] = withCompletion(items[i])
+	}
+	return items, nil
 }
 
 // GetEpic executes GetEpic behavior.
@@ -41,23 +48,27 @@ func (s *Service) GetEpic(ctx context.Context, req domain.EpicIDRequest) (domain
 	if req.ID <= 0 {
 		return domain.Epic{}, apperror.ErrEpicInvalidInput
 	}
-	return s.repo.Get(ctx, req.ID)
+	item, err := s.repo.Get(ctx, req)
+	if err != nil {
+		return domain.Epic{}, err
+	}
+	return withCompletion(item), nil
 }
 
 // CreateEpic executes CreateEpic behavior.
-func (s *Service) CreateEpic(ctx context.Context, req domain.EpicCreateRequest) (domain.Epic, error) {
+func (s *Service) CreateEpic(ctx context.Context, req domain.EpicCreateRequest) (domain.EpicIDRequest, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.ProjectID <= 0 || req.Name == "" {
-		return domain.Epic{}, apperror.ErrEpicInvalidInput
+		return domain.EpicIDRequest{}, apperror.ErrEpicInvalidInput
 	}
 	return s.repo.Create(ctx, req)
 }
 
 // UpdateEpic executes UpdateEpic behavior.
-func (s *Service) UpdateEpic(ctx context.Context, req domain.EpicUpdateRequest) (domain.Epic, error) {
+func (s *Service) UpdateEpic(ctx context.Context, req domain.EpicUpdateRequest) error {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.ID <= 0 || req.Name == "" {
-		return domain.Epic{}, apperror.ErrEpicInvalidInput
+		return apperror.ErrEpicInvalidInput
 	}
 	return s.repo.Update(ctx, req)
 }
@@ -67,5 +78,13 @@ func (s *Service) DeleteEpic(ctx context.Context, req domain.EpicIDRequest) erro
 	if req.ID <= 0 {
 		return apperror.ErrEpicInvalidInput
 	}
-	return s.repo.Delete(ctx, req.ID)
+	return s.repo.Delete(ctx, req)
+}
+
+func withCompletion(item domain.Epic) domain.Epic {
+	item.Completed = 0
+	if item.TotalTC != 0 {
+		item.Completed = 100 * item.DoneTC / item.TotalTC
+	}
+	return item
 }

@@ -7,7 +7,6 @@ import (
 	"mch_api/internal/epic"
 	apperror "mch_api/internal/error"
 	"mch_api/internal/health"
-	"mch_api/internal/options"
 	"mch_api/internal/project"
 	"mch_api/internal/testcase"
 	"mch_api/pkg/config"
@@ -142,10 +141,6 @@ func start(ctx context.Context, cfg *config.Config) (application, error) {
 	epicRepository := epic.NewRepo(pool)
 	epicService := epic.NewService(epicRepository)
 	epic.NewAPI(e, epicService)
-
-	optionsRepository := options.NewRepo(pool)
-	optionsService := options.NewService(optionsRepository)
-	options.NewAPI(e, optionsService)
 
 	changeRepository := change.NewRepo(pool)
 	changeService := change.NewService(changeRepository, changeRenderer)

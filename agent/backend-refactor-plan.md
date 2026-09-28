@@ -1,6 +1,6 @@
 # Backend refactor plan
 
-Status: execution resumed under the user's 2026-09-28 clarification: coverage targets are final-result goals, never intermediate merge blockers. P0 is reviewed and published with honest unit 576/1209 (47.6427%) and integration 168/1209 (13.8958%) measurements; merge it to dev and continue P1 through R6 without stopping solely for coverage. Aim strongly for final targets, finish all safe authorized work, and report any remaining shortfall. See [the current checkpoint](../backend/agents/backend-refactor-checkpoint.md).
+Status: P0–P2 implemented and reviewed under the user's final-result coverage policy. P2 project/epic/config workflows pass 100 APIHydra requests; unit coverage is 853/1164 (73.2818%), integration 414/1164 (35.5670%), with both strict gates honestly failing. Project and epic each have 100% unit statement coverage. The next specification is P3 change/document alignment, followed by the remaining sequence, each starting from fresh origin/dev after the preceding authorized squash merge. Coverage shortfalls alone do not stop intermediate work. See [the current checkpoint](../backend/agents/backend-refactor-checkpoint.md).
 Inspected on 2026-09-28 at commit `7a89905`, branch `change/004-refactor-backend`.
 
 ## Recommendation and scope

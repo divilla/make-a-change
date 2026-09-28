@@ -21,7 +21,7 @@ func TestEpicHandlerErrorContracts(t *testing.T) {
 		{"list", `{"project_id":1}`, "list", (*API).listEpics, 200},
 		{"get", `{"id":1}`, "get", (*API).getEpic, 200},
 		{"create", `{"project_id":1,"name":"Name"}`, "create", (*API).createEpic, 201},
-		{"update", `{"id":1,"name":"Name"}`, "update", (*API).updateEpic, 200},
+		{"update", `{"id":1,"name":"Name"}`, "update", (*API).updateEpic, 204},
 		{"delete", `{"id":1}`, "delete", (*API).deleteEpic, 204},
 	} {
 		t.Run(op.name, func(t *testing.T) {
