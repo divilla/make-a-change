@@ -13,8 +13,7 @@ import (
 )
 
 func main() {
-	config.New()
-	cfg := config.Get()
+	cfg := config.New()
 
 	portFlag := flag.String("port", "", "server port")
 	dbFlag := flag.String("db", "", "database connection string")

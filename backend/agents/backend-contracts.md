@@ -316,3 +316,23 @@ prove CORS/trailing-slash/recovery/context/logging behavior and safe error-write
 failure logging; lifecycle tests prove failed shutdown unblocks via owned close.
 Global configuration is intentionally unchanged until R4. Both coverage gates
 pass 924/939 unit and 851/939 integration; 11 baseline lint findings await R5.
+
+## R4 independent application configuration
+
+`pkg/config.New() *Config` now returns an independent value using a fresh local
+gookit loader; the package singleton and Get are removed. Main consumes the
+returned instance before unchanged flag parsing. The fixed config/dev.yaml path,
+YAML/ParseEnv, defaults, nonempty untrimmed environment overrides, final CLI
+overrides and cause-preserving configuration panics retain their semantics.
+No file-path parameter, loader interface, flag redesign, global reset or change
+to R3 router/lifecycle ownership is introduced. Application configuration stays
+separate from project-selected database configuration.
+
+Sequential loads prove no field carryover or owner mutation leaks; failed loads
+preserve earlier values and later defaults. Stable-input concurrent loads pass
+the race detector. Ordinary executable tests preserve config-before-help/invalid
+flags and file/environment/CLI precedence without injecting subprocess counters.
+All408 APIHydra requests and full legacy HTTP/SQL parity pass. Fresh gates pass
+925/939 unit and851/939 integration. Normal lint displays11 baseline diagnostics;
+repeated-message limits mean this is not a total unique inventory. R5 will audit
+without diagnostic caps, repair the actual debt and retain normal Make checks.

@@ -1,3 +1,4 @@
+// Package config loads application configuration from YAML and the environment.
 package config
 
 import (
@@ -9,8 +10,6 @@ import (
 	"github.com/gookit/config/v2/yaml"
 )
 
-var cfg Config
-
 type (
 	// Config defines Config values.
 	Config struct {
@@ -20,47 +19,44 @@ type (
 	}
 )
 
-// New initializes or executes New behavior.
-func New() {
-	config.WithOptions(config.ParseEnv)
-	config.AddDriver(yaml.Driver)
-	if err := config.LoadFiles("config/dev.yaml"); err != nil {
+// New loads an independently owned application configuration.
+func New() *Config {
+	loader := config.New("application", config.ParseEnv)
+	loader.AddDriver(yaml.Driver)
+	if err := loader.LoadFiles("config/dev.yaml"); err != nil {
 		panic(apperror.Wrap(err, "configuration"))
 	}
-	if err := config.Decode(&cfg); err != nil {
+	var cfg Config
+	if err := loader.Decode(&cfg); err != nil {
 		panic(apperror.Wrap(err, "configuration"))
 	}
 
-	applyDefaults()
-	applyEnv()
-}
-
-// Get initializes or executes Get behavior.
-func Get() *Config {
+	cfg.applyDefaults()
+	cfg.applyEnv()
 	return &cfg
 }
 
-func applyDefaults() {
-	if cfg.ConnectionString == "" {
-		cfg.ConnectionString = "postgresql://localhost:5432/postgres"
+func (c *Config) applyDefaults() {
+	if c.ConnectionString == "" {
+		c.ConnectionString = "postgresql://localhost:5432/postgres"
 	}
-	if cfg.Port == "" {
-		cfg.Port = "8080"
+	if c.Port == "" {
+		c.Port = "8080"
 	}
-	if cfg.CORSOrigins == "" {
-		cfg.CORSOrigins = "http://localhost:8000"
+	if c.CORSOrigins == "" {
+		c.CORSOrigins = "http://localhost:8000"
 	}
 }
 
-func applyEnv() {
+func (c *Config) applyEnv() {
 	if value := os.Getenv("DATABASE_URL"); value != "" {
-		cfg.ConnectionString = value
+		c.ConnectionString = value
 	}
 	if value := os.Getenv("PORT"); value != "" {
-		cfg.Port = value
+		c.Port = value
 	}
 	if value := os.Getenv("CORS_ORIGINS"); value != "" {
-		cfg.CORSOrigins = value
+		c.CORSOrigins = value
 	}
 }
 

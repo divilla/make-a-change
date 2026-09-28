@@ -1,7 +1,7 @@
-# APIHydra R3 measurement
+# APIHydra R4 measurement
 
-Measured 2026-09-28 on `change/012-backend-startup-boundaries`, published
-implementation `8bc82d4` over merged dev `4c25d70`; native review passed clean.
+Measured 2026-09-28 on `change/013-backend-config-isolation`, published
+implementation `7686129` over merged dev `b48efed`; native review passed clean.
 **All 408 requests pass**: 96 P4 in
 [p4/steps.yaml](p4/steps.yaml), 212 P3, 91 P2, 7 errors and 2 health aliases.
 APIHydra and the owned instrumented server exit0. The isolated runner loads
@@ -10,11 +10,13 @@ its own private PostgreSQL cluster and server. No external database is reset.
 
 `make -C backend api-test` exits **0**: **851/939 = 90.6283%** production
 statement coverage, passing >=90%. Independent unit coverage is
-**924/939 = 98.4026%**, passing strict >95%. Testcase is 108/108 unit and 99/108
+**925/939 = 98.5091%**, passing strict >95%. Testcase is 108/108 unit and 99/108
 API statements. Unit and legacy profiles are never merged into integration.
 R1 previously removed the audited unused pkg/db wrapper; 011 added seven real
 validation-cause statements and R3 adds four composition-boundary statements.
-The production denominator is 939; domain has no executable statements. No
+R4 adds local configuration construction while removing the separate main Get
+call; the production denominator remains 939. Config is 31/31 unit and 22/31
+API statements; main is 77/91 unit and 75/91 API. Domain has no executable statements. No
 retained production package is excluded. All router/lifecycle statements are
 unit-covered; process-only main statements remain honestly uncovered.
 The [checkpoint](../agents/backend-refactor-checkpoint.md) lists every package,
