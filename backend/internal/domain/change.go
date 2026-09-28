@@ -54,9 +54,11 @@ type (
 		Modified    time.Time `json:"modified"`
 	}
 
+	// ChangeDetails contains fields exposed by the current change details view.
 	ChangeDetails struct {
-		Change    Change     `json:"change"`
-		TestCases []TestCase `json:"test_cases"`
+		ChangeListItem
+		PRUrl   string    `json:"pr_url"`
+		Created time.Time `json:"created"`
 	}
 
 	// ChangeRenderedArtifactsRequest defines ChangeRenderedArtifactsRequest values.

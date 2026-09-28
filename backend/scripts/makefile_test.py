@@ -116,9 +116,10 @@ class MakefileTest(unittest.TestCase):
             (self.backend / target).touch()
         self.make("-j4", "check")
         commands = self.commands()
-        self.assertEqual(len(commands), 5)
+        self.assertEqual(len(commands), 6)
         self.assertIn(("go", ["vet"] + ALL), commands)
         self.assertIn(("go", ["test", "-short", "-count=1", "-race"] + UNIT), commands)
+        self.assertIn(("go", ["test", "-count=1", "./scripts/validate-apih-suite"]), commands)
         fmt = next(args for name, args in commands if name == "golangci-lint" and args[0] == "fmt")
         self.assertIn("--diff", fmt)
         self.assertIn(("python3", ["-B", "-m", "unittest", "discover", "-s", "scripts", "-p", "*_test.py", "-v"]), commands)
@@ -146,22 +147,18 @@ class MakefileTest(unittest.TestCase):
                 self.make(target, failure=True, FAIL_COMMAND=command)
         self.make("check", failure=True, FAIL_COMMAND="go vet")
 
-    def test_coverage_instruments_all_production_packages_and_generates_html_last(self):
+    def test_coverage_targets_delegate_to_strict_runner(self):
+        self.make("coverage")
         self.make("coverage-html")
-        commands = self.commands()
-        self.assertEqual(commands[0], ("go", ["test", "-short", "-count=1", "-race", "-covermode=atomic",
-            "-coverpkg=./cmd/...,./internal/...,./pkg/...", "-coverprofile=.coverage/unit/coverage.out"] + UNIT))
-        self.assertEqual(commands[1], ("go", ["tool", "cover", "-func=.coverage/unit/coverage.out"]))
-        self.assertEqual(commands[2], ("go", ["tool", "cover", "-html=.coverage/unit/coverage.out", "-o", ".coverage/unit/coverage.html"]))
+        self.assertEqual(self.commands(), [
+            ("python3", ["-B", "scripts/coverage.py"]),
+            ("python3", ["-B", "scripts/coverage.py", "--html"])])
+        self.make("coverage", failure=True, FAIL_COMMAND="python3")
 
-    def test_failed_coverage_removes_stale_reports_and_never_reports_success(self):
-        directory = self.backend / ".coverage/unit"
-        directory.mkdir(parents=True)
-        for name in ["coverage.out", "coverage.html"]:
-            (directory / name).write_text("stale success")
-        self.make("coverage-html", failure=True, FAIL_COMMAND="go test")
-        self.assertEqual(len(self.calls()), 1)
-        self.assertEqual(list(directory.iterdir()), [])
+    def test_api_target_runs_instrumented_apih_driver(self):
+        self.make("api-test")
+        self.assertEqual(self.commands(), [("python3", ["-B", "scripts/api_coverage.py"])])
+        self.make("api-test", failure=True, FAIL_COMMAND="python3")
 
     def test_docker_version_follows_module_and_volume_path_is_one_argument(self):
         self.make("test_version")
@@ -183,56 +180,10 @@ class MakefileTest(unittest.TestCase):
         self.make("import-db", failure=True, FAIL_COMMAND="psql")
         self.assertEqual(len(self.calls()), 1)
 
-    def test_api_runner_rejects_non_test_database_and_database_query_override(self):
-        for url in ["postgres://localhost/changes", "postgres://localhost/changes_test_other",
-                    "postgres://localhost/changes_test?dbname=changes", "postgres://localhost/changes_test?db%6eame=changes"]:
-            with self.subTest(url=url):
-                self.make("api-test", "API_TEST_DB_URL=" + url, failure=True)
-                self.assertEqual(self.calls(), [])
-
-    def test_api_build_failure_precedes_database_reset(self):
-        self.make("api-test", failure=True, FAIL_COMMAND="go build")
-        self.assertEqual([name for name, _, _ in self.calls()], ["go"])
-        self.assertEqual(list(self.scratch.iterdir()), [])
-
-    def test_api_occupied_service_is_not_killed_or_reset(self):
-        self.make("api-test", failure=True, OCCUPIED="1")
-        self.assertEqual([name for name, _, _ in self.calls()], ["go", "curl"])
-        self.assertFalse((self.root / "started").exists())
-
-    def test_api_schema_failure_prevents_server_and_test_start(self):
-        self.make("api-test", failure=True, FAIL_COMMAND="psql")
-        self.assertEqual([name for name, _, _ in self.calls()], ["go", "curl", "psql"])
-        self.assertFalse((self.root / "started").exists())
-        self.assertEqual(list(self.scratch.iterdir()), [])
-
-    def test_api_success_owns_process_and_preserves_existing_binary(self):
-        binary = self.backend / "mch-server"
-        binary.write_text("user binary")
-        self.make("api-test", "API_TEST_DB_URL=postgres://localhost/changes_test?sslmode=disable")
-        self.assertIn(("go", ["test", "-count=1", "./api-tests/..."]), self.commands())
-        self.assertEqual(sum(name == "psql" for name, _, _ in self.calls()), 2)
-        self.assertTrue((self.root / "stopped").exists())
-        self.assertEqual(binary.read_text(), "user binary")
-        self.assertEqual(list(self.scratch.iterdir()), [])
-
-    def test_api_test_failure_still_cleans_up_and_fails(self):
-        self.make("api-test", failure=True, FAIL_COMMAND="go test")
-        self.assertTrue((self.root / "stopped").exists())
-        self.assertEqual(list(self.scratch.iterdir()), [])
-
-    def test_api_server_startup_failure_is_reported_without_running_tests(self):
-        result = self.make("api-test", failure=True, FAIL_SERVER="1")
-        self.assertIn("server startup failed", result.stderr)
-        self.assertFalse(any(name == "go" and args[0] == "test" for name, args in self.commands()))
-        self.assertEqual(list(self.scratch.iterdir()), [])
-
-    def test_api_timeout_fails_without_running_tests(self):
-        result = self.make("api-test", failure=True, NOT_READY="1")
-        self.assertIn("Timed out", result.stderr)
-        self.assertFalse(any(name == "go" and args[0] == "test" for name, args in self.commands()))
-        self.assertTrue((self.root / "stopped").exists())
-        self.assertEqual(list(self.scratch.iterdir()), [])
+    def test_legacy_runner_uses_private_lifecycle_and_separate_output(self):
+        self.make("legacy-api-test")
+        self.assertEqual(self.commands(), [("python3", ["-B", "scripts/api_coverage.py", "--legacy"])])
+        self.make("legacy-api-test", failure=True, FAIL_COMMAND="python3")
 
 
 if __name__ == "__main__":

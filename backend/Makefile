@@ -23,7 +23,7 @@ API_TEST_BASE_URL ?= http://localhost:$(API_TEST_PORT)
 export API_TEST_DB_URL API_TEST_PORT API_TEST_BASE_URL GO
 
 .PHONY: check init format format-check lint vet test race coverage coverage-html \
-        benchmark deps-audit tooling-test help test_version import-db api-test
+        benchmark deps-audit tooling-test help test_version import-db api-test legacy-api-test
 
 check: format-check lint vet race tooling-test ## Run read-only formatting, lint, vet, race and tooling checks
 
@@ -49,14 +49,11 @@ test: ## Run uncached unit tests without database or HTTP integration tests
 race: ## Run uncached unit tests with the race detector
 	$(GO) test -short -count=1 -race $(UNIT_PACKAGES)
 
-coverage: ## Measure unit coverage for every production package (target: above 95%)
-	mkdir -p .coverage/unit
-	rm -f "$(COVERAGE_FILE)" .coverage/unit/coverage.html
-	$(GO) test -short -count=1 -race -covermode=atomic -coverpkg=$(COVER_PACKAGES) -coverprofile="$(COVERAGE_FILE)" $(UNIT_PACKAGES)
-	$(GO) tool cover -func="$(COVERAGE_FILE)"
+coverage: ## Measure fresh production unit statements and enforce strictly greater than 95%
+	python3 -B scripts/coverage.py
 
-coverage-html: coverage ## Generate an HTML report after a successful unit coverage run
-	$(GO) tool cover -html="$(COVERAGE_FILE)" -o .coverage/unit/coverage.html
+coverage-html: ## Run unit coverage and generate HTML even for a valid below-threshold profile
+	python3 -B scripts/coverage.py --html
 
 benchmark: ## Run benchmarks without ordinary or database integration tests
 	$(GO) test -short -run='^$$' -bench=. -benchmem $(UNIT_PACKAGES)
@@ -66,15 +63,17 @@ deps-audit: ## Check backend dependencies for known vulnerabilities
 
 tooling-test: ## Test Makefile behavior with isolated tool and service fixtures
 	python3 -B -m unittest discover -s scripts -p '*_test.py' -v
+	$(GO) test -count=1 ./scripts/validate-apih-suite
 
 import-db: ## Initialize and seed DATABASE_URL (destructive; explicit target only)
 	psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f ../db/init.sql
 	psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f ../db/seed.sql
 	psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f ../db/seed-demo.sql
 
-# Retain the existing Go HTTP tests until P0 introduces the APIHydra runner.
-# This target does not measure the future APIHydra integration coverage gate.
-api-test: ## Rebuild changes_test and run the existing Go HTTP integration suite
+api-test: ## Run isolated APIHydra suites and enforce at least 90% server statement coverage
+	python3 -B scripts/api_coverage.py
+
+legacy-api-test: ## Legacy Go HTTP scenarios (excluded from APIHydra coverage; explicit disposable DB only)
 	bash scripts/run-api-tests.sh
 
 help: ## Display available backend targets

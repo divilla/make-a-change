@@ -3,3 +3,8 @@
 
 # Generated backend executable.
 /mch-server
+
+# Source/report names otherwise matched by the root coverage.* rule.
+!/scripts/coverage.py
+!/apih-tests/coverage.md
+/scripts/__pycache__/

@@ -29,8 +29,8 @@ From inside `backend/`, omit `-C backend`.
 
 ## Backend Definition of Done
 
-For backend production-code changes, all of these commands must succeed on the
-final implementation, including any review fixes:
+For backend production-code changes, run all of these commands on the final
+implementation, including any review fixes:
 
 ```sh
 make -C backend check
@@ -65,14 +65,24 @@ Successful commands are necessary but not sufficient:
   validation pass. Finish the safe, reviewable work and discuss genuine blockers
   with the user; describe the result as incomplete rather than declaring it done.
 
-**Current migration status:** `coverage` reports coverage but does not yet enforce
-the numeric threshold, so its exit code alone is insufficient. `api-test` still
-runs the legacy Go HTTP suite and does not collect APIHydra server coverage.
-Passing it currently proves only the retained legacy scenarios. The planned
-verification-foundation specification must implement automated coverage gates and
-the APIHydra runner, keeping these documented completion commands valid. Until
-then, the full backend definition of done cannot be claimed from the existing
-targets alone. See `agent/backend-refactor-plan.md` for that work.
+**Refactor execution policy (user clarification, 2026-09-28):** the numerical
+coverage targets apply to the final refactor result, not to each intermediate
+branch. Implement meaningful tests and measure both suites in every pass;
+continue the agreed specification/review/merge sequence when a valid measurement
+is below target. Make coverage gates must still return failure honestly. Aim for
+>95% unit and >=90% integration at the end; if legitimate testing falls short,
+finish the remaining work and report actual counts, uncovered behavior and
+options for discussion. A coverage shortfall alone does not stop implementation
+or merging to dev. This is not permission to hide failing tests, introduce
+regressions, manipulate coverage or claim unmet targets passed. Known baseline
+format/lint issues are tracked for repair in the relevant passes; new failures
+must be repaired. Do not promote to stage or production.
+
+**Current migration status:** P0 implements strict statement-count gates in
+`coverage` and `api-test`; the latter runs APIHydra against an instrumented server
+and an owned disposable PostgreSQL cluster. `legacy-api-test` retains the Go HTTP
+harness separately and contributes no APIHydra coverage. See
+`agent/backend-refactor-plan.md` and the backend checkpoint for current results.
 
 `check` already includes formatting, lint, vet, race tests, and tooling tests;
 there is no need to run each constituent again without a new change or failure.

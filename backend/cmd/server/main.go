@@ -4,9 +4,6 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"net/http"
-	"os"
-
 	"mch_api/internal/change"
 	"mch_api/internal/epic"
 	"mch_api/internal/health"
@@ -14,9 +11,16 @@ import (
 	"mch_api/internal/project"
 	"mch_api/internal/testcase"
 	"mch_api/pkg/config"
-	"mch_api/pkg/db"
 	"mch_api/pkg/markdown"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
+	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/rs/zerolog"
@@ -37,9 +41,61 @@ func main() {
 		cfg.ConnectionString = *dbFlag
 	}
 
-	ctx := context.Background()
-	pool := db.Pool(ctx, cfg.ConnectionString)
-	defer pool.Close()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := run(ctx, func() (application, error) { return start(ctx, cfg) }); err != nil {
+		log.Error().Err(err).Msg("server stopped")
+		os.Exit(1)
+	}
+}
+
+type application struct {
+	serve    func() error
+	shutdown func(context.Context) error
+	close    func()
+}
+
+func run(ctx context.Context, startup func() (application, error)) error {
+	app, err := startup()
+	if err != nil {
+		return err
+	}
+	closeApp := sync.OnceFunc(app.close)
+	defer closeApp()
+	served := make(chan error, 1)
+	go func() { served <- app.serve() }()
+	var serveErr error
+	select {
+	case serveErr = <-served:
+		return serveErr
+	case <-ctx.Done():
+	}
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	shutdownErr := app.shutdown(shutdownCtx)
+	// A failed Shutdown may leave Serve blocked. Close owned resources first.
+	if shutdownErr != nil {
+		closeApp()
+		<-served
+		return shutdownErr
+	}
+	serveErr = <-served
+	if errors.Is(serveErr, http.ErrServerClosed) {
+		serveErr = nil
+	}
+	return serveErr
+}
+
+func start(ctx context.Context, cfg *config.Config) (application, error) {
+	pool, err := pgxpool.New(ctx, cfg.ConnectionString)
+	if err != nil {
+		return application{}, err
+	}
+	listener, err := net.Listen("tcp", cfg.Addr())
+	if err != nil {
+		pool.Close()
+		return application{}, err
+	}
 
 	defaultCORSConfig := middleware.CORSConfig{
 		Skipper:      middleware.DefaultSkipper,
@@ -66,7 +122,13 @@ func main() {
 	}))
 
 	e.Use(middleware.Recover())
-	e.Use(middleware.CORSWithConfig(defaultCORSConfig))
+	cors, err := defaultCORSConfig.ToMiddleware()
+	if err != nil {
+		_ = listener.Close()
+		pool.Close()
+		return application{}, err
+	}
+	e.Use(cors)
 
 	markdownParser := markdown.NewGoldmarkParser()
 	htmlSanitizer := markdown.NewBluemondaySanitizer()
@@ -96,8 +158,20 @@ func main() {
 	testCaseService := testcase.NewService(testCaseRepository, changeRenderer)
 	testcase.NewAPI(e, testCaseService)
 
-	if err := e.Start(cfg.Addr()); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Error().Err(err).Msg("server stopped")
+	server := newHTTPServer(e)
+	return application{
+		serve:    func() error { return server.Serve(listener) },
+		shutdown: server.Shutdown,
+		close:    func() { _ = server.Close(); _ = listener.Close(); pool.Close() },
+	}, nil
+}
+
+func newHTTPServer(handler http.Handler) *http.Server {
+	return &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		// Preserve Echo's request-body deadline and implicit idle timeout.
+		ReadTimeout: 30 * time.Second,
 	}
 }
 

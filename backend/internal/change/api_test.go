@@ -38,7 +38,7 @@ func TestChangeAPIContracts(t *testing.T) {
 		{"update-epic", `{"id":2,"epic_id":3}`, http.StatusOK},
 		{"update-phase", `{"id":2,"change_phase":"review"}`, http.StatusOK},
 		{"update-open", `{"id":2,"open":false}`, http.StatusOK},
-		{"update-change-types", `{"id":2,"change_types":["fix"]}`, http.StatusOK},
+		{"update-change-types", `{"id":2,"change_types":["fix"]}`, http.StatusNoContent},
 		{"update-title", `{"id":2,"title":"Title"}`, http.StatusOK},
 		{"update-brief", `{"id":2,"brief":" Brief ","agent_edit":true}`, http.StatusOK},
 		{"update-spec", `{"id":2,"spec":"Spec","agent_edit":false}`, http.StatusOK},
@@ -67,6 +67,9 @@ func TestChangeAPIContracts(t *testing.T) {
 					rec := httptest.NewRecorder()
 					e.ServeHTTP(rec, req)
 					require.Equal(t, input.status, rec.Code, rec.Body.String())
+					if input.status == http.StatusNoContent {
+						assert.Empty(t, rec.Body.String())
+					}
 					if tc.path == "update-brief" && input.err == nil && input.status == http.StatusOK {
 						assert.Equal(t, "Brief", repo.updateBriefReq.Brief)
 						require.NotNil(t, repo.updateBriefReq.AgentEdit)

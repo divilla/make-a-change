@@ -6,6 +6,7 @@ import (
 	"mch_api/internal/domain"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -13,7 +14,7 @@ import (
 type (
 	// Repo defines Repo values.
 	Repo struct {
-		pool *pgxpool.Pool
+		pool changePool
 	}
 
 	// Repository defines Repository values.
@@ -23,7 +24,7 @@ type (
 		Artifacts(ctx context.Context, ids []int) ([]domain.Change, error)
 		AvailableChangeTypes(ctx context.Context) ([]string, error)
 		Create(ctx context.Context, req domain.ChangeCreateRequest) (domain.Change, error)
-		UpdateChangeTypes(ctx context.Context, req domain.ChangeUpdateChangeTypesRequest) (domain.Change, error)
+		UpdateChangeTypes(ctx context.Context, req domain.ChangeUpdateChangeTypesRequest) error
 		UpdateTitle(ctx context.Context, req domain.ChangeUpdateTitleRequest) (domain.Change, error)
 		UpdateBrief(ctx context.Context, req domain.ChangeUpdateBriefRequest) (domain.Change, error)
 		UpdateSpec(ctx context.Context, req domain.ChangeUpdateSpecRequest) (domain.Change, error)
@@ -35,6 +36,16 @@ type (
 		Delete(ctx context.Context, req domain.ChangeIDRequest) error
 	}
 )
+
+// changePool is the pgx boundary exercised by repository tests.
+type changePool interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+	Begin(context.Context) (pgx.Tx, error)
+}
+
+var _ Repository = (*Repo)(nil)
 
 const changeDetailColumns = `
 	id,
@@ -73,7 +84,7 @@ const changeListColumns = `
 	open,
 	done_tc,
 	total_tc,
-	completed,
+	coalesce(100 * done_tc / nullif(total_tc, 0), 0),
 	modified`
 
 // NewRepo initializes or executes NewRepo behavior.
@@ -110,7 +121,7 @@ func (r *Repo) List(ctx context.Context, projectID int) ([]domain.ChangeListItem
 			&change.Title,
 			&change.Open,
 			&change.DoneTC,
-			change.TotalTC,
+			&change.TotalTC,
 			&change.Completed,
 			&change.Modified,
 		)
@@ -123,52 +134,19 @@ func (r *Repo) List(ctx context.Context, projectID int) ([]domain.ChangeListItem
 	return changes, rows.Err()
 }
 
-// Details executes Get behavior.
-func (r *Repo) Details(ctx context.Context, id int) ([]domain.Change, error) {
-	rows, err := r.pool.Query(ctx, `
-		select `+changeListColumns+`
-		from public.vw_change_list
-		where id = $1
-		order by modified desc, id
-	`, id)
-	if err != nil {
-		return nil, err
+// Details reads only fields backed by the current change details view.
+func (r *Repo) Details(ctx context.Context, id int) (domain.ChangeDetails, error) {
+	var detail domain.ChangeDetails
+	err := r.pool.QueryRow(ctx, `select `+changeListColumns+`, pr_url, created
+ from public.vw_change_details where id = $1`, id).Scan(
+		&detail.ID, &detail.RefUUID, &detail.Ref, &detail.Slug, &detail.ProjectID,
+		&detail.ChangePhase, &detail.ChangeTypes, &detail.EpicID, &detail.EpicName,
+		&detail.Title, &detail.Open, &detail.DoneTC, &detail.TotalTC, &detail.Completed,
+		&detail.Modified, &detail.PRUrl, &detail.Created)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ChangeDetails{}, ErrNotFound
 	}
-	defer rows.Close()
-
-	var changes []domain.Change
-	for rows.Next() {
-		var change domain.Change
-		err = rows.Scan(
-			&change.ID,
-			&change.RefUUID,
-			&change.Ref,
-			&change.Version,
-			&change.Slug,
-			&change.ProjectID,
-			&change.ChangePhase,
-			&change.ChangeTypes,
-			&change.EpicID,
-			&change.EpicName,
-			&change.Title,
-			&change.Brief,
-			&change.Spec,
-			&change.PR,
-			&change.PRUrl,
-			&change.Open,
-			&change.DoneTC,
-			&change.TotalTC,
-			&change.Completed,
-			&change.Created,
-			&change.Modified,
-		)
-		if err != nil {
-			return nil, err
-		}
-		changes = append(changes, change)
-	}
-
-	return changes, rows.Err()
+	return detail, err
 }
 
 // Artifacts executes Artifacts behavior.
@@ -249,8 +227,15 @@ func (r *Repo) AvailableChangeTypes(ctx context.Context) ([]string, error) {
 }
 
 // UpdateChangeTypes executes UpdateChangeTypes behavior.
-func (r *Repo) UpdateChangeTypes(ctx context.Context, req domain.ChangeUpdateChangeTypesRequest) (domain.Change, error) {
-	r.pool.Exec(ctx, `update public.change set change_types = $1, modified = now() where id = $2`, req.ChangeTypes, req.ID)
+func (r *Repo) UpdateChangeTypes(ctx context.Context, req domain.ChangeUpdateChangeTypesRequest) error {
+	tag, err := r.pool.Exec(ctx, `update public.change set change_types = $1, modified = now() where id = $2`, req.ChangeTypes, req.ID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // UpdateTitle executes UpdateTitle behavior.

@@ -3,10 +3,9 @@ package change
 import (
 	"context"
 	"errors"
+	"mch_api/internal/domain"
 	"net/url"
 	"strings"
-
-	"mch_api/internal/domain"
 
 	"github.com/gofrs/uuid/v5"
 )
@@ -48,7 +47,6 @@ func (s *Service) GetChange(ctx context.Context, req domain.ChangeIDRequest) (do
 	if err != nil {
 		return domain.ChangeDetails{}, err
 	}
-	detail.Change = s.renderer.RenderChange(detail.Change)
 	return detail, nil
 }
 
@@ -99,21 +97,17 @@ func (s *Service) CreateChange(ctx context.Context, req domain.ChangeCreateReque
 }
 
 // UpdateChangeTypes executes UpdateChangeTypes behavior.
-func (s *Service) UpdateChangeTypes(ctx context.Context, req domain.ChangeUpdateChangeTypesRequest) (domain.Change, error) {
+func (s *Service) UpdateChangeTypes(ctx context.Context, req domain.ChangeUpdateChangeTypesRequest) error {
 	req.ChangeTypes = normalizeTypes(req.ChangeTypes)
 	if req.ID <= 0 {
-		return domain.Change{}, ErrInvalidInput
+		return ErrInvalidInput
 	}
 	available, err := s.repo.AvailableChangeTypes(ctx)
 	if err != nil {
-		return domain.Change{}, err
+		return err
 	}
 	req.ChangeTypes = intersectTypes(req.ChangeTypes, available)
-	change, err := s.repo.UpdateChangeTypes(ctx, req)
-	if err != nil {
-		return domain.Change{}, err
-	}
-	return s.renderer.RenderChange(change), nil
+	return s.repo.UpdateChangeTypes(ctx, req)
 }
 
 // UpdateTitle executes UpdateTitle behavior.

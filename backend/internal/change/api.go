@@ -2,9 +2,8 @@ package change
 
 import (
 	"errors"
-	"net/http"
-
 	"mch_api/internal/domain"
+	"net/http"
 
 	"github.com/labstack/echo/v5"
 )
@@ -107,11 +106,11 @@ func (a *API) updateChangeTypes(c *echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change types payload")
 	}
-	res, err := a.s.UpdateChangeTypes(c.Request().Context(), req)
+	err := a.s.UpdateChangeTypes(c.Request().Context(), req)
 	if err != nil {
 		return changeError(err)
 	}
-	return c.JSON(http.StatusOK, &res)
+	return c.NoContent(http.StatusNoContent)
 }
 
 func (a *API) updateTitle(c *echo.Context) error {

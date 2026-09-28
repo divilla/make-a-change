@@ -2,10 +2,9 @@ package change
 
 import (
 	"context"
+	"mch_api/internal/domain"
 	"strconv"
 	"testing"
-
-	"mch_api/internal/domain"
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
@@ -86,10 +85,10 @@ func TestServiceNormalizesChangeRequests(t *testing.T) {
 	assert.Equal(t, "Change Title", repo.createReq.Title)
 	assert.Equal(t, "Brief", repo.createReq.Brief)
 
-	_, err = service.UpdateChangeTypes(context.Background(), domain.ChangeUpdateChangeTypesRequest{ID: 2, ChangeTypes: []string{" fix ", "missing", "fix "}})
+	err = service.UpdateChangeTypes(context.Background(), domain.ChangeUpdateChangeTypesRequest{ID: 2, ChangeTypes: []string{" fix ", "missing", "fix "}})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"fix"}, repo.updateTypesReq.ChangeTypes)
-	_, err = service.UpdateChangeTypes(context.Background(), domain.ChangeUpdateChangeTypesRequest{ID: 2, ChangeTypes: []string{"missing"}})
+	err = service.UpdateChangeTypes(context.Background(), domain.ChangeUpdateChangeTypesRequest{ID: 2, ChangeTypes: []string{"missing"}})
 	require.NoError(t, err)
 	assert.Empty(t, repo.updateTypesReq.ChangeTypes)
 	_, err = service.UpdateTitle(context.Background(), domain.ChangeUpdateTitleRequest{ID: 2, Title: " Focused Title "})
@@ -126,13 +125,13 @@ func TestServiceNormalizesChangeRequests(t *testing.T) {
 	assert.Equal(t, 2, repo.id)
 }
 
-func TestServiceRendersChangeSpecHTML(t *testing.T) {
+func TestServiceReturnsCurrentChangeDetails(t *testing.T) {
 	repo := &fakeChangeRepository{}
 	service := NewService(repo, NewRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
 
 	detail, err := service.GetChange(context.Background(), domain.ChangeIDRequest{ID: 2})
 	require.NoError(t, err)
-	assert.Equal(t, "clean(parsed(**Change**))", detail.Change.SpecHTML)
+	assert.Equal(t, 2, detail.ID)
 }
 
 func TestServiceRendersBatchChangeSpecs(t *testing.T) {
@@ -206,7 +205,7 @@ func (r *fakeChangeRepository) Details(_ context.Context, id int) (domain.Change
 		return domain.ChangeDetails{}, r.err
 	}
 	r.id = id
-	return domain.ChangeDetails{Change: domain.Change{ID: id, Spec: "**Change**"}}, nil
+	return domain.ChangeDetails{ChangeListItem: domain.ChangeListItem{ID: id}}, nil
 }
 
 func (r *fakeChangeRepository) Artifacts(_ context.Context, ids []int) ([]domain.Change, error) {
@@ -233,12 +232,12 @@ func (r *fakeChangeRepository) Create(_ context.Context, req domain.ChangeCreate
 	return change, nil
 }
 
-func (r *fakeChangeRepository) UpdateChangeTypes(_ context.Context, req domain.ChangeUpdateChangeTypesRequest) (domain.Change, error) {
+func (r *fakeChangeRepository) UpdateChangeTypes(_ context.Context, req domain.ChangeUpdateChangeTypesRequest) error {
 	if r.err != nil {
-		return domain.Change{}, r.err
+		return r.err
 	}
 	r.updateTypesReq = req
-	return domain.Change{ID: req.ID, ChangeTypes: req.ChangeTypes}, nil
+	return nil
 }
 
 func (r *fakeChangeRepository) UpdateTitle(_ context.Context, req domain.ChangeUpdateTitleRequest) (domain.Change, error) {

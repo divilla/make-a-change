@@ -1,0 +1,18 @@
+app: apihydra
+kind: steps
+metadata:
+  name: registered-health-aliases
+spec:
+  steps:
+    - request:
+        method: GET
+        path: /api/v1/health
+      response:
+        expected_status: 200
+        expected_body: '{"status":"ok","api":"ok","database":"ok"}'
+    - request:
+        method: GET
+        path: /api/health
+      response:
+        expected_status: 200
+        expected_body: '{"status":"ok","api":"ok","database":"ok"}'

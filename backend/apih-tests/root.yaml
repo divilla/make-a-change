@@ -1,0 +1,5 @@
+app: apihydra
+kind: root
+spec:
+  base_url: http://127.0.0.1:19080
+  timeout: 5
