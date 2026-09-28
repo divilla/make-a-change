@@ -1,0 +1,681 @@
+app: apihydra
+kind: steps
+metadata:
+  name: p4-testcase-current-state
+spec:
+  defaults:
+    retries: -1
+    headers:
+      Content-Type: application/json
+  steps:
+    - request:
+        method: POST
+        path: /api/v1/project/create
+        body: '{"name":"P4 workflow"}'
+      response:
+        expected_status: 201
+        expected_types:
+          .id: [int]
+        capture:
+          p4_project: .id
+    - request:
+        method: POST
+        path: /api/v1/epic/create
+        body: '{"project_id":${p4_project},"name":"P4 epic"}'
+      response:
+        expected_status: 201
+        expected_types:
+          .id: [int]
+        capture:
+          p4_epic: .id
+    - request:
+        method: POST
+        path: /api/v1/change/create
+        body: '{"project_id":${p4_project},"title":"P4 testcase workflow","brief":"Original brief"}'
+      response:
+        expected_status: 201
+        expected_types:
+          .id: [int]
+        capture:
+          p4_change: .id
+    - request:
+        method: POST
+        path: /api/v1/change/update-epic
+        body: '{"id":${p4_change},"epic_id":${p4_epic}}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/test-case/list
+        body: '{"change_id":${p4_change}}'
+      response:
+        expected_status: 200
+        expected_body: '[]'
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":${p4_change}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p4_change},"done_tc":0,"total_tc":0,"completed":0}'
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{"id":${p4_epic}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p4_epic},"done_tc":0,"total_tc":0,"completed":0}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/create
+        body: '{"change_id":${p4_change},"scenario":"  First case  "}'
+      response:
+        expected_status: 201
+        expected_types:
+          .id: [int]
+        capture:
+          p4_first: .id
+    - request:
+        method: POST
+        path: /api/v1/test-case/create
+        body: '{"change_id":${p4_change},"scenario":"\t Second case \n"}'
+      response:
+        expected_status: 201
+        expected_types:
+          .id: [int]
+        capture:
+          p4_second: .id
+    - request:
+        method: POST
+        path: /api/v1/test-case/list
+        body: '{"change_id":${p4_change}}'
+      response:
+        expected_status: 200
+        expected_body: '[{"id":${p4_first},"change_id":${p4_change},"scenario":"First case","done":false},{"id":${p4_second},"change_id":${p4_change},"scenario":"Second case","done":false}]'
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":${p4_change}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p4_change},"done_tc":0,"total_tc":2,"completed":0}'
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{"id":${p4_epic}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p4_epic},"done_tc":0,"total_tc":2,"completed":0}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update-done
+        body: '{"id":${p4_first},"done":true}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":${p4_change}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p4_change},"done_tc":1,"total_tc":2,"completed":50}'
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{"id":${p4_epic}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p4_epic},"done_tc":1,"total_tc":2,"completed":50}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update-done
+        body: '{"id":${p4_second},"done":true}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":${p4_change}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p4_change},"done_tc":2,"total_tc":2,"completed":100}'
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{"id":${p4_epic}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p4_epic},"done_tc":2,"total_tc":2,"completed":100}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update
+        body: '{"id":${p4_second},"scenario":"  Edited case  "}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/test-case/list
+        body: '{"change_id":${p4_change}}'
+      response:
+        expected_status: 200
+        expected_body: '[{"id":${p4_first},"change_id":${p4_change},"scenario":"First case","done":true},{"id":${p4_second},"change_id":${p4_change},"scenario":"Edited case","done":true}]'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update
+        body: '{"id":${p4_second},"scenario":"Edited case"}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/test-case/update-done
+        body: '{"id":${p4_second},"done":true}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":${p4_change}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p4_change},"done_tc":2,"total_tc":2,"completed":100}'
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{"id":${p4_epic}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p4_epic},"done_tc":2,"total_tc":2,"completed":100}'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"id":${p4_change},"doc_type":"brief","body":"Historic brief","agent_edit":false}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"id":${p4_change},"doc_type":"brief","body":"Current brief","agent_edit":false}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/delete
+        body: '{"id":${p4_change}}'
+      response:
+        expected_status: 409
+        expected_body: '{"message":"change has testcases and cannot be deleted"}'
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":${p4_change}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p4_change},"done_tc":2,"total_tc":2,"completed":100}'
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{"id":${p4_epic}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p4_epic},"done_tc":2,"total_tc":2,"completed":100}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/list
+        body: '{"change_id":${p4_change}}'
+      response:
+        expected_status: 200
+        expected_body: '[{"id":${p4_first},"change_id":${p4_change},"scenario":"First case","done":true},{"id":${p4_second},"change_id":${p4_change},"scenario":"Edited case","done":true}]'
+    - request:
+        method: POST
+        path: /api/v1/change/documents
+        body: '{"id":${p4_change}}'
+      response:
+        expected_status: 200
+        expected_body: '[{"doc_type":"brief","body":"Current brief","agent_edit":false}]'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update-done
+        body: '{"id":${p4_second},"done":false}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":${p4_change}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p4_change},"done_tc":1,"total_tc":2,"completed":50}'
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{"id":${p4_epic}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p4_epic},"done_tc":1,"total_tc":2,"completed":50}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update-done
+        body: '{"id":${p4_second}}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/test-case/update-done
+        body: '{"id":${p4_second},"done":null}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/test-case/list
+        body: '{"change_id":${p4_change}}'
+      response:
+        expected_status: 200
+        expected_body: '[{"id":${p4_first},"change_id":${p4_change},"scenario":"First case","done":true},{"id":${p4_second},"change_id":${p4_change},"scenario":"Edited case","done":false}]'
+    - request:
+        method: POST
+        path: /api/v1/test-case/delete
+        body: '{"id":${p4_first}}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":${p4_change}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p4_change},"done_tc":0,"total_tc":1,"completed":0}'
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{"id":${p4_epic}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p4_epic},"done_tc":0,"total_tc":1,"completed":0}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/list
+        body: '{"change_id":${p4_change}}'
+      response:
+        expected_status: 200
+        expected_body: '[{"id":${p4_second},"change_id":${p4_change},"scenario":"Edited case","done":false}]'
+    - request:
+        method: POST
+        path: /api/v1/test-case/delete
+        body: '{"id":${p4_first}}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"test case not found"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/delete
+        body: '{"id":${p4_second}}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":${p4_change}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p4_change},"done_tc":0,"total_tc":0,"completed":0}'
+    - request:
+        method: POST
+        path: /api/v1/epic/get
+        body: '{"id":${p4_epic}}'
+      response:
+        expected_status: 200
+        expected_body: '{"id":${p4_epic},"done_tc":0,"total_tc":0,"completed":0}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/list
+        body: '{"change_id":${p4_change}}'
+      response:
+        expected_status: 200
+        expected_body: '[]'
+    - request:
+        method: POST
+        path: /api/v1/change/delete
+        body: '{"id":${p4_change}}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/change/get
+        body: '{"id":${p4_change}}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/documents
+        body: '{"id":${p4_change}}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/change/set-document
+        body: '{"id":${p4_change},"doc_type":"brief","body":"No resurrection","agent_edit":false}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"change not found"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/list
+        body: '{"change_id":${p4_change}}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"test case not found"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/create
+        body: '{"change_id":${p4_change},"scenario":"Removed parent"}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"test case not found"}'
+    - request:
+        method: POST
+        path: /api/v1/epic/delete
+        body: '{"id":${p4_epic}}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/project/delete
+        body: '{"id":${p4_project}}'
+      response:
+        expected_status: 204
+    - request:
+        method: POST
+        path: /api/v1/test-case/list
+        body: '{"change_id":0}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/list
+        body: '{"change_id":-1}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/list
+        body: '{"change_id":999999999}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"test case not found"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/list
+        body: '{"change_id":1099511627776}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"test case not found"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/list
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case list payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/list
+        body: '{"change_id":"wrong"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case list payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/create
+        body: '{"change_id":0,"scenario":"Valid"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/create
+        body: '{"change_id":-1,"scenario":"Valid"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/create
+        body: '{"change_id":999999999,"scenario":"Valid"}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"test case not found"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/create
+        body: '{"change_id":1099511627776,"scenario":"Valid"}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"test case not found"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/create
+        body: '{"change_id":2201,"scenario":""}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/create
+        body: '{"change_id":2201,"scenario":" \t "}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/create
+        body: '{"change_id":2201,"scenario":null}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/create
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case create payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/create
+        body: '{"change_id":"wrong","scenario":"Valid"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case create payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update
+        body: '{"id":0,"scenario":"Valid"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update
+        body: '{"id":-1,"scenario":"Valid"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update
+        body: '{"id":999999999,"scenario":"Valid"}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"test case not found"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update
+        body: '{"id":1099511627776,"scenario":"Valid"}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"test case not found"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update
+        body: '{"id":2201,"scenario":""}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update
+        body: '{"id":2201,"scenario":" \t "}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update
+        body: '{"id":2201,"scenario":null}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case update payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update
+        body: '{"id":"wrong","scenario":"Valid"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case update payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update-done
+        body: '{"id":0,"done":true}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update-done
+        body: '{"id":-1,"done":true}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update-done
+        body: '{"id":999999999,"done":true}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"test case not found"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update-done
+        body: '{"id":1099511627776,"done":true}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"test case not found"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update-done
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case done payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update-done
+        body: '{"id":"wrong","done":true}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case done payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/delete
+        body: '{"id":0}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/delete
+        body: '{"id":-1}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/delete
+        body: '{"id":999999999}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"test case not found"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/delete
+        body: '{"id":1099511627776}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"test case not found"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/delete
+        body: '{'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case delete payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/delete
+        body: '{"id":"wrong"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case delete payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update-done
+        body: '{"id":1,"done":"true"}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case done payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update-done
+        body: '{"id":1,"done":1}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case done payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update-done
+        body: '{"id":1,"done":[]}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case done payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/create
+        body: '{"change_id":2201,"scenario":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case create payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update
+        body: '{"id":2201,"scenario":false}'
+      response:
+        expected_status: 400
+        expected_body: '{"message":"invalid test case update payload"}'
+    - request:
+        method: POST
+        path: /api/v1/test-case/update-change
+        body: '{"id":1,"change_id":2}'
+      response:
+        expected_status: 404
+        expected_body: '{"message":"Not Found"}'

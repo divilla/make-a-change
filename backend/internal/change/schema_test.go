@@ -37,10 +37,10 @@ func TestChangeArchitectureAndP4Boundary(t *testing.T) {
 	}
 	source, err := os.ReadFile("../testcase/service.go")
 	require.NoError(t, err)
-	require.Contains(t, string(source), "RenderMutation")
+	require.NotContains(t, string(source), "RenderMutation")
 	source, err = os.ReadFile("../testcase/repo.go")
 	require.NoError(t, err)
-	require.Contains(t, string(source), "domain.Change")
+	require.NotContains(t, string(source), "domain.Change")
 	source, err = os.ReadFile("service.go")
 	require.NoError(t, err)
 	require.False(t, strings.Contains(string(source), "RenderChange("))

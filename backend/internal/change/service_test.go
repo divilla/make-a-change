@@ -437,18 +437,12 @@ func TestServiceRejectsUnknownPhaseAndDocumentKind(t *testing.T) {
 	}
 }
 
-func TestP4RenderingAdapterRetainsLegacyContract(t *testing.T) {
-	raw := domain.Change{ID: 7, Spec: "**Spec**", PR: "**PR** <script>unsafe()</script>"}
+func TestRendererExplicitSource(t *testing.T) {
 	r := NewRenderer(markdown.NewGoldmarkParser(), markdown.NewBluemondaySanitizer())
-	got := r.RenderMutation(domain.TestCaseMutationResponse{Change: raw})
-	require.Equal(t, raw.Spec, got.Change.Spec)
-	require.Equal(t, raw.PR, got.Change.PR)
-	require.Contains(t, got.Change.SpecHTML, "<strong>Spec</strong>")
-	require.Contains(t, got.Change.PRHtml, "<strong>PR</strong>")
-	require.NotContains(t, got.Change.PRHtml, "script")
-	require.NotContains(t, got.Change.PRHtml, "unsafe")
-	require.Equal(t, raw, (Renderer{}).RenderChange(raw))
-	require.Equal(t, domain.Change{}, r.RenderChange(domain.Change{}))
+	require.Contains(t, r.Render("**Spec**"), "<strong>Spec</strong>")
+	require.NotContains(t, r.Render("**PR** <script>unsafe()</script>"), "unsafe")
+	require.Empty(t, (Renderer{}).Render("source"))
+	require.Empty(t, r.Render(""))
 }
 
 func TestServiceCustomPhaseAndDocuments(t *testing.T) {

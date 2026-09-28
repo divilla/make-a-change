@@ -6,260 +6,86 @@ import (
 	apperror "mch_api/internal/error"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// Repo defines Repo values.
-type Repo struct {
-	pool *pgxpool.Pool
+type pool interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
 }
 
-const changeColumns = `
-	id,
-	ref_uuid,
-	ref,
-	version,
-	slug,
-	project_id,
-	change_phase,
-	change_types,
-	epic_id,
-	epic_name,
-	title,
-	brief,
-	spec,
-	pr,
-	pr_url,
-	open,
-	done_tc,
-	total_tc,
-	completed,
-	created,
-	modified`
+// Repo reads and writes current testcase rows.
+type Repo struct{ pool pool }
 
-// NewRepo initializes or executes NewRepo behavior.
-func NewRepo(pool *pgxpool.Pool) *Repo {
-	return &Repo{pool: pool}
-}
+// NewRepo constructs the testcase repository.
+func NewRepo(pool pool) *Repo { return &Repo{pool: pool} }
 
-// List executes List behavior.
-func (r *Repo) List(ctx context.Context, changeID int) ([]domain.TestCase, error) {
-	if err := ensureChangeExists(ctx, r.pool, changeID); err != nil {
-		return nil, err
-	}
-	return listTestCases(ctx, r.pool, changeID)
-}
-
-// Create executes Create behavior.
-func (r *Repo) Create(ctx context.Context, req domain.TestCaseCreateRequest) (domain.TestCaseMutationResponse, error) {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return domain.TestCaseMutationResponse{}, apperror.Database(err, nil, nil)
-	}
-	defer tx.Rollback(ctx)
-
-	testCase, err := createTestCase(ctx, tx, req.ChangeID, req.Scenario)
-	if err != nil {
-		return domain.TestCaseMutationResponse{}, err
-	}
-	return finishMutation(ctx, tx, testCase.ChangeID, &testCase)
-}
-
-func createTestCase(ctx context.Context, tx pgx.Tx, changeID int, scenario string) (domain.TestCase, error) {
-	var id int
-	err := tx.QueryRow(ctx, "select public.fn_test_case_insert($1, $2)", changeID, scenario).Scan(&id)
-	if err != nil {
-		return domain.TestCase{}, apperror.Database(err, nil, apperror.ErrTestCaseNotFound)
-	}
-	return getTestCase(ctx, tx, id)
-}
-
-// Update executes Update behavior.
-func (r *Repo) Update(ctx context.Context, req domain.TestCaseUpdateRequest) (domain.TestCaseMutationResponse, error) {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return domain.TestCaseMutationResponse{}, apperror.Database(err, nil, nil)
-	}
-	defer tx.Rollback(ctx)
-
-	current, err := getTestCase(ctx, tx, req.ID)
-	if err != nil {
-		return domain.TestCaseMutationResponse{}, err
-	}
-	if req.Scenario == current.Scenario {
-		return finishMutation(ctx, tx, current.ChangeID, &current)
-	}
-	testCase, err := updateTestCaseScenario(ctx, tx, req.ID, req.Scenario)
-	if err != nil {
-		return domain.TestCaseMutationResponse{}, err
-	}
-	return finishMutation(ctx, tx, current.ChangeID, &testCase)
-}
-
-func updateTestCaseScenario(ctx context.Context, tx pgx.Tx, id int, scenario string) (domain.TestCase, error) {
-	if _, err := tx.Exec(ctx, "call public.sp_test_case_update_scenario($1, $2)", id, scenario); err != nil {
-		return domain.TestCase{}, apperror.Database(err, nil, nil)
-	}
-	return getTestCase(ctx, tx, id)
-}
-
-// UpdateDone executes UpdateDone behavior.
-func (r *Repo) UpdateDone(ctx context.Context, req domain.TestCaseUpdateDoneRequest) (domain.TestCaseMutationResponse, error) {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return domain.TestCaseMutationResponse{}, apperror.Database(err, nil, nil)
-	}
-	defer tx.Rollback(ctx)
-
-	testCase, err := updateTestCaseDone(ctx, tx, req.ID, req.Done)
-	if err != nil {
-		return domain.TestCaseMutationResponse{}, err
-	}
-	return finishMutation(ctx, tx, testCase.ChangeID, &testCase)
-}
-
-func updateTestCaseDone(ctx context.Context, tx pgx.Tx, id int, done bool) (domain.TestCase, error) {
-	if _, err := tx.Exec(ctx, "call public.sp_test_case_update_done($1, $2)", id, done); err != nil {
-		return domain.TestCase{}, apperror.Database(err, nil, nil)
-	}
-	return getTestCase(ctx, tx, id)
-}
-
-// Delete executes Delete behavior.
-func (r *Repo) Delete(ctx context.Context, req domain.TestCaseIDRequest) (domain.TestCaseMutationResponse, error) {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return domain.TestCaseMutationResponse{}, apperror.Database(err, nil, nil)
-	}
-	defer tx.Rollback(ctx)
-
-	current, err := getTestCase(ctx, tx, req.ID)
-	if err != nil {
-		return domain.TestCaseMutationResponse{}, err
-	}
-	if _, err := tx.Exec(ctx, "call public.sp_test_case_delete($1)", req.ID); err != nil {
-		return domain.TestCaseMutationResponse{}, apperror.Database(err, nil, nil)
-	}
-	return finishMutation(ctx, tx, current.ChangeID, nil)
-}
-
-func finishMutation(ctx context.Context, tx pgx.Tx, responseChangeID int, testCase *domain.TestCase) (domain.TestCaseMutationResponse, error) {
-	change, err := getChange(ctx, tx, responseChangeID)
-	if err != nil {
-		return domain.TestCaseMutationResponse{}, err
-	}
-	testCases, err := listTestCases(ctx, tx, responseChangeID)
-	if err != nil {
-		return domain.TestCaseMutationResponse{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return domain.TestCaseMutationResponse{}, apperror.Database(err, nil, nil)
-	}
-	return domain.TestCaseMutationResponse{TestCase: testCase, Change: change, TestCases: testCases}, nil
-}
-
-func getTestCase(ctx context.Context, tx pgx.Tx, id int) (domain.TestCase, error) {
-	testCase, err := scanTestCase(tx.QueryRow(ctx, `
-		select id, version, scenario, done, change_id, created, modified
-		from public.test_case
-		where id = $1
-	`, id))
-	if err != nil {
-		return domain.TestCase{}, apperror.Database(err, apperror.ErrTestCaseNotFound, nil)
-	}
-	return testCase, nil
-}
-
-func ensureChangeExists(ctx context.Context, q queryer, id int) error {
+// List reads current cases after checking the live parent. A concurrent parent
+// deletion between these independent reads may yield an empty list.
+func (r *Repo) List(ctx context.Context, req domain.TestCaseListRequest) ([]domain.TestCase, error) {
 	var exists bool
-	if err := q.QueryRow(ctx, "select exists(select 1 from public.change where id = $1)", id).Scan(&exists); err != nil {
-		return apperror.Database(err, nil, nil)
+	if err := r.pool.QueryRow(ctx, "select exists(select 1 from public.change where id = $1)", req.ChangeID).Scan(&exists); err != nil {
+		return nil, apperror.Database(err, nil, nil)
 	}
 	if !exists {
+		return nil, apperror.ErrTestCaseNotFound
+	}
+	rows, err := r.pool.Query(ctx, "select id, change_id, scenario, done, created, modified from public.testcase where change_id = $1 order by id", req.ChangeID)
+	if err != nil {
+		return nil, apperror.Database(err, nil, nil)
+	}
+	defer rows.Close()
+	cases := make([]domain.TestCase, 0)
+	for rows.Next() {
+		var tc domain.TestCase
+		if err := rows.Scan(&tc.ID, &tc.ChangeID, &tc.Scenario, &tc.Done, &tc.Created, &tc.Modified); err != nil {
+			return nil, apperror.Database(err, nil, nil)
+		}
+		cases = append(cases, tc)
+	}
+	return cases, apperror.Database(rows.Err(), nil, nil)
+}
+
+// Create inserts one case, leaving default state and timestamps to the database.
+func (r *Repo) Create(ctx context.Context, req domain.TestCaseCreateRequest) (domain.TestCaseIDRequest, error) {
+	var result domain.TestCaseIDRequest
+	err := r.pool.QueryRow(ctx, "insert into public.testcase(change_id,scenario) values($1,$2) returning id", req.ChangeID, req.Scenario).Scan(&result.ID)
+	return result, apperror.Database(err, nil, apperror.ErrTestCaseNotFound)
+}
+
+// Update changes the scenario and timestamp, including same-value writes.
+func (r *Repo) Update(ctx context.Context, req domain.TestCaseUpdateRequest) error {
+	tag, err := r.pool.Exec(ctx, "update public.testcase set scenario=$2,modified=now() where id=$1", req.ID, req.Scenario)
+	if err != nil {
+		return apperror.Database(err, nil, nil)
+	}
+	if tag.RowsAffected() == 0 {
 		return apperror.ErrTestCaseNotFound
 	}
 	return nil
 }
 
-func listTestCases(ctx context.Context, q queryer, changeID int) ([]domain.TestCase, error) {
-	rows, err := q.Query(ctx, `
-		select id, version, scenario, done, change_id, created, modified
-		from public.test_case
-		where change_id = $1
-		order by id
-	`, changeID)
+// UpdateDone changes completion state and timestamp, including same-value writes.
+func (r *Repo) UpdateDone(ctx context.Context, req domain.TestCaseUpdateDoneRequest) error {
+	tag, err := r.pool.Exec(ctx, "update public.testcase set done=$2,modified=now() where id=$1", req.ID, req.Done)
 	if err != nil {
-		return nil, apperror.Database(err, nil, nil)
+		return apperror.Database(err, nil, nil)
 	}
-	defer rows.Close()
-	testCases := make([]domain.TestCase, 0)
-	for rows.Next() {
-		testCase, err := scanTestCase(rows)
-		if err != nil {
-			return nil, err
-		}
-		testCases = append(testCases, testCase)
+	if tag.RowsAffected() == 0 {
+		return apperror.ErrTestCaseNotFound
 	}
-	return testCases, apperror.Database(rows.Err(), nil, nil)
+	return nil
 }
 
-func scanTestCase(row pgx.Row) (domain.TestCase, error) {
-	var testCase domain.TestCase
-	err := row.Scan(
-		&testCase.ID, &testCase.Version, &testCase.Scenario, &testCase.Done,
-		&testCase.ChangeID, &testCase.Created, &testCase.Modified,
-	)
-	return testCase, apperror.Database(err, nil, nil)
-}
-
-func getChange(ctx context.Context, q queryer, id int) (domain.Change, error) {
-	change, err := scanChange(q.QueryRow(ctx, "select "+changeColumns+" from public.vw_change_details where id = $1", id))
+// Delete removes only the requested testcase.
+func (r *Repo) Delete(ctx context.Context, req domain.TestCaseIDRequest) error {
+	tag, err := r.pool.Exec(ctx, "delete from public.testcase where id=$1", req.ID)
 	if err != nil {
-		return domain.Change{}, apperror.Database(err, apperror.ErrTestCaseNotFound, nil)
+		return apperror.Database(err, nil, nil)
 	}
-	return change, nil
-}
-
-func scanChange(row pgx.Row) (domain.Change, error) {
-	var change domain.Change
-	var refUUID pgtype.UUID
-	var ref pgtype.Int4
-	var slug pgtype.Text
-	var epicID pgtype.Int8
-	var epicName pgtype.Text
-	err := row.Scan(
-		&change.ID, &refUUID, &ref, &change.Version, &slug, &change.ProjectID,
-		&change.ChangePhase, &change.ChangeTypes, &epicID, &epicName, &change.Title,
-		&change.Brief, &change.Spec, &change.PR, &change.PRUrl, &change.Open, &change.DoneTC,
-		&change.TotalTC, &change.Completed, &change.Created, &change.Modified,
-	)
-	if err != nil {
-		return domain.Change{}, apperror.Database(err, nil, nil)
+	if tag.RowsAffected() == 0 {
+		return apperror.ErrTestCaseNotFound
 	}
-	if refUUID.Valid {
-		change.RefUUID = refUUID.String()
-	}
-	if ref.Valid {
-		value := ref.Int32
-		change.Ref = &value
-	}
-	if slug.Valid {
-		value := slug.String
-		change.Slug = &value
-	}
-	if epicID.Valid {
-		value := int(epicID.Int64)
-		change.EpicID = &value
-	}
-	if epicName.Valid {
-		value := epicName.String
-		change.EpicName = &value
-	}
-	return change, nil
-}
-
-type queryer interface {
-	Query(context.Context, string, ...any) (pgx.Rows, error)
-	QueryRow(context.Context, string, ...any) pgx.Row
+	return nil
 }

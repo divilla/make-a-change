@@ -91,18 +91,33 @@ func TestChangeDeletionRetainsAppendOnlyDocuments(t *testing.T) {
 	require.Equal(t, []string{"Identical body", "Identical body", "Identical body"}, bodies)
 	require.Equal(t, []bool{false, false, true}, current)
 	// An actual testcase FK blocks one DELETE and leaves all state intact.
-	var testcaseID int
-	require.NoError(t, conn.QueryRow(ctx, `insert into public.testcase(change_id,scenario) values($1,'Block deletion') returning id`, id.ID).Scan(&testcaseID))
+	var testcaseID domain.TestCaseIDRequest
+	require.Equal(t, 201, client.Post(t, "/api/v1/test-case/create", domain.TestCaseCreateRequest{ChangeID: id.ID, Scenario: "Block deletion"}, &testcaseID))
 	require.Equal(t, 409, client.Post(t, "/api/v1/change/delete", id, nil))
+	var surviving domain.ChangeDetails
+	require.Equal(t, 200, client.Post(t, "/api/v1/change/get", id, &surviving))
+	require.Equal(t, id.ID, surviving.ID)
+	var survivingDocs []domain.ChangeDocument
+	require.Equal(t, 200, client.Post(t, "/api/v1/change/documents", id, &survivingDocs))
+	require.Len(t, survivingDocs, 1)
+	require.Equal(t, ids[2], int64(survivingDocs[0].ID))
+	require.Equal(t, "Identical body", survivingDocs[0].Body)
+
 	var count int
-	require.NoError(t, conn.QueryRow(ctx, `select count(*) from public.testcase where id=$1`, testcaseID).Scan(&count))
+	require.NoError(t, conn.QueryRow(ctx, `select count(*) from public.testcase where id=$1`, testcaseID.ID).Scan(&count))
 	require.Equal(t, 1, count)
-	_, err = conn.Exec(ctx, `delete from public.testcase where id=$1`, testcaseID)
-	require.NoError(t, err)
+	require.Equal(t, 204, client.Post(t, "/api/v1/test-case/delete", testcaseID, nil))
 	require.Equal(t, 204, client.Post(t, "/api/v1/change/delete", id, nil))
 	require.Equal(t, 404, client.Post(t, "/api/v1/change/get", id, nil))
 	require.Equal(t, 404, client.Post(t, "/api/v1/change/documents", id, nil))
 	require.Equal(t, 404, client.Post(t, "/api/v1/change/set-document", map[string]any{"id": id.ID, "doc_type": "brief", "body": "No resurrection", "agent_edit": false}, nil))
+	require.Equal(t, 404, client.Post(t, "/api/v1/test-case/list", domain.TestCaseListRequest{ChangeID: id.ID}, nil))
+	require.Equal(t, 404, client.Post(t, "/api/v1/test-case/create", domain.TestCaseCreateRequest{ChangeID: id.ID, Scenario: "Removed"}, nil))
+	require.NoError(t, conn.QueryRow(ctx, `select count(*) from public.change where id=$1`, id.ID).Scan(&count))
+	require.Zero(t, count)
+	require.NoError(t, conn.QueryRow(ctx, `select count(*) from public.testcase where change_id=$1`, id.ID).Scan(&count))
+	require.Zero(t, count)
+
 	var retained []int64
 	var retainedBodies []string
 	var retainedCurrent []bool

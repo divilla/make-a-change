@@ -2,7 +2,6 @@ package testcase
 
 import (
 	"context"
-	"mch_api/internal/change"
 	"mch_api/internal/domain"
 	apperror "mch_api/internal/error"
 	"strings"
@@ -11,23 +10,22 @@ import (
 type (
 	// Service defines Service values.
 	Service struct {
-		repo     Repository
-		renderer change.Renderer
+		repo Repository
 	}
 
 	// Repository defines Repository values.
 	Repository interface {
-		List(ctx context.Context, changeID int) ([]domain.TestCase, error)
-		Create(ctx context.Context, req domain.TestCaseCreateRequest) (domain.TestCaseMutationResponse, error)
-		Update(ctx context.Context, req domain.TestCaseUpdateRequest) (domain.TestCaseMutationResponse, error)
-		UpdateDone(ctx context.Context, req domain.TestCaseUpdateDoneRequest) (domain.TestCaseMutationResponse, error)
-		Delete(ctx context.Context, req domain.TestCaseIDRequest) (domain.TestCaseMutationResponse, error)
+		List(ctx context.Context, req domain.TestCaseListRequest) ([]domain.TestCase, error)
+		Create(ctx context.Context, req domain.TestCaseCreateRequest) (domain.TestCaseIDRequest, error)
+		Update(ctx context.Context, req domain.TestCaseUpdateRequest) error
+		UpdateDone(ctx context.Context, req domain.TestCaseUpdateDoneRequest) error
+		Delete(ctx context.Context, req domain.TestCaseIDRequest) error
 	}
 )
 
 // NewService initializes or executes NewService behavior.
-func NewService(testCaseRepository Repository, renderer change.Renderer) *Service {
-	return &Service{repo: testCaseRepository, renderer: renderer}
+func NewService(testCaseRepository Repository) *Service {
+	return &Service{repo: testCaseRepository}
 }
 
 // ListTestCases executes ListTestCases behavior.
@@ -35,59 +33,39 @@ func (s *Service) ListTestCases(ctx context.Context, req domain.TestCaseListRequ
 	if req.ChangeID <= 0 {
 		return nil, apperror.ErrTestCaseInvalidInput
 	}
-	return s.repo.List(ctx, req.ChangeID)
+	return s.repo.List(ctx, req)
 }
 
 // CreateTestCase executes CreateTestCase behavior.
-func (s *Service) CreateTestCase(ctx context.Context, req domain.TestCaseCreateRequest) (domain.TestCaseMutationResponse, error) {
+func (s *Service) CreateTestCase(ctx context.Context, req domain.TestCaseCreateRequest) (domain.TestCaseIDRequest, error) {
 	req.Scenario = strings.TrimSpace(req.Scenario)
 	if req.ChangeID <= 0 || req.Scenario == "" {
-		return domain.TestCaseMutationResponse{}, apperror.ErrTestCaseInvalidInput
+		return domain.TestCaseIDRequest{}, apperror.ErrTestCaseInvalidInput
 	}
-	mutation, err := s.repo.Create(ctx, req)
-	if err != nil {
-		return domain.TestCaseMutationResponse{}, err
-	}
-	return s.renderMutation(mutation), nil
+	return s.repo.Create(ctx, req)
 }
 
 // UpdateTestCase executes UpdateTestCase behavior.
-func (s *Service) UpdateTestCase(ctx context.Context, req domain.TestCaseUpdateRequest) (domain.TestCaseMutationResponse, error) {
+func (s *Service) UpdateTestCase(ctx context.Context, req domain.TestCaseUpdateRequest) error {
 	req.Scenario = strings.TrimSpace(req.Scenario)
 	if req.ID <= 0 || req.Scenario == "" {
-		return domain.TestCaseMutationResponse{}, apperror.ErrTestCaseInvalidInput
+		return apperror.ErrTestCaseInvalidInput
 	}
-	mutation, err := s.repo.Update(ctx, req)
-	if err != nil {
-		return domain.TestCaseMutationResponse{}, err
-	}
-	return s.renderMutation(mutation), nil
+	return s.repo.Update(ctx, req)
 }
 
 // UpdateTestCaseDone executes UpdateTestCaseDone behavior.
-func (s *Service) UpdateTestCaseDone(ctx context.Context, req domain.TestCaseUpdateDoneRequest) (domain.TestCaseMutationResponse, error) {
+func (s *Service) UpdateTestCaseDone(ctx context.Context, req domain.TestCaseUpdateDoneRequest) error {
 	if req.ID <= 0 {
-		return domain.TestCaseMutationResponse{}, apperror.ErrTestCaseInvalidInput
+		return apperror.ErrTestCaseInvalidInput
 	}
-	mutation, err := s.repo.UpdateDone(ctx, req)
-	if err != nil {
-		return domain.TestCaseMutationResponse{}, err
-	}
-	return s.renderMutation(mutation), nil
+	return s.repo.UpdateDone(ctx, req)
 }
 
 // DeleteTestCase executes DeleteTestCase behavior.
-func (s *Service) DeleteTestCase(ctx context.Context, req domain.TestCaseIDRequest) (domain.TestCaseMutationResponse, error) {
+func (s *Service) DeleteTestCase(ctx context.Context, req domain.TestCaseIDRequest) error {
 	if req.ID <= 0 {
-		return domain.TestCaseMutationResponse{}, apperror.ErrTestCaseInvalidInput
+		return apperror.ErrTestCaseInvalidInput
 	}
-	mutation, err := s.repo.Delete(ctx, req)
-	if err != nil {
-		return domain.TestCaseMutationResponse{}, err
-	}
-	return s.renderMutation(mutation), nil
-}
-
-func (s *Service) renderMutation(mutation domain.TestCaseMutationResponse) domain.TestCaseMutationResponse {
-	return s.renderer.RenderMutation(mutation)
+	return s.repo.Delete(ctx, req)
 }

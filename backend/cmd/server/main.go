@@ -148,7 +148,7 @@ func start(ctx context.Context, cfg *config.Config) (application, error) {
 	change.NewAPI(e, changeService)
 
 	testCaseRepository := testcase.NewRepo(pool)
-	testCaseService := testcase.NewService(testCaseRepository, changeRenderer)
+	testCaseService := testcase.NewService(testCaseRepository)
 	testcase.NewAPI(e, testCaseService)
 
 	server := newHTTPServer(e)

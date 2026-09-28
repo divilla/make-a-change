@@ -1,10 +1,9 @@
-# P3 route, schema and error ledger
+# P4 route, schema and error ledger
 
 Authority: read-only `../../docs/backend-architecture.md`, `../../db/init.sql`
 and `../../db/seed.sql`. The inventory is **34 registered method/path pairs**:
 32 after P2 plus documents and set-document. APIHydra exercises all 16 change,
-11 project/epic and two health operations successfully. Five testcase routes
-remain in the denominator pending P4; testcase list has only error evidence.
+11 project/epic, five testcase and two health operations successfully (34/34).
 No authentication middleware or invented authentication contract exists.
 
 | Method | Path | Current behavior / database source | Target and deferred pass | APIHydra |
@@ -38,11 +37,11 @@ No authentication middleware or invented authentication contract exists.
 | POST | /api/v1/change/delete | 204; direct DELETE; actual testcase FK 409; missing 404; docs retained; no config | P3 aligned | pass (p3/steps.yaml) |
 | POST | /api/v1/change/documents | 200 current docs ordered doc_type,id with raw body and sanitized html; [] if none; live-parent preflight; no config | P3 aligned | pass (p3/steps.yaml) |
 | POST | /api/v1/change/set-document | 204; explicit agent_edit, nonblank kind/body, selected-config validation; sp_change_doc_set appends even identical body | P3 aligned | pass (p3/steps.yaml) |
-| POST | /api/v1/test-case/list | Uses public.test_case (absent); intended 200 list | P4: public.testcase, retained fields | 404 pass; success blocked |
-| POST | /api/v1/test-case/create | Removed fn_test_case_insert; composite mutation response | P4: testcase insert; 201 ID only | blocked |
-| POST | /api/v1/test-case/update | Removed sp_test_case_update and old state | P4: testcase.scenario; 204 | blocked |
-| POST | /api/v1/test-case/update-done | Removed procedure, old history/composite response | P4: testcase.done; 204 | blocked |
-| POST | /api/v1/test-case/delete | Removed sp_test_case_delete; composite response | P4: testcase delete; 204, independent reads | blocked |
+| POST | /api/v1/test-case/list | 200 ordered six-column public.testcase array after live-parent check; [] for no cases; missing parent404 | P4 aligned | pass (p4/steps.yaml) |
+| POST | /api/v1/test-case/create | 201 exact {id}; one INSERT returning ID; default false/timestamps; missing parent FK404 | P4 aligned | pass (p4/steps.yaml) |
+| POST | /api/v1/test-case/update | 204 empty; one scenario/modified UPDATE; affected rows0 means404; same-value writes execute | P4 aligned | pass (p4/steps.yaml) |
+| POST | /api/v1/test-case/update-done | 204 empty; one done/modified UPDATE; omitted/null done=false; affected rows0 means404 | P4 aligned | pass (p4/steps.yaml) |
+| POST | /api/v1/test-case/delete | 204 empty; one testcase DELETE; affected rows0 means404; no cascade or reload | P4 aligned | pass (p4/steps.yaml) |
 
 
 ## P3 change/document contracts and concurrency limits
@@ -88,17 +87,71 @@ append-only with polymorphic, non-FK references: historical AND current doc rows
 survive parent deletion. Reads/set after an already absent parent return 404;
 bulk artifacts omit that parent. No new purge or document blocker is invented.
 
-P4 boundary: legacy domain.Change remains only because internal/testcase/repo.go
-getChange/scanChange and domain.TestCaseMutationResponse still use it.
-internal/testcase/service.go renderMutation calls change.Renderer.RenderMutation,
-which calls RenderChange. Keep these adapters until P4 replaces the testcase
-composite response, then delete the legacy DTO and both rendering adapters.
-P3 change service/repository use none of them. Testcase's old SQL/history/Go
-transactions are deliberately deferred; compilation is preserved, not claimed
-as schema compatibility. The obsolete change transaction/state/full-entity scan,
-finishMutation, recalculation and testcase cascade paths and their compatibility
-assertions are removed. Current-schema unit tests and APIHydra replace retained
-behavior; separate HTTP/SQL checks prove timestamp advancement and doc retention.
+P4 removed the final consumers of legacy domain.Change and both
+RenderChange/RenderMutation adapters. The explicit Renderer.Render and its
+parser/sanitizer remain for current document/artifact reads. Testcase has no
+change dependency, renderer injection, transaction or post-mutation reads.
+
+## P4 testcase contracts and concurrency limits
+
+TestCase exposes exactly id, change_id, scenario, done, created and modified.
+All requests cross API/service/repository as domain types, including list.
+IDs remain int; tests exercise 1<<40 on this 64-bit toolchain. Echo binds and
+validate checks request format; services independently reject nonpositive IDs
+and trim/reject blank scenarios. Bool done retains false for omitted/null,
+accepts explicit false/true, and rejects other JSON types at the API.
+
+List checks live public.change then selects explicit six columns from
+public.testcase ordered by id, with closed rows and preserved query/scan/iterator
+causes. These two reads are not an atomic snapshot: concurrent parent deletion
+can yield [] after a positive existence check. No Go transaction is implied.
+Create inserts only change_id/scenario and scans only ID; FK SQLSTATE23503 maps
+through Database to existing ErrTestCaseNotFound and preserves errors.Is/As.
+Unknown SQL errors remain generic500 externally and inspectable internally.
+
+Scenario/done updates always execute one UPDATE setting modified=now(), even
+for identical values. Delete executes one DELETE. Zero affected rows means404;
+success is error-only at both lower layers and an empty204 at the API. Each
+statement has PostgreSQL statement atomicity. No preliminary read, parent
+modified/count write, history row, cascade, reload or response rendering occurs.
+Current change/epic views supply counters via independent reads. created and
+unrelated fields remain unchanged; timestamps and parent invariance have real
+HTTP evidence. /update-change remains absent (404).
+
+Change deletion with live cases still returns409 and preserves parent, children
+and current documents. Explicit testcase deletion permits change deletion204.
+Already removed parents produce404 for get/documents/set-document and testcase
+list/create. Append-only document rows retain all historic/current IDs, bodies
+and flags, checked by the owned legacy SQL campaign, never merged into APIHydra
+coverage. There was no runner SQL-postcondition hook at the merged P3 baseline;
+the meaningful TestChangeDeletionRetainsAppendOnlyDocuments is retained and
+adapted to create/delete its blocking testcase through the API.
+
+### Obsolete assertion migration
+
+- Procedure/function, transaction-embedding mocks, postmutation entity/list
+  reads, testcase version/history and parent cascade assertions describe no
+  current database capability. Replaced by TestRepositoryCurrentSixColumnList,
+  TestRepositoryCreateOnlyID and TestRepositorySingleStatementMutations.
+- TestScanChangeCurrentSchema and TestMutationChangeMissingCause in testcase
+  disappear because testcase no longer reads changes. Six-column testcase scan
+  errors and TestRepositoryTranslationKeepsExternalCauses preserve supported
+  cause checks; P3's current change scans remain intact.
+- TestServiceRendersMutationChangeSpecHTML and the temporary legacy renderer
+  test disappear because mutation side data is forbidden. Explicit P3
+  TestServiceSanitizesExplicitReads and TestRendererExplicitSource retain raw
+  content/sanitization checks. Architecture tests now require adapter absence.
+- TestRepositoryHistoryProcedures is removed: public.test_case_history,
+  version, removed procedures, stored parent counters and cascade do not exist.
+  Its valid FK, state, lifecycle and counter guarantees now run in the 96-step
+  APIHydra P4 flow and retained owned HTTP/SQL campaigns. No environment-selected
+  database test remains under internal/testcase.
+- Legacy composite CRUD/delete-last and preserved/incremented-version tests
+  are replaced by independent APIHydra reads and
+  TestTestCaseCurrentStateAndSameValueTimestamps. Both boolean values, text edits,
+  delete-last zero counts, repeated-delete404 and removed-move404 remain tested.
+  Invalid/missing-row tests and all seven project/epic/change tests are retained;
+  no SQL document-history assertions were dropped.
 
 ## P1 centralized error contract
 
@@ -171,5 +224,5 @@ Configuration/db panic values remain errors with inspectable underlying causes.
 
 See [checkpoint](backend-refactor-checkpoint.md) for criterion/test mapping and
 actual verification, and [API coverage](../apih-tests/coverage.md) for assertions
-and tool limitations. Error-only testcase scenarios remain diagnostic;
-they are not successful operation coverage.
+and tool limitations. All five testcase successful operations are now measured separately from
+negative/boundary scenarios.

@@ -1,6 +1,6 @@
 # Backend refactor plan
 
-Status: P3 change/document alignment is implemented, published and reviewed clean; the supervisor is merging it to dev, then continuing P4 and R1–R6. Final P3 measurements are unit 933/1021 (91.3810%) and APIHydra integration 766/1021 (75.0245%); all 312 API requests pass, while strict coverage gates correctly fail. The user clarified that numerical targets are final-result goals and do not block intermediate merges. See [the current checkpoint](../backend/agents/backend-refactor-checkpoint.md).
+Status: P4 testcase alignment is implemented on `change/009-backend-testcase-alignment` over merged P3 `b626dd5`, awaiting factory native review and supervisor merge-to-dev before R1. Fresh unit coverage is 914/932 (98.0687%) and APIHydra integration 843/932 (90.4506%); both strict numerical gates pass. All 408 APIHydra requests and the complete retained HTTP/SQL campaign pass. Overall verification remains incomplete because 11 known baseline lint issues remain; no R1 work or stage/production promotion occurred. See [the current checkpoint](../backend/agents/backend-refactor-checkpoint.md).
 Inspected on 2026-09-28 at commit `7a89905`, branch `change/004-refactor-backend`.
 
 ## Recommendation and scope

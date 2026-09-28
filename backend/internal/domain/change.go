@@ -8,34 +8,6 @@ import (
 )
 
 type (
-	// Change is the legacy testcase mutation DTO. Remove with the P4 testcase migration.
-	Change struct {
-		ID          int       `json:"id"`
-		Version     int16     `json:"version"`
-		RefUUID     string    `json:"ref_uuid"`
-		Ref         *int32    `json:"ref"`
-		Slug        *string   `json:"slug"`
-		ProjectID   int       `json:"project_id"`
-		EpicID      *int      `json:"epic_id"`
-		EpicName    *string   `json:"epic_name"`
-		ChangePhase string    `json:"change_phase"`
-		ChangeTypes []string  `json:"change_types"`
-		Title       string    `json:"title"`
-		Brief       string    `json:"brief"`
-		BriefHTML   string    `json:"brief_html"`
-		Spec        string    `json:"spec"`
-		SpecHTML    string    `json:"spec_html"`
-		PR          string    `json:"pr"`
-		PRHtml      string    `json:"pr_html"`
-		PRUrl       string    `json:"pr_url"`
-		Open        bool      `json:"open"`
-		DoneTC      int16     `json:"done_tc"`
-		TotalTC     int16     `json:"total_tc"`
-		Completed   int16     `json:"completed"`
-		Created     time.Time `json:"created"`
-		Modified    time.Time `json:"modified"`
-	}
-
 	// ChangeListItem defines ChangeListItem values.
 	ChangeListItem struct {
 		ID          int       `json:"id"`

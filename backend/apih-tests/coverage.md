@@ -1,32 +1,41 @@
-# APIHydra P3 measurement
+# APIHydra P4 measurement
 
-Measured 2026-09-28 on `change/008-backend-change-doc-alignment`, working-tree
-implementation over `8722e1d`. **All 312 requests pass**: 212 P3 requests in
-[p3/steps.yaml](p3/steps.yaml), 91 retained P2, 7 errors and 2 health aliases.
-P3 is a child stage so P2 completes before P3 mutates its independent fixtures.
-APIHydra and the owned instrumented server exit 0. The isolated runner loads
-unchanged root init/seed followed by [fixtures.sql](fixtures.sql), all with
-ON_ERROR_STOP, then stops/removes its own private PostgreSQL cluster and server.
-No external database is reset.
+Measured 2026-09-28 on `change/009-backend-testcase-alignment`, implementation
+over freshly fetched merged P3 `b626dd5`. **All 408 requests pass**: 96 P4 in
+[p4/steps.yaml](p4/steps.yaml), 212 P3, 91 P2, 7 errors and 2 health aliases.
+APIHydra and the owned instrumented server exit0. The isolated runner loads
+unchanged root init/seed and [fixtures.sql](fixtures.sql), then stops/removes
+its own private PostgreSQL cluster and server. No external database is reset.
 
-`make -C backend api-test` exits **2** (coverage recipe **1**): valid
-**766/1021 = 75.0245%** production statement coverage, below the final >=90%
-target. Independent unit coverage is **933/1021 = 91.3810%**, below strict >95%.
-Change has 405/405 unit statements and 376/405 APIHydra statements. Neither unit
-nor legacy profiles are merged into integration. Unlinked pkg/db's 4 statements
-remain structural zero; domain has zero executable statements. The
-[checkpoint](../agents/backend-refactor-checkpoint.md) lists every package,
-command exit, source gaps and named criterion evidence.
+`make -C backend api-test` exits **0**: **843/932 = 90.4506%** production
+statement coverage, passing >=90%. Independent unit coverage is
+**914/932 = 98.0687%**, passing strict >95%. Testcase is 108/108 unit and 99/108
+API statements. Unit and legacy profiles are never merged into integration.
+Unlinked pkg/db remains structural zero; domain has no executable statements.
+The [checkpoint](../agents/backend-refactor-checkpoint.md) lists every package,
+command exit, named acceptance evidence and remaining baseline lint failures.
 
 ## Operation inventory and scenarios
 
-The [ledger](../agents/backend-contracts.md) retains all **34 method/path pairs**.
-**29/34 = 85.2941%** have passing successful contracts: all 16 change routes,
-6 project, 5 epic, 2 health. **30/34** are reached including testcase list's
-error-only scenario. Five testcase successful operations remain blocked by old
-SQL pending P4 and stay in the denominator. Removed options/unknown routes are
-404 checks, not additional registered operations. Operation coverage is a
-separate diagnostic and never substitutes for statement coverage.
+The [ledger](../agents/backend-contracts.md) inventories **34 method/path pairs**,
+recalculated from route registration by a passing tooling test.
+**34/34 = 100%** have passing successful contracts: 16 change, 6 project,
+5 epic, 5 testcase, 2 health. Negative-only scenarios do not earn successful
+operation credit. Removed options/move/unknown routes are404 checks, not extra
+registered operations. Operation coverage is separate from statement coverage.
+
+P4 creates its own project/epic/change through ID-only201, associates via204,
+and independently lists cases and reads counters. Two captured testcase IDs
+prove trimmed scenarios, default false and ID ordering. Toggle/edit/same-value
+writes, omitted/null false, deletes and repeated-delete404 are followed by
+independent state/count reads: 0/0/0, 0/2/0, 1/2/50, 2/2/100, 1/2/50, 0/1/0,
+and delete-last0/0/0. Parent deletion409 preserves children and current docs;
+after explicit child deletion, parent delete204 succeeds, then change
+get/documents/set-document and testcase list/create return404. All applicable
+invalid IDs, blank/null scenario, malformed/wrong-type payloads, representable
+large missing IDs and missing parent/case paths assert stable status/envelopes.
+Retries remain -1 to prevent mutation/error replay. No mutation side data is
+used as a read.
 
 Every retained change operation and the two explicit document operations have
 successful contracts with substantive reads. Each successful mutation is followed
@@ -61,18 +70,24 @@ unrelated title/open/pr-url/epic/delete operations. No fallback is credited.
 
 ## Separate SQL/HTTP evidence and tool limits
 
-`TestChangeDeletionRetainsAppendOnlyDocuments` uses a separate owned campaign
-and proves identical writes create three distinct IDs, two historic/one current;
-a testcase FK prevents deletion without removing the testcase; after explicit
-child deletion, change deletion retains every doc ID/body/current flag. A public
-set on the removed parent cannot resurrect documents. The separate
-`TestChangeIdentityOrderingAndSameValueTimestamps` proves generated UUIDv7,
-modified ordering and same-value title/open/types/pr-url timestamp advancement.
-These checks and retained project/epic HTTP/SQL tests pass but contribute **zero**
-APIHydra coverage. The seven-test campaign lives in `.coverage/legacy-p3/`.
-Obsolete change version/history/inline-testcase assertions were replaced only
-after the corresponding retained contracts passed APIHydra. Testcase's own
-legacy tests are deferred to P4 and were not claimed passing.
+`TestChangeDeletionRetainsAppendOnlyDocuments` runs in the complete separate
+owned legacy campaign and proves identical writes append three increasing IDs,
+two historic/one current. A testcase created through the new API blocks deletion
+without removing child/current documents. After API child deletion and parent
+delete204, SQL confirms parent/child absence and exact retained document
+IDs/bodies/current flags. Public writes cannot resurrect removed-parent docs.
+No equivalent runner SQL hook existed in merged P3, so this useful SQL evidence
+was retained and adapted rather than discarded.
+
+`TestChangeIdentityOrderingAndSameValueTimestamps` still proves UUIDv7 and
+change timestamp ordering; `TestTestCaseCurrentStateAndSameValueTimestamps`
+adds testcase same-value modified advancement with preserved created, unrelated
+rows, parent timestamps and independently read counters. All seven existing
+project/epic/change tests, health and two migrated testcase tests pass via
+`make -C backend legacy-api-test`. Separate `.coverage/legacy/` counters receive
+**zero APIHydra coverage credit**. The ledger records why nonexistent testcase
+history/version/procedure/cascade and composite-response assertions were removed,
+and maps every retained guarantee to current tests.
 
 Installed `/home/vito/go/bin/apih` is module
 `v0.1.1-0.20260907061551-c3947513e2a4`, revision
@@ -84,20 +99,25 @@ There are no credentials/auth middleware, Debug breakpoints or partial selection
 
 APIHydra's subset comparison ignores extra object keys; an empty expected body
 skips comparison. Thus it cannot prove exact {id} or truly empty204 bodies.
+`TestTestCaseAPIExactContracts`, `TestTestCaseListExactCurrentFields`,
 `TestChangeAPIContracts` and `TestDocumentAPIShapeAndExplicitBooleans` pin exact
 keys/nulls/empty bodies. Tests separately preserve bind/validation/PG causes.
 Captured IDs and explicit expected_status/body/types use supported syntax.
 
 ## Remaining gaps and rerun
 
-Query/scan/iteration failures, entropy failure, concurrent FK/parent failures,
-legacy adapter rendering, degraded health and startup/config/Markdown error
-branches have no fabricated HTTP trigger. Most deferred testcase behavior remains
-unexecuted. Procedure preflight/CALL and epic association checks are not atomic;
-see the ledger for exact races. Both final coverage goals remain unmet.
+Query/scan/iteration and Exec failures, entropy failure, concurrent FK/parent
+races, degraded health and startup/config/Markdown error branches remain gaps;
+no fabricated HTTP triggers or exclusions were introduced. Testcase's nine API
+uncovered statements are DB failure arms, all unit tested. Both numerical goals
+pass, but overall verification still reports 11 unrelated baseline lint issues.
+The two-read testcase existence/list race is documented without an atomic claim.
+
+First P4 API attempt failed101 because the new file lacked JSON Content-Type;
+that header was fixed and the entire campaign rerun with unchanged assertions.
+Only completed successful runs establish the counts above. No scenarios remain
+failed/skipped/blocked; no outage campaign was added.
 
 Fresh ignored profiles, provenance, source/block inventories, result.json and
 runner/server/PostgreSQL logs live under `backend/.coverage/api/`; unit and
-legacy evidence remain in separate directories. Rerun from repository root:
-`make -C backend api-test`. Its strict gate remains a failure until >=90% is
-actually measured. No failing/blocked scenario receives successful coverage credit.
+legacy evidence stay separate. Rerun: `make -C backend api-test`.

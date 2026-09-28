@@ -3,7 +3,6 @@ package testcase
 import (
 	"errors"
 	"fmt"
-	"mch_api/internal/change"
 	apperror "mch_api/internal/error"
 	"net/http/httptest"
 	"strings"
@@ -21,9 +20,9 @@ func TestTestCaseHandlerErrorContracts(t *testing.T) {
 	}{
 		{"list", `{"change_id":1}`, "list", (*API).listTestCases, 200},
 		{"create", `{"change_id":1,"scenario":"Test"}`, "create", (*API).createTestCase, 201},
-		{"update", `{"id":1,"scenario":"Test"}`, "update", (*API).updateTestCase, 200},
-		{"update-done", `{"id":1,"done":true}`, "done", (*API).updateTestCaseDone, 200},
-		{"delete", `{"id":1}`, "delete", (*API).deleteTestCase, 200},
+		{"update", `{"id":1,"scenario":"Test"}`, "update", (*API).updateTestCase, 204},
+		{"update-done", `{"id":1,"done":true}`, "done", (*API).updateTestCaseDone, 204},
+		{"delete", `{"id":1}`, "delete", (*API).deleteTestCase, 204},
 	} {
 		t.Run(op.name, func(t *testing.T) {
 			unknown := errors.New("private database detail")
@@ -41,7 +40,7 @@ func TestTestCaseHandlerErrorContracts(t *testing.T) {
 			} {
 				t.Run(tc.name, func(t *testing.T) {
 					e := echo.New()
-					a := NewAPI(e, NewService(&fakeTestCaseRepository{err: tc.cause}, change.Renderer{}))
+					a := NewAPI(e, NewService(&fakeTestCaseRepository{err: tc.cause}))
 					rec := httptest.NewRecorder()
 					req := httptest.NewRequest("POST", "/", strings.NewReader(op.body))
 					req.Header.Set("Content-Type", "application/json")
@@ -62,11 +61,11 @@ func TestTestCaseHandlerErrorContracts(t *testing.T) {
 					require.Equal(t, `{"message":"`+tc.message+`"}`+"\n", rec.Body.String())
 				})
 			}
-			if op.payload != "" {
+			for _, body := range []string{"{", `{"id":"wrong","change_id":"wrong"}`} {
 				e := echo.New()
 				a := NewAPI(e, nil)
 				rec := httptest.NewRecorder()
-				req := httptest.NewRequest("POST", "/", strings.NewReader("{"))
+				req := httptest.NewRequest("POST", "/", strings.NewReader(body))
 				req.Header.Set("Content-Type", "application/json")
 				ctx := e.NewContext(req, rec)
 				err := op.handler(a, ctx)

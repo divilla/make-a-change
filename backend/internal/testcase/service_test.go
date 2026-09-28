@@ -2,104 +2,101 @@ package testcase
 
 import (
 	"context"
-	"mch_api/internal/change"
+	"errors"
+	"fmt"
 	"mch_api/internal/domain"
 	apperror "mch_api/internal/error"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestServiceRejectsInvalidTestCaseInput(t *testing.T) {
-	service := &Service{}
-	_, err := service.ListTestCases(context.Background(), domain.TestCaseListRequest{})
-	require.ErrorIs(t, err, apperror.ErrTestCaseInvalidInput)
-	_, err = service.CreateTestCase(context.Background(), domain.TestCaseCreateRequest{ChangeID: 2, Scenario: "   "})
-	require.ErrorIs(t, err, apperror.ErrTestCaseInvalidInput)
-	_, err = service.UpdateTestCase(context.Background(), domain.TestCaseUpdateRequest{ID: 3, Scenario: "   "})
-	require.ErrorIs(t, err, apperror.ErrTestCaseInvalidInput)
-	_, err = service.DeleteTestCase(context.Background(), domain.TestCaseIDRequest{})
-	require.ErrorIs(t, err, apperror.ErrTestCaseInvalidInput)
-}
-
-func TestServiceNormalizesTestCaseRequests(t *testing.T) {
-	repo := &fakeTestCaseRepository{}
-	service := NewService(repo, change.NewRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
-
-	_, err := service.ListTestCases(context.Background(), domain.TestCaseListRequest{ChangeID: 2})
-	require.NoError(t, err)
-	assert.Equal(t, 2, repo.changeID)
-	_, err = service.CreateTestCase(context.Background(), domain.TestCaseCreateRequest{ChangeID: 2, Scenario: " Add API test "})
-	require.NoError(t, err)
-	assert.Equal(t, "Add API test", repo.createReq.Scenario)
-	_, err = service.UpdateTestCase(context.Background(), domain.TestCaseUpdateRequest{
-		ID: 3, Scenario: " Mark test green ",
-	})
-	require.NoError(t, err)
-	assert.Equal(t, "Mark test green", repo.updateReq.Scenario)
-	_, err = service.DeleteTestCase(context.Background(), domain.TestCaseIDRequest{ID: 3})
-	require.NoError(t, err)
-	assert.Equal(t, 3, repo.id)
-}
-
-func TestServiceRendersMutationChangeSpecHTML(t *testing.T) {
-	repo := &fakeTestCaseRepository{}
-	service := NewService(repo, change.NewRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
-
-	mutation, err := service.CreateTestCase(context.Background(), domain.TestCaseCreateRequest{
-		ChangeID: 2,
-		Scenario: "TestCase",
-	})
-	require.NoError(t, err)
-	assert.Equal(t, "clean(parsed(**Change**))", mutation.Change.SpecHTML)
-}
-
-type fakeMarkdownParser struct{}
-
-func (fakeMarkdownParser) Parse(source string) string {
-	return "parsed(" + source + ")"
-}
-
-type fakeMarkdownSanitizer struct{}
-
-func (fakeMarkdownSanitizer) Parse(source string) string {
-	return "clean(" + source + ")"
-}
-
 type fakeTestCaseRepository struct {
-	err       error
-	id        int
-	changeID  int
-	createReq domain.TestCaseCreateRequest
-	updateReq domain.TestCaseUpdateRequest
+	err      error
+	calls    []any
+	contexts []context.Context
+	cases    []domain.TestCase
 }
 
-func (r *fakeTestCaseRepository) List(_ context.Context, changeID int) ([]domain.TestCase, error) {
-	r.changeID = changeID
-	return []domain.TestCase{}, r.err
+func (r *fakeTestCaseRepository) record(ctx context.Context, req any) {
+	r.calls = append(r.calls, req)
+	r.contexts = append(r.contexts, ctx)
 }
 
-func (r *fakeTestCaseRepository) Create(_ context.Context, req domain.TestCaseCreateRequest) (domain.TestCaseMutationResponse, error) {
-	r.createReq = req
-	testCase := domain.TestCase{ID: 3, ChangeID: req.ChangeID, Scenario: req.Scenario}
-	return domain.TestCaseMutationResponse{
-		TestCase: &testCase,
-		Change:   domain.Change{ID: req.ChangeID, Spec: "**Change**"},
-	}, r.err
+func (r *fakeTestCaseRepository) List(ctx context.Context, req domain.TestCaseListRequest) ([]domain.TestCase, error) {
+	r.record(ctx, req)
+	if r.cases == nil {
+		return []domain.TestCase{}, r.err
+	}
+	return r.cases, r.err
 }
 
-func (r *fakeTestCaseRepository) Update(_ context.Context, req domain.TestCaseUpdateRequest) (domain.TestCaseMutationResponse, error) {
-	r.updateReq = req
-	return domain.TestCaseMutationResponse{}, r.err
+func (r *fakeTestCaseRepository) Create(ctx context.Context, req domain.TestCaseCreateRequest) (domain.TestCaseIDRequest, error) {
+	r.record(ctx, req)
+	return domain.TestCaseIDRequest{ID: 3}, r.err
 }
 
-func (r *fakeTestCaseRepository) UpdateDone(_ context.Context, req domain.TestCaseUpdateDoneRequest) (domain.TestCaseMutationResponse, error) {
-	r.id = req.ID
-	return domain.TestCaseMutationResponse{}, r.err
+func (r *fakeTestCaseRepository) Update(ctx context.Context, req domain.TestCaseUpdateRequest) error {
+	r.record(ctx, req)
+	return r.err
 }
 
-func (r *fakeTestCaseRepository) Delete(_ context.Context, req domain.TestCaseIDRequest) (domain.TestCaseMutationResponse, error) {
-	r.id = req.ID
-	return domain.TestCaseMutationResponse{}, r.err
+func (r *fakeTestCaseRepository) UpdateDone(ctx context.Context, req domain.TestCaseUpdateDoneRequest) error {
+	r.record(ctx, req)
+	return r.err
+}
+
+func (r *fakeTestCaseRepository) Delete(ctx context.Context, req domain.TestCaseIDRequest) error {
+	r.record(ctx, req)
+	return r.err
+}
+
+func TestServiceRejectsInvalidTestCaseInput(t *testing.T) {
+	for _, id := range []int{0, -1} {
+		t.Run(fmt.Sprint(id), func(t *testing.T) {
+			r := &fakeTestCaseRepository{}
+			s := NewService(r)
+			ctx := context.Background()
+			_, err := s.ListTestCases(ctx, domain.TestCaseListRequest{ChangeID: id})
+			require.ErrorIs(t, err, apperror.ErrTestCaseInvalidInput)
+			_, err = s.CreateTestCase(ctx, domain.TestCaseCreateRequest{ChangeID: id, Scenario: "valid"})
+			require.ErrorIs(t, err, apperror.ErrTestCaseInvalidInput)
+			require.ErrorIs(t, s.UpdateTestCase(ctx, domain.TestCaseUpdateRequest{ID: id, Scenario: "valid"}), apperror.ErrTestCaseInvalidInput)
+			require.ErrorIs(t, s.UpdateTestCaseDone(ctx, domain.TestCaseUpdateDoneRequest{ID: id}), apperror.ErrTestCaseInvalidInput)
+			require.ErrorIs(t, s.DeleteTestCase(ctx, domain.TestCaseIDRequest{ID: id}), apperror.ErrTestCaseInvalidInput)
+			require.Empty(t, r.calls)
+		})
+	}
+	for _, blank := range []string{"", " \t\n "} {
+		s := NewService(nil)
+		_, err := s.CreateTestCase(context.Background(), domain.TestCaseCreateRequest{ChangeID: 1, Scenario: blank})
+		require.ErrorIs(t, err, apperror.ErrTestCaseInvalidInput)
+		require.ErrorIs(t, s.UpdateTestCase(context.Background(), domain.TestCaseUpdateRequest{ID: 1, Scenario: blank}), apperror.ErrTestCaseInvalidInput)
+	}
+}
+
+func TestServiceNormalizesAndDelegatesOnce(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	for _, id := range []int{1, 1 << 40} {
+		for _, cause := range []error{nil, errors.New("repository failure")} {
+			r := &fakeTestCaseRepository{err: cause, cases: []domain.TestCase{{ID: id, ChangeID: id}}}
+			s := NewService(r)
+			got, err := s.ListTestCases(ctx, domain.TestCaseListRequest{ChangeID: id})
+			require.ErrorIs(t, err, cause)
+			require.Equal(t, r.cases, got)
+			created, err := s.CreateTestCase(ctx, domain.TestCaseCreateRequest{ChangeID: id, Scenario: " \tfirst\n "})
+			require.ErrorIs(t, err, cause)
+			require.Equal(t, 3, created.ID)
+			require.ErrorIs(t, s.UpdateTestCase(ctx, domain.TestCaseUpdateRequest{ID: id, Scenario: " \tsecond\n "}), cause)
+			for _, done := range []bool{true, false} {
+				require.ErrorIs(t, s.UpdateTestCaseDone(ctx, domain.TestCaseUpdateDoneRequest{ID: id, Done: done}), cause)
+			}
+			require.ErrorIs(t, s.DeleteTestCase(ctx, domain.TestCaseIDRequest{ID: id}), cause)
+			require.Equal(t, []any{domain.TestCaseListRequest{ChangeID: id}, domain.TestCaseCreateRequest{ChangeID: id, Scenario: "first"}, domain.TestCaseUpdateRequest{ID: id, Scenario: "second"}, domain.TestCaseUpdateDoneRequest{ID: id, Done: true}, domain.TestCaseUpdateDoneRequest{ID: id}, domain.TestCaseIDRequest{ID: id}}, r.calls)
+			for _, actual := range r.contexts {
+				require.Same(t, ctx, actual)
+			}
+		}
+	}
 }
