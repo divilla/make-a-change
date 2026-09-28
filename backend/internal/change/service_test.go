@@ -3,9 +3,8 @@ package change
 import (
 	"context"
 	"errors"
+	"mch_api/internal/app"
 	"mch_api/internal/domain"
-	apperror "mch_api/internal/error"
-	"mch_api/pkg/markdown"
 	"net/url"
 	"testing"
 
@@ -22,8 +21,6 @@ type fakeChangeRepository struct {
 	projectID, epicProjectID int
 	list                     []domain.ChangeListItem
 	details                  domain.ChangeDetails
-	docs                     []domain.ChangeDocument
-	artifacts                []domain.ChangeArtifactSource
 }
 
 func (r *fakeChangeRepository) record(ctx context.Context, op string, req any) error {
@@ -60,18 +57,6 @@ func (r *fakeChangeRepository) EpicProject(c context.Context, q domain.EpicIDReq
 	return domain.ProjectIDRequest{ID: r.epicProjectID}, r.record(c, "EpicProject", q)
 }
 
-func (r *fakeChangeRepository) Documents(c context.Context, q domain.ChangeIDRequest) ([]domain.ChangeDocument, error) {
-	v := r.docs
-	if v == nil {
-		v = []domain.ChangeDocument{}
-	}
-	return v, r.record(c, "Documents", q)
-}
-
-func (r *fakeChangeRepository) Artifacts(c context.Context, q domain.ChangeRenderedArtifactsRequest) ([]domain.ChangeArtifactSource, error) {
-	return r.artifacts, r.record(c, "Artifacts", q)
-}
-
 func (r *fakeChangeRepository) Create(c context.Context, q domain.ChangeCreateRequest) (domain.ChangeIDRequest, error) {
 	return domain.ChangeIDRequest{ID: 2}, r.record(c, "Create", q)
 }
@@ -92,16 +77,12 @@ func (r *fakeChangeRepository) UpdateOpen(c context.Context, q domain.ChangeUpda
 	return r.record(c, "UpdateOpen", q)
 }
 
-func (r *fakeChangeRepository) UpdateChangeTypes(c context.Context, q domain.ChangeUpdateChangeTypesRequest) error {
-	return r.record(c, "UpdateChangeTypes", q)
+func (r *fakeChangeRepository) UpdateTypes(c context.Context, q domain.ChangeUpdateTypesRequest) error {
+	return r.record(c, "UpdateTypes", q)
 }
 
 func (r *fakeChangeRepository) UpdatePRUrl(c context.Context, q domain.ChangeUpdatePRUrlRequest) error {
 	return r.record(c, "UpdatePRUrl", q)
-}
-
-func (r *fakeChangeRepository) SetDocument(c context.Context, q domain.ChangeDocumentSetRequest) error {
-	return r.record(c, "SetDocument", q)
 }
 
 func (r *fakeChangeRepository) Delete(c context.Context, q domain.ChangeIDRequest) error {
@@ -133,8 +114,8 @@ func TestServiceCreateIdentityDefaultsAndFailures(t *testing.T) {
 	for _, id := range []*uuid.UUID{nil, &supplied} {
 		r := &fakeChangeRepository{}
 		p := defaultConfig()
-		s := NewService(r, Renderer{}, p)
-		got, err := s.CreateChange(ctx, domain.ChangeCreateRequest{ProjectID: 9, RefUUID: id, Title: " Title ", Brief: " Brief "})
+		s := NewService(r, p)
+		got, err := s.Create(ctx, domain.ChangeCreateRequest{ProjectID: 9, RefUUID: id, Title: " Title ", Brief: " Brief "})
 		require.NoError(t, err)
 		require.Equal(t, domain.ChangeIDRequest{ID: 2}, got)
 		require.Equal(t, []string{"Create"}, r.calls)
@@ -150,16 +131,16 @@ func TestServiceCreateIdentityDefaultsAndFailures(t *testing.T) {
 	}
 	for _, c := range []domain.Config{{ChangeDocs: []string{"brief"}}, {ChangePhases: []string{"backlog"}}} {
 		r := &fakeChangeRepository{}
-		s := NewService(r, Renderer{}, &configFake{config: c})
-		_, err := s.CreateChange(ctx, domain.ChangeCreateRequest{ProjectID: 9, Title: "Title", Brief: "Brief"})
-		require.ErrorIs(t, err, apperror.ErrChangeInvalidReference)
+		s := NewService(r, &configFake{config: c})
+		_, err := s.Create(ctx, domain.ChangeCreateRequest{ProjectID: 9, Title: "Title", Brief: "Brief"})
+		require.ErrorIs(t, err, app.ErrChangeInvalidReference)
 		require.Empty(t, r.calls)
 	}
 	failure := errors.New("entropy failure")
 	r := &fakeChangeRepository{}
-	s := NewService(r, Renderer{}, defaultConfig())
+	s := NewService(r, defaultConfig())
 	s.newUUID = func() (uuid.UUID, error) { return uuid.Nil, failure }
-	_, err := s.CreateChange(ctx, domain.ChangeCreateRequest{ProjectID: 9, Title: "Title", Brief: "Brief"})
+	_, err := s.Create(ctx, domain.ChangeCreateRequest{ProjectID: 9, Title: "Title", Brief: "Brief"})
 	require.ErrorIs(t, err, failure)
 	require.Contains(t, err.Error(), "generate change UUID")
 	require.Empty(t, r.calls)
@@ -169,68 +150,43 @@ func TestServiceDerivesWideCompletion(t *testing.T) {
 	for _, tc := range []struct{ done, total, want int64 }{{0, 0, 0}, {1, 2, 50}, {2, 3, 66}, {70000, 100000, 70}} {
 		item := domain.ChangeListItem{ID: 7, DoneTC: tc.done, TotalTC: tc.total}
 		r := &fakeChangeRepository{list: []domain.ChangeListItem{item}, details: domain.ChangeDetails{ChangeListItem: item}}
-		s := NewService(r, Renderer{}, nil)
-		list, err := s.ListChanges(context.Background(), domain.ChangeListRequest{ProjectID: 9})
+		s := NewService(r, nil)
+		list, err := s.List(context.Background(), domain.ChangeListRequest{ProjectID: 9})
 		require.NoError(t, err)
 		require.Equal(t, tc.want, list[0].Completed)
-		got, err := s.GetChange(context.Background(), domain.ChangeIDRequest{ID: 7})
+		got, err := s.Details(context.Background(), domain.ChangeIDRequest{ID: 7})
 		require.NoError(t, err)
 		require.Equal(t, tc.want, got.Completed)
 	}
 }
 
-func TestServiceSelectedConfigurationFiltering(t *testing.T) {
+func TestServiceSelectedConfigurationValidation(t *testing.T) {
 	for _, available := range [][]string{{"fix", "feature"}, {"experiment", "maintenance"}} {
-		for _, values := range [][]string{nil, {}, {"unknown"}, {" fix ", "experiment", "fix", "", " feature ", "experiment"}} {
+		for _, values := range [][]string{nil, {}, {" " + available[0] + " ", available[1], available[0], ""}} {
 			p := &configFake{config: domain.Config{ChangeTypes: available}}
 			r := &fakeChangeRepository{projectID: 19}
-			s := NewService(r, Renderer{}, p)
-			require.NoError(t, s.UpdateChangeTypes(context.Background(), domain.ChangeUpdateChangeTypesRequest{ID: 7, ChangeTypes: values}))
+			require.NoError(t, NewService(r, p).UpdateTypes(context.Background(), domain.ChangeUpdateTypesRequest{ID: 7, ChangeTypes: values}))
 			want := []string{}
-			if len(values) > 1 {
-				if available[0] == "fix" {
-					want = []string{"fix", "feature"}
-				} else {
-					want = []string{"experiment"}
-				}
+			if len(values) > 0 {
+				want = available
 			}
-			require.Equal(t, domain.ChangeUpdateChangeTypesRequest{ID: 7, ChangeTypes: want}, r.requests[1])
-			require.Equal(t, []string{"Project", "UpdateChangeTypes"}, r.calls)
+			require.Equal(t, domain.ChangeUpdateTypesRequest{ID: 7, ChangeTypes: want}, r.requests[1])
+			require.Equal(t, []string{"Project", "UpdateTypes"}, r.calls)
 			require.Equal(t, []domain.ProjectIDRequest{{ID: 19}}, p.ids)
 		}
-	}
-}
-
-func TestServiceDocumentMappingAndRepeatedWrites(t *testing.T) {
-	ctx := context.Background()
-	flag := false
-	for _, kind := range []string{"brief", "spec", "pr", "plan"} {
-		r := &fakeChangeRepository{projectID: 9}
-		s := NewService(r, Renderer{}, defaultConfig())
-		for range 2 {
-			var err error
-			switch kind {
-			case "brief":
-				err = s.UpdateBrief(ctx, domain.ChangeUpdateBriefRequest{ID: 7, Brief: " Raw ", AgentEdit: &flag})
-			case "spec":
-				err = s.UpdateSpec(ctx, domain.ChangeUpdateSpecRequest{ID: 7, Spec: " Raw ", AgentEdit: &flag})
-			case "pr":
-				err = s.UpdatePR(ctx, domain.ChangeUpdatePRRequest{ID: 7, PR: " Raw ", AgentEdit: &flag})
-			case "plan":
-				err = s.SetDocument(ctx, domain.ChangeDocumentSetRequest{ID: 7, DocType: " plan ", Body: " Raw ", AgentEdit: &flag})
-			}
-			require.NoError(t, err)
+		for _, values := range [][]string{{"unknown"}, {available[0], "unknown"}} {
+			r := &fakeChangeRepository{projectID: 19}
+			p := &configFake{config: domain.Config{ChangeTypes: available}}
+			require.ErrorIs(t, NewService(r, p).UpdateTypes(context.Background(), domain.ChangeUpdateTypesRequest{ID: 7, ChangeTypes: values}), app.ErrChangeInvalidReference)
+			require.Equal(t, []string{"Project"}, r.calls)
 		}
-		require.Equal(t, []string{"Project", "SetDocument", "Project", "SetDocument"}, r.calls)
-		require.Equal(t, domain.ChangeDocumentSetRequest{ID: 7, DocType: kind, Body: "Raw", AgentEdit: &flag}, r.requests[1])
-		require.Equal(t, r.requests[1], r.requests[3])
 	}
 }
 
 func TestServicePreflightAndAssociation(t *testing.T) {
 	for _, epic := range []*int{nil, intPtr(4)} {
 		r := &fakeChangeRepository{projectID: 9, epicProjectID: 9}
-		s := NewService(r, Renderer{}, nil)
+		s := NewService(r, nil)
 		require.NoError(t, s.UpdateEpic(context.Background(), domain.ChangeUpdateEpicRequest{ID: 7, EpicID: epic}))
 		want := []string{"Project", "UpdateEpic"}
 		if epic != nil {
@@ -239,73 +195,41 @@ func TestServicePreflightAndAssociation(t *testing.T) {
 		require.Equal(t, want, r.calls)
 	}
 	r := &fakeChangeRepository{projectID: 9, epicProjectID: 10}
-	s := NewService(r, Renderer{}, nil)
-	require.ErrorIs(t, s.UpdateEpic(context.Background(), domain.ChangeUpdateEpicRequest{ID: 7, EpicID: intPtr(4)}), apperror.ErrChangeInvalidReference)
+	s := NewService(r, nil)
+	require.ErrorIs(t, s.UpdateEpic(context.Background(), domain.ChangeUpdateEpicRequest{ID: 7, EpicID: intPtr(4)}), app.ErrChangeInvalidReference)
 	require.Equal(t, []string{"Project", "EpicProject"}, r.calls)
 	r = &fakeChangeRepository{}
-	s = NewService(r, Renderer{}, nil)
+	s = NewService(r, nil)
 	require.NoError(t, s.UpdateTitle(context.Background(), domain.ChangeUpdateTitleRequest{ID: 7, Title: " A  title "}))
 	require.Equal(t, []string{"Exists", "UpdateTitle"}, r.calls)
 	require.Equal(t, domain.ChangeUpdateTitleRequest{ID: 7, Title: "A  title"}, r.requests[1])
-}
-
-func TestServiceSanitizesExplicitReads(t *testing.T) {
-	raw := "**safe** <script>alert(1)</script> [bad](javascript:alert(1))"
-	r := &fakeChangeRepository{docs: []domain.ChangeDocument{{ID: 8, DocType: "spec", Body: raw}}, artifacts: []domain.ChangeArtifactSource{{ID: 9}, {ID: 7, Spec: raw, PR: raw}}}
-	s := NewService(r, NewRenderer(markdown.NewGoldmarkParser(), markdown.NewBluemondaySanitizer()), nil)
-	docs, err := s.Documents(context.Background(), domain.ChangeIDRequest{ID: 7})
-	require.NoError(t, err)
-	require.Equal(t, raw, docs[0].Body)
-	require.Contains(t, docs[0].HTML, "<strong>safe</strong>")
-	require.NotContains(t, docs[0].HTML, "script")
-	require.NotContains(t, docs[0].HTML, "alert")
-	got, err := s.RenderedArtifacts(context.Background(), domain.ChangeRenderedArtifactsRequest{IDs: []int{9, 404, 7, 9}})
-	require.NoError(t, err)
-	require.Equal(t, domain.ChangeRenderedArtifactsRequest{IDs: []int{9, 404, 7}}, r.requests[2])
-	require.Equal(t, []domain.ChangeRenderedArtifact{{ID: 9}, {ID: 7, SpecHTML: docs[0].HTML, PRHtml: docs[0].HTML}}, got.Artifacts)
-	require.Equal(t, raw, r.artifacts[1].Spec)
-	r = &fakeChangeRepository{}
-	s = NewService(r, Renderer{}, nil)
-	empty, err := s.RenderedArtifacts(context.Background(), domain.ChangeRenderedArtifactsRequest{})
-	require.NoError(t, err)
-	require.Equal(t, []domain.ChangeRenderedArtifact{}, empty.Artifacts)
-	require.Empty(t, r.calls)
-	docs, err = s.Documents(context.Background(), domain.ChangeIDRequest{ID: 7})
-	require.NoError(t, err)
-	require.Equal(t, []domain.ChangeDocument{}, docs)
-	require.Empty(t, (Renderer{}).Render("raw"))
 }
 
 func TestServiceRejectsInvalidDirectInput(t *testing.T) {
 	ctx := context.Background()
 	s := &Service{}
 	for _, id := range []int{0, -1} {
-		_, err := s.ListChanges(ctx, domain.ChangeListRequest{ProjectID: id})
-		require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
-		_, err = s.GetChange(ctx, domain.ChangeIDRequest{ID: id})
-		require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
-		_, err = s.Documents(ctx, domain.ChangeIDRequest{ID: id})
-		require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
-		_, err = s.RenderedArtifacts(ctx, domain.ChangeRenderedArtifactsRequest{IDs: []int{7, id}})
-		require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
-		_, err = s.CreateChange(ctx, domain.ChangeCreateRequest{ProjectID: id, Title: "Title", Brief: "Brief"})
-		require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
+		_, err := s.List(ctx, domain.ChangeListRequest{ProjectID: id})
+		require.ErrorIs(t, err, app.ErrChangeInvalidInput)
+		_, err = s.Details(ctx, domain.ChangeIDRequest{ID: id})
+		require.ErrorIs(t, err, app.ErrChangeInvalidInput)
+		_, err = s.Create(ctx, domain.ChangeCreateRequest{ProjectID: id, Title: "Title", Brief: "Brief"})
+		require.ErrorIs(t, err, app.ErrChangeInvalidInput)
 		for _, err = range []error{
 			s.UpdateTitle(ctx, domain.ChangeUpdateTitleRequest{ID: id, Title: "Title"}),
 			s.UpdatePhase(ctx, domain.ChangeUpdatePhaseRequest{ID: id, ChangePhase: "backlog"}),
 			s.UpdateEpic(ctx, domain.ChangeUpdateEpicRequest{ID: id}),
 			s.UpdateOpen(ctx, domain.ChangeUpdateOpenRequest{ID: id, Open: boolPtr(false)}),
-			s.UpdateChangeTypes(ctx, domain.ChangeUpdateChangeTypesRequest{ID: id}),
+			s.UpdateTypes(ctx, domain.ChangeUpdateTypesRequest{ID: id}),
 			s.UpdatePRUrl(ctx, domain.ChangeUpdatePRUrlRequest{ID: id, PRUrl: "https://pr"}),
-			s.SetDocument(ctx, domain.ChangeDocumentSetRequest{ID: id, DocType: "spec", Body: "Raw", AgentEdit: boolPtr(true)}),
-			s.DeleteChange(ctx, domain.ChangeIDRequest{ID: id}),
+			s.Delete(ctx, domain.ChangeIDRequest{ID: id}),
 		} {
-			require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
+			require.ErrorIs(t, err, app.ErrChangeInvalidInput)
 		}
 	}
 	for _, req := range []domain.ChangeCreateRequest{{ProjectID: 9, Title: " ", Brief: "Brief"}, {ProjectID: 9, Title: "Title", Brief: " "}} {
-		_, err := s.CreateChange(ctx, req)
-		require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
+		_, err := s.Create(ctx, req)
+		require.ErrorIs(t, err, app.ErrChangeInvalidInput)
 	}
 	for _, err := range []error{
 		s.UpdateTitle(ctx, domain.ChangeUpdateTitleRequest{ID: 7, Title: " "}),
@@ -313,21 +237,15 @@ func TestServiceRejectsInvalidDirectInput(t *testing.T) {
 		s.UpdateEpic(ctx, domain.ChangeUpdateEpicRequest{ID: 7, EpicID: intPtr(0)}),
 		s.UpdateEpic(ctx, domain.ChangeUpdateEpicRequest{ID: 7, EpicID: intPtr(-1)}),
 		s.UpdateOpen(ctx, domain.ChangeUpdateOpenRequest{ID: 7}),
-		s.UpdateBrief(ctx, domain.ChangeUpdateBriefRequest{ID: 7, Brief: "Raw"}),
-		s.UpdateSpec(ctx, domain.ChangeUpdateSpecRequest{ID: 7, Spec: "Raw"}),
-		s.UpdatePR(ctx, domain.ChangeUpdatePRRequest{ID: 7, PR: "Raw"}),
 	} {
-		require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
-	}
-	for _, req := range []domain.ChangeDocumentSetRequest{{ID: 7, DocType: " ", Body: "Raw", AgentEdit: boolPtr(false)}, {ID: 7, DocType: "spec", Body: " ", AgentEdit: boolPtr(false)}, {ID: 7, DocType: "spec", Body: "Raw"}} {
-		require.ErrorIs(t, s.SetDocument(ctx, req), apperror.ErrChangeInvalidInput)
+		require.ErrorIs(t, err, app.ErrChangeInvalidInput)
 	}
 	for _, u := range []string{" ", "%", "https:///missing-host", "javascript:alert(1)", "ftp://host", "/relative"} {
-		require.ErrorIs(t, s.UpdatePRUrl(ctx, domain.ChangeUpdatePRUrlRequest{ID: 7, PRUrl: u}), apperror.ErrChangeInvalidInput)
+		require.ErrorIs(t, s.UpdatePRUrl(ctx, domain.ChangeUpdatePRUrlRequest{ID: 7, PRUrl: u}), app.ErrChangeInvalidInput)
 	}
 	for _, u := range []string{" https://pr ", "http://pr", "HTTP://pr"} {
 		r := &fakeChangeRepository{}
-		service := NewService(r, Renderer{}, nil)
+		service := NewService(r, nil)
 		require.NoError(t, service.UpdatePRUrl(ctx, domain.ChangeUpdatePRUrlRequest{ID: 7, PRUrl: u}))
 		if u == " https://pr " {
 			require.Equal(t, domain.ChangeUpdatePRUrlRequest{ID: 7, PRUrl: "https://pr"}, r.requests[0])
@@ -345,17 +263,12 @@ func TestServiceCollaboratorFailuresAndContext(t *testing.T) {
 		config bool
 	}{
 		{"list", func(s *Service) error {
-			_, err := s.ListChanges(ctx, domain.ChangeListRequest{ProjectID: 9})
+			_, err := s.List(ctx, domain.ChangeListRequest{ProjectID: 9})
 			return err
 		}, []string{"List"}, false},
-		{"get", func(s *Service) error { _, err := s.GetChange(ctx, domain.ChangeIDRequest{ID: 7}); return err }, []string{"Details"}, false},
-		{"artifacts", func(s *Service) error {
-			_, err := s.RenderedArtifacts(ctx, domain.ChangeRenderedArtifactsRequest{IDs: []int{7}})
-			return err
-		}, []string{"Artifacts"}, false},
-		{"documents", func(s *Service) error { _, err := s.Documents(ctx, domain.ChangeIDRequest{ID: 7}); return err }, []string{"Exists", "Documents"}, false},
+		{"details", func(s *Service) error { _, err := s.Details(ctx, domain.ChangeIDRequest{ID: 7}); return err }, []string{"Details"}, false},
 		{"create", func(s *Service) error {
-			_, err := s.CreateChange(ctx, domain.ChangeCreateRequest{ProjectID: 9, Title: "Title", Brief: "Brief"})
+			_, err := s.Create(ctx, domain.ChangeCreateRequest{ProjectID: 9, Title: "Title", Brief: "Brief"})
 			return err
 		}, []string{"Create"}, true},
 		{"title", func(s *Service) error {
@@ -367,17 +280,14 @@ func TestServiceCollaboratorFailuresAndContext(t *testing.T) {
 		{"phase", func(s *Service) error {
 			return s.UpdatePhase(ctx, domain.ChangeUpdatePhaseRequest{ID: 7, ChangePhase: " review "})
 		}, []string{"Project", "UpdatePhase"}, true},
-		{"types", func(s *Service) error { return s.UpdateChangeTypes(ctx, domain.ChangeUpdateChangeTypesRequest{ID: 7}) }, []string{"Project", "UpdateChangeTypes"}, true},
-		{"set", func(s *Service) error {
-			return s.SetDocument(ctx, domain.ChangeDocumentSetRequest{ID: 7, DocType: "spec", Body: "Raw", AgentEdit: boolPtr(false)})
-		}, []string{"Project", "SetDocument"}, true},
+		{"types", func(s *Service) error { return s.UpdateTypes(ctx, domain.ChangeUpdateTypesRequest{ID: 7}) }, []string{"Project", "UpdateTypes"}, true},
 		{"open", func(s *Service) error {
 			return s.UpdateOpen(ctx, domain.ChangeUpdateOpenRequest{ID: 7, Open: boolPtr(false)})
 		}, []string{"UpdateOpen"}, false},
 		{"url", func(s *Service) error {
 			return s.UpdatePRUrl(ctx, domain.ChangeUpdatePRUrlRequest{ID: 7, PRUrl: "https://pr"})
 		}, []string{"UpdatePRUrl"}, false},
-		{"delete", func(s *Service) error { return s.DeleteChange(ctx, domain.ChangeIDRequest{ID: 7}) }, []string{"Delete"}, false},
+		{"delete", func(s *Service) error { return s.Delete(ctx, domain.ChangeIDRequest{ID: 7}) }, []string{"Delete"}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -385,7 +295,7 @@ func TestServiceCollaboratorFailuresAndContext(t *testing.T) {
 			for _, step := range append([]string{"success"}, tc.ops...) {
 				r := &fakeChangeRepository{projectID: 9, epicProjectID: 9}
 				p := defaultConfig()
-				p.err = apperror.ErrProjectConfigNotFound
+				p.err = app.ErrProjectConfigNotFound
 				if tc.config {
 					p.err = nil
 				}
@@ -393,7 +303,7 @@ func TestServiceCollaboratorFailuresAndContext(t *testing.T) {
 					r.err = failure
 					r.failAt = step
 				}
-				err := tc.call(NewService(r, Renderer{}, p))
+				err := tc.call(NewService(r, p))
 				if step == "success" {
 					require.NoError(t, err)
 					require.Equal(t, tc.ops, r.calls)
@@ -412,11 +322,11 @@ func TestServiceCollaboratorFailuresAndContext(t *testing.T) {
 				}
 			}
 			if tc.config {
-				for _, cause := range []error{apperror.ErrProjectConfigNotFound, failure} {
+				for _, cause := range []error{app.ErrProjectConfigNotFound, failure} {
 					r := &fakeChangeRepository{projectID: 9}
 					p := defaultConfig()
 					p.err = cause
-					require.ErrorIs(t, tc.call(NewService(r, Renderer{}, p)), cause)
+					require.ErrorIs(t, tc.call(NewService(r, p)), cause)
 					if tc.name == "create" {
 						require.Empty(t, r.calls)
 					} else {
@@ -428,36 +338,13 @@ func TestServiceCollaboratorFailuresAndContext(t *testing.T) {
 	}
 }
 
-func TestServiceRejectsUnknownPhaseAndDocumentKind(t *testing.T) {
+func TestServiceRejectsUnknownPhase(t *testing.T) {
 	for _, config := range []domain.Config{defaultConfig().config, {ChangePhases: []string{"discover"}, ChangeDocs: []string{"analysis"}}} {
 		r := &fakeChangeRepository{projectID: 9}
-		s := NewService(r, Renderer{}, &configFake{config: config})
-		require.ErrorIs(t, s.UpdatePhase(context.Background(), domain.ChangeUpdatePhaseRequest{ID: 7, ChangePhase: "unknown"}), apperror.ErrChangeInvalidReference)
-		require.ErrorIs(t, s.SetDocument(context.Background(), domain.ChangeDocumentSetRequest{ID: 7, DocType: "unknown", Body: "Raw", AgentEdit: boolPtr(true)}), apperror.ErrChangeInvalidReference)
-		require.Equal(t, []string{"Project", "Project"}, r.calls)
+		s := NewService(r, &configFake{config: config})
+		require.ErrorIs(t, s.UpdatePhase(context.Background(), domain.ChangeUpdatePhaseRequest{ID: 7, ChangePhase: "unknown"}), app.ErrChangeInvalidReference)
+		require.Equal(t, []string{"Project"}, r.calls)
 	}
-}
-
-func TestRendererExplicitSource(t *testing.T) {
-	r := NewRenderer(markdown.NewGoldmarkParser(), markdown.NewBluemondaySanitizer())
-	require.Contains(t, r.Render("**Spec**"), "<strong>Spec</strong>")
-	require.NotContains(t, r.Render("**PR** <script>unsafe()</script>"), "unsafe")
-	require.Empty(t, (Renderer{}).Render("source"))
-	require.Empty(t, r.Render(""))
-}
-
-func TestServiceCustomPhaseAndDocuments(t *testing.T) {
-	ctx := context.Background()
-	p := &configFake{config: domain.Config{ChangePhases: []string{"discover", "ship"}, ChangeDocs: []string{"analysis", "decision"}}}
-	r := &fakeChangeRepository{projectID: 19}
-	s := NewService(r, Renderer{}, p)
-	require.NoError(t, s.UpdatePhase(ctx, domain.ChangeUpdatePhaseRequest{ID: 7, ChangePhase: " ship "}))
-	require.Equal(t, domain.ChangeUpdatePhaseRequest{ID: 7, ChangePhase: "ship"}, r.requests[1])
-	require.NoError(t, s.SetDocument(ctx, domain.ChangeDocumentSetRequest{ID: 7, DocType: " analysis ", Body: " Custom ", AgentEdit: boolPtr(true)}))
-	require.Equal(t, domain.ChangeDocumentSetRequest{ID: 7, DocType: "analysis", Body: "Custom", AgentEdit: boolPtr(true)}, r.requests[3])
-	require.ErrorIs(t, s.UpdatePhase(ctx, domain.ChangeUpdatePhaseRequest{ID: 7, ChangePhase: "backlog"}), apperror.ErrChangeInvalidReference)
-	require.ErrorIs(t, s.UpdateBrief(ctx, domain.ChangeUpdateBriefRequest{ID: 7, Brief: "Raw", AgentEdit: boolPtr(false)}), apperror.ErrChangeInvalidReference)
-	require.Equal(t, []string{"Project", "UpdatePhase", "Project", "SetDocument", "Project", "Project"}, r.calls)
 }
 
 func TestUpdatePRURLValidationCauses(t *testing.T) {
@@ -485,7 +372,7 @@ func TestUpdatePRURLValidationCauses(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &fakeChangeRepository{err: tc.repoError}
 			config := defaultConfig()
-			err := NewService(repo, Renderer{}, config).UpdatePRUrl(context.Background(), domain.ChangeUpdatePRUrlRequest{ID: tc.id, PRUrl: tc.input})
+			err := NewService(repo, config).UpdatePRUrl(context.Background(), domain.ChangeUpdatePRUrlRequest{ID: tc.id, PRUrl: tc.input})
 			require.Empty(t, config.ids)
 			if tc.normalized != "" {
 				require.Equal(t, []string{"UpdatePRUrl"}, repo.calls)
@@ -498,7 +385,7 @@ func TestUpdatePRURLValidationCauses(t *testing.T) {
 				return
 			}
 			require.Empty(t, repo.calls)
-			require.ErrorIs(t, err, apperror.ErrChangeInvalidInput)
+			require.ErrorIs(t, err, app.ErrChangeInvalidInput)
 			var parser *url.Error
 			require.Equal(t, tc.parser, errors.As(err, &parser))
 			if tc.parser {
@@ -510,8 +397,26 @@ func TestUpdatePRURLValidationCauses(t *testing.T) {
 					require.Equal(t, url.EscapeError("%zz"), escape)
 				}
 			} else {
-				require.Same(t, apperror.ErrChangeInvalidInput, err)
+				require.Same(t, app.ErrChangeInvalidInput, err)
 			}
 		})
 	}
+}
+
+func (r *fakeChangeRepository) UpdateAfterChange(c context.Context, q domain.ChangeUpdateAfterChangeRequest) error {
+	return r.record(c, "UpdateAfterChange", q)
+}
+
+func TestUpdateAfterChange(t *testing.T) {
+	for _, id := range []*int{nil, intPtr(9)} {
+		repo := &fakeChangeRepository{}
+		req := domain.ChangeUpdateAfterChangeRequest{ID: 7, AfterChangeID: id}
+		require.NoError(t, NewService(repo, nil).UpdateAfterChange(context.Background(), req))
+		require.Equal(t, []any{req}, repo.requests)
+	}
+	for _, req := range []domain.ChangeUpdateAfterChangeRequest{{}, {ID: -1}, {ID: 7, AfterChangeID: intPtr(0)}, {ID: 7, AfterChangeID: intPtr(-1)}} {
+		require.ErrorIs(t, (&Service{}).UpdateAfterChange(context.Background(), req), app.ErrChangeInvalidInput)
+	}
+	failure := errors.New("failure")
+	require.ErrorIs(t, NewService(&fakeChangeRepository{err: failure}, nil).UpdateAfterChange(context.Background(), domain.ChangeUpdateAfterChangeRequest{ID: 7}), failure)
 }

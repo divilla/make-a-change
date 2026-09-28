@@ -3,7 +3,7 @@ package markdown
 
 import (
 	"bytes"
-	apperror "mch_api/internal/error"
+	"mch_api/internal/app"
 
 	"github.com/rs/zerolog/log"
 
@@ -42,7 +42,7 @@ func NewGoldmarkParser() *GoldmarkParser {
 func (p *GoldmarkParser) Parse(source string) string {
 	var out bytes.Buffer
 	if err := p.parser.Convert([]byte(source), &out); err != nil {
-		log.Error().Err(apperror.Wrap(err, "render markdown")).Msg("markdown rendering failed")
+		log.Error().Err(app.Wrap(err, "render markdown")).Msg("markdown rendering failed")
 		return ""
 	}
 	return out.String()

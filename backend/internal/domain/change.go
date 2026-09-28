@@ -24,31 +24,15 @@ type (
 		DoneTC      int64     `json:"done_tc"`
 		TotalTC     int64     `json:"total_tc"`
 		Completed   int64     `json:"completed"`
-		Modified    time.Time `json:"modified"`
+		UpdatedAt   time.Time `json:"updated_at"`
 	}
 
 	// ChangeDetails contains fields exposed by the current change details view.
 	ChangeDetails struct {
 		ChangeListItem
-		PRUrl   string    `json:"pr_url"`
-		Created time.Time `json:"created"`
-	}
-
-	// ChangeRenderedArtifactsRequest defines ChangeRenderedArtifactsRequest values.
-	ChangeRenderedArtifactsRequest struct {
-		IDs []int `json:"ids"`
-	}
-
-	// ChangeRenderedArtifact defines ChangeRenderedArtifact values.
-	ChangeRenderedArtifact struct {
-		ID       int    `json:"id"`
-		SpecHTML string `json:"spec_html"`
-		PRHtml   string `json:"pr_html"`
-	}
-
-	// ChangeRenderedArtifactsResponse defines ChangeRenderedArtifactsResponse values.
-	ChangeRenderedArtifactsResponse struct {
-		Artifacts []ChangeRenderedArtifact `json:"artifacts"`
+		AfterChangeID *int      `json:"after_change_id"`
+		PRUrl         string    `json:"pr_url"`
+		CreatedAt     time.Time `json:"created_at"`
 	}
 
 	// ChangeListRequest defines ChangeListRequest values.
@@ -75,8 +59,8 @@ type (
 		ChangePhase string `json:"change_phase"`
 	}
 
-	// ChangeUpdateChangeTypesRequest defines ChangeUpdateChangeTypesRequest values.
-	ChangeUpdateChangeTypesRequest struct {
+	// ChangeUpdateTypesRequest defines ChangeUpdateTypesRequest values.
+	ChangeUpdateTypesRequest struct {
 		ID          int      `json:"id" validate:"required|min:1"`
 		ChangeTypes []string `json:"change_types"`
 	}
@@ -93,27 +77,6 @@ type (
 		Title string `json:"title"`
 	}
 
-	// ChangeUpdateBriefRequest defines ChangeUpdateBriefRequest values.
-	ChangeUpdateBriefRequest struct {
-		ID        int    `json:"id" validate:"required|min:1"`
-		Brief     string `json:"brief"`
-		AgentEdit *bool  `json:"agent_edit"`
-	}
-
-	// ChangeUpdateSpecRequest defines ChangeUpdateSpecRequest values.
-	ChangeUpdateSpecRequest struct {
-		ID        int    `json:"id" validate:"required|min:1"`
-		Spec      string `json:"spec"`
-		AgentEdit *bool  `json:"agent_edit"`
-	}
-
-	// ChangeUpdatePRRequest defines ChangeUpdatePRRequest values.
-	ChangeUpdatePRRequest struct {
-		ID        int    `json:"id" validate:"required|min:1"`
-		PR        string `json:"pr"`
-		AgentEdit *bool  `json:"agent_edit"`
-	}
-
 	// ChangeUpdatePRUrlRequest defines ChangeUpdatePRUrlRequest values.
 	ChangeUpdatePRUrlRequest struct {
 		ID    int    `json:"id" validate:"required|min:1"`
@@ -126,27 +89,8 @@ type (
 	}
 )
 
-// ChangeDocumentSetRequest writes one configured document kind.
-type ChangeDocumentSetRequest struct {
-	ID        int    `json:"id" validate:"required|min:1"`
-	DocType   string `json:"doc_type" validate:"required"`
-	Body      string `json:"body" validate:"required"`
-	AgentEdit *bool  `json:"agent_edit"`
-}
-
-// ChangeDocument is a current stored document and its safe rendered representation.
-type ChangeDocument struct {
-	ID        int       `json:"id"`
-	DocType   string    `json:"doc_type"`
-	Body      string    `json:"body"`
-	AgentEdit bool      `json:"agent_edit"`
-	Created   time.Time `json:"created"`
-	HTML      string    `json:"html"`
-}
-
-// ChangeArtifactSource contains only the raw documents needed by the bulk read.
-type ChangeArtifactSource struct {
-	ID   int
-	Spec string
-	PR   string
+// ChangeUpdateAfterChangeRequest sets or clears the prerequisite change.
+type ChangeUpdateAfterChangeRequest struct {
+	ID            int  `json:"id" validate:"required|min:1"`
+	AfterChangeID *int `json:"after_change_id"`
 }

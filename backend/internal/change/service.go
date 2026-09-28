@@ -2,8 +2,8 @@ package change
 
 import (
 	"context"
+	"mch_api/internal/app"
 	"mch_api/internal/domain"
-	apperror "mch_api/internal/error"
 	"net/url"
 	"slices"
 	"strings"
@@ -16,23 +16,22 @@ type ProjectConfig interface {
 	Config(context.Context, domain.ProjectIDRequest) (domain.Config, error)
 }
 
-// Service validates change operations and renders explicit document reads.
+// Service validates change operations.
 type Service struct {
 	repo     Repository
-	renderer Renderer
 	projects ProjectConfig
 	newUUID  func() (uuid.UUID, error)
 }
 
-// NewService injects only persistence, rendering and selected project configuration.
-func NewService(repo Repository, renderer Renderer, projects ProjectConfig) *Service {
-	return &Service{repo: repo, renderer: renderer, projects: projects, newUUID: uuid.NewV7}
+// NewService injects only persistence and selected project configuration.
+func NewService(repo Repository, projects ProjectConfig) *Service {
+	return &Service{repo: repo, projects: projects, newUUID: uuid.NewV7}
 }
 
-// ListChanges derives completion from wide database counts.
-func (s *Service) ListChanges(ctx context.Context, req domain.ChangeListRequest) ([]domain.ChangeListItem, error) {
+// List derives completion from wide database counts.
+func (s *Service) List(ctx context.Context, req domain.ChangeListRequest) ([]domain.ChangeListItem, error) {
 	if req.ProjectID <= 0 {
-		return nil, apperror.ErrChangeInvalidInput
+		return nil, app.ErrChangeInvalidInput
 	}
 	changes, err := s.repo.List(ctx, req)
 	if err != nil {
@@ -44,10 +43,10 @@ func (s *Service) ListChanges(ctx context.Context, req domain.ChangeListRequest)
 	return changes, nil
 }
 
-// GetChange returns current stored fields and derived completion.
-func (s *Service) GetChange(ctx context.Context, req domain.ChangeIDRequest) (domain.ChangeDetails, error) {
+// Details returns current stored fields and derived completion.
+func (s *Service) Details(ctx context.Context, req domain.ChangeIDRequest) (domain.ChangeDetails, error) {
 	if req.ID <= 0 {
-		return domain.ChangeDetails{}, apperror.ErrChangeInvalidInput
+		return domain.ChangeDetails{}, app.ErrChangeInvalidInput
 	}
 	change, err := s.repo.Details(ctx, req)
 	if err != nil {
@@ -64,62 +63,24 @@ func completion(done, total int64) int64 {
 	return 100 * done / total
 }
 
-// RenderedArtifacts renders only current spec/PR documents, preserving request order.
-func (s *Service) RenderedArtifacts(ctx context.Context, req domain.ChangeRenderedArtifactsRequest) (domain.ChangeRenderedArtifactsResponse, error) {
-	ids, err := normalizeIDs(req.IDs)
-	if err != nil {
-		return domain.ChangeRenderedArtifactsResponse{}, err
-	}
-	result := domain.ChangeRenderedArtifactsResponse{Artifacts: []domain.ChangeRenderedArtifact{}}
-	if len(ids) == 0 {
-		return result, nil
-	}
-	sources, err := s.repo.Artifacts(ctx, domain.ChangeRenderedArtifactsRequest{IDs: ids})
-	if err != nil {
-		return domain.ChangeRenderedArtifactsResponse{}, err
-	}
-	for _, source := range sources {
-		result.Artifacts = append(result.Artifacts, domain.ChangeRenderedArtifact{ID: source.ID, SpecHTML: s.renderer.Render(source.Spec), PRHtml: s.renderer.Render(source.PR)})
-	}
-	return result, nil
-}
-
-// Documents checks live-parent existence and renders current raw documents separately from writes.
-func (s *Service) Documents(ctx context.Context, req domain.ChangeIDRequest) ([]domain.ChangeDocument, error) {
-	if req.ID <= 0 {
-		return nil, apperror.ErrChangeInvalidInput
-	}
-	if err := s.repo.Exists(ctx, req); err != nil {
-		return nil, err
-	}
-	docs, err := s.repo.Documents(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	for i := range docs {
-		docs[i].HTML = s.renderer.Render(docs[i].Body)
-	}
-	return docs, nil
-}
-
-// CreateChange validates database function defaults against the selected configuration.
-func (s *Service) CreateChange(ctx context.Context, req domain.ChangeCreateRequest) (domain.ChangeIDRequest, error) {
+// Create validates database function defaults against the selected configuration.
+func (s *Service) Create(ctx context.Context, req domain.ChangeCreateRequest) (domain.ChangeIDRequest, error) {
 	req.Title = strings.TrimSpace(req.Title)
 	req.Brief = strings.TrimSpace(req.Brief)
 	if req.ProjectID <= 0 || req.Title == "" || req.Brief == "" {
-		return domain.ChangeIDRequest{}, apperror.ErrChangeInvalidInput
+		return domain.ChangeIDRequest{}, app.ErrChangeInvalidInput
 	}
 	config, err := s.projects.Config(ctx, domain.ProjectIDRequest{ID: req.ProjectID})
 	if err != nil {
 		return domain.ChangeIDRequest{}, err
 	}
 	if !slices.Contains(config.ChangePhases, "backlog") || !slices.Contains(config.ChangeDocs, "brief") {
-		return domain.ChangeIDRequest{}, apperror.ErrChangeInvalidReference
+		return domain.ChangeIDRequest{}, app.ErrChangeInvalidReference
 	}
 	if req.RefUUID == nil {
 		id, err := s.newUUID()
 		if err != nil {
-			return domain.ChangeIDRequest{}, apperror.Wrap(err, "generate change UUID")
+			return domain.ChangeIDRequest{}, app.Wrap(err, "generate change UUID")
 		}
 		req.RefUUID = &id
 	}
@@ -134,24 +95,29 @@ func (s *Service) config(ctx context.Context, req domain.ChangeIDRequest) (domai
 	return s.projects.Config(ctx, project)
 }
 
-// UpdateChangeTypes retains ordered filtering against this project's selected types.
-func (s *Service) UpdateChangeTypes(ctx context.Context, req domain.ChangeUpdateChangeTypesRequest) error {
+// UpdateTypes validates normalized types against this project's selected configuration.
+func (s *Service) UpdateTypes(ctx context.Context, req domain.ChangeUpdateTypesRequest) error {
 	if req.ID <= 0 {
-		return apperror.ErrChangeInvalidInput
+		return app.ErrChangeInvalidInput
 	}
 	config, err := s.config(ctx, domain.ChangeIDRequest{ID: req.ID})
 	if err != nil {
 		return err
 	}
-	req.ChangeTypes = intersectTypes(normalizeTypes(req.ChangeTypes), config.ChangeTypes)
-	return s.repo.UpdateChangeTypes(ctx, req)
+	req.ChangeTypes = normalizeTypes(req.ChangeTypes)
+	for _, kind := range req.ChangeTypes {
+		if !slices.Contains(config.ChangeTypes, kind) {
+			return app.ErrChangeInvalidReference
+		}
+	}
+	return s.repo.UpdateTypes(ctx, req)
 }
 
 // UpdateTitle leaves internal whitespace normalization to the database procedure.
 func (s *Service) UpdateTitle(ctx context.Context, req domain.ChangeUpdateTitleRequest) error {
 	req.Title = strings.TrimSpace(req.Title)
 	if req.ID <= 0 || req.Title == "" {
-		return apperror.ErrChangeInvalidInput
+		return app.ErrChangeInvalidInput
 	}
 	if err := s.repo.Exists(ctx, domain.ChangeIDRequest{ID: req.ID}); err != nil {
 		return err
@@ -163,14 +129,14 @@ func (s *Service) UpdateTitle(ctx context.Context, req domain.ChangeUpdateTitleR
 func (s *Service) UpdatePhase(ctx context.Context, req domain.ChangeUpdatePhaseRequest) error {
 	req.ChangePhase = strings.TrimSpace(req.ChangePhase)
 	if req.ID <= 0 || req.ChangePhase == "" {
-		return apperror.ErrChangeInvalidInput
+		return app.ErrChangeInvalidInput
 	}
 	config, err := s.config(ctx, domain.ChangeIDRequest{ID: req.ID})
 	if err != nil {
 		return err
 	}
 	if !slices.Contains(config.ChangePhases, req.ChangePhase) {
-		return apperror.ErrChangeInvalidReference
+		return app.ErrChangeInvalidReference
 	}
 	return s.repo.UpdatePhase(ctx, req)
 }
@@ -178,7 +144,7 @@ func (s *Service) UpdatePhase(ctx context.Context, req domain.ChangeUpdatePhaseR
 // UpdateEpic checks same-project association; separate preflight and CALL are not atomic.
 func (s *Service) UpdateEpic(ctx context.Context, req domain.ChangeUpdateEpicRequest) error {
 	if req.ID <= 0 || invalidOptionalID(req.EpicID) {
-		return apperror.ErrChangeInvalidInput
+		return app.ErrChangeInvalidInput
 	}
 	project, err := s.repo.Project(ctx, domain.ChangeIDRequest{ID: req.ID})
 	if err != nil {
@@ -190,7 +156,7 @@ func (s *Service) UpdateEpic(ctx context.Context, req domain.ChangeUpdateEpicReq
 			return err
 		}
 		if parent != project {
-			return apperror.ErrChangeInvalidReference
+			return app.ErrChangeInvalidReference
 		}
 	}
 	return s.repo.UpdateEpic(ctx, req)
@@ -199,7 +165,7 @@ func (s *Service) UpdateEpic(ctx context.Context, req domain.ChangeUpdateEpicReq
 // UpdateOpen requires an explicit boolean, including false.
 func (s *Service) UpdateOpen(ctx context.Context, req domain.ChangeUpdateOpenRequest) error {
 	if req.ID <= 0 || req.Open == nil {
-		return apperror.ErrChangeInvalidInput
+		return app.ErrChangeInvalidInput
 	}
 	return s.repo.UpdateOpen(ctx, req)
 }
@@ -208,7 +174,7 @@ func (s *Service) UpdateOpen(ctx context.Context, req domain.ChangeUpdateOpenReq
 func (s *Service) UpdatePRUrl(ctx context.Context, req domain.ChangeUpdatePRUrlRequest) error {
 	req.PRUrl = strings.TrimSpace(req.PRUrl)
 	if req.ID <= 0 || req.PRUrl == "" {
-		return apperror.ErrChangeInvalidInput
+		return app.ErrChangeInvalidInput
 	}
 	if err := validatePRURL(req.PRUrl); err != nil {
 		return err
@@ -216,60 +182,12 @@ func (s *Service) UpdatePRUrl(ctx context.Context, req domain.ChangeUpdatePRUrlR
 	return s.repo.UpdatePRUrl(ctx, req)
 }
 
-// SetDocument appends a document through the database's atomic workflow.
-func (s *Service) SetDocument(ctx context.Context, req domain.ChangeDocumentSetRequest) error {
-	req.DocType = strings.TrimSpace(req.DocType)
-	req.Body = strings.TrimSpace(req.Body)
-	if req.ID <= 0 || req.DocType == "" || req.Body == "" || req.AgentEdit == nil {
-		return apperror.ErrChangeInvalidInput
-	}
-	config, err := s.config(ctx, domain.ChangeIDRequest{ID: req.ID})
-	if err != nil {
-		return err
-	}
-	if !slices.Contains(config.ChangeDocs, req.DocType) {
-		return apperror.ErrChangeInvalidReference
-	}
-	return s.repo.SetDocument(ctx, req)
-}
-
-// UpdateBrief maps the specialized operation to the shared document request.
-func (s *Service) UpdateBrief(ctx context.Context, req domain.ChangeUpdateBriefRequest) error {
-	return s.SetDocument(ctx, domain.ChangeDocumentSetRequest{ID: req.ID, DocType: "brief", Body: req.Brief, AgentEdit: req.AgentEdit})
-}
-
-// UpdateSpec maps the specialized operation to the shared document request.
-func (s *Service) UpdateSpec(ctx context.Context, req domain.ChangeUpdateSpecRequest) error {
-	return s.SetDocument(ctx, domain.ChangeDocumentSetRequest{ID: req.ID, DocType: "spec", Body: req.Spec, AgentEdit: req.AgentEdit})
-}
-
-// UpdatePR maps the specialized operation to the shared document request.
-func (s *Service) UpdatePR(ctx context.Context, req domain.ChangeUpdatePRRequest) error {
-	return s.SetDocument(ctx, domain.ChangeDocumentSetRequest{ID: req.ID, DocType: "pr", Body: req.PR, AgentEdit: req.AgentEdit})
-}
-
-// DeleteChange leaves actual FK conflicts and affected-row semantics to one DELETE.
-func (s *Service) DeleteChange(ctx context.Context, req domain.ChangeIDRequest) error {
+// Delete leaves actual FK conflicts and affected-row semantics to one DELETE.
+func (s *Service) Delete(ctx context.Context, req domain.ChangeIDRequest) error {
 	if req.ID <= 0 {
-		return apperror.ErrChangeInvalidInput
+		return app.ErrChangeInvalidInput
 	}
 	return s.repo.Delete(ctx, req)
-}
-
-func normalizeIDs(ids []int) ([]int, error) {
-	normalized := make([]int, 0, len(ids))
-	seen := make(map[int]struct{}, len(ids))
-	for _, id := range ids {
-		if id <= 0 {
-			return nil, apperror.ErrChangeInvalidInput
-		}
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		normalized = append(normalized, id)
-	}
-	return normalized, nil
 }
 
 func normalizeTypes(values []string) []string {
@@ -289,20 +207,6 @@ func normalizeTypes(values []string) []string {
 	return normalized
 }
 
-func intersectTypes(values, available []string) []string {
-	availableSet := make(map[string]struct{}, len(available))
-	for _, value := range available {
-		availableSet[value] = struct{}{}
-	}
-	filtered := make([]string, 0, len(values))
-	for _, value := range values {
-		if _, ok := availableSet[value]; ok {
-			filtered = append(filtered, value)
-		}
-	}
-	return filtered
-}
-
 func invalidOptionalID(value *int) bool {
 	return value != nil && *value <= 0
 }
@@ -310,10 +214,18 @@ func invalidOptionalID(value *int) bool {
 func validatePRURL(value string) error {
 	parsed, err := url.Parse(value)
 	if err != nil {
-		return apperror.Validation(err, apperror.ErrChangeInvalidInput)
+		return app.Validation(err, app.ErrChangeInvalidInput)
 	}
 	if parsed.Host == "" || (!strings.EqualFold(parsed.Scheme, "https") && !strings.EqualFold(parsed.Scheme, "http")) {
-		return apperror.ErrChangeInvalidInput
+		return app.ErrChangeInvalidInput
 	}
 	return nil
+}
+
+// UpdateAfterChange stores the nullable prerequisite; the database enforces the reference.
+func (s *Service) UpdateAfterChange(ctx context.Context, req domain.ChangeUpdateAfterChangeRequest) error {
+	if req.ID <= 0 || invalidOptionalID(req.AfterChangeID) {
+		return app.ErrChangeInvalidInput
+	}
+	return s.repo.UpdateAfterChange(ctx, req)
 }

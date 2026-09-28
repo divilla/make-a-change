@@ -1,0 +1,45 @@
+app: apihydra
+kind: steps
+metadata:
+  name: testcase-01-init
+spec:
+  steps:
+  - request:
+      method: POST
+      path: /api/v1/project/create
+      body: '{"name":"P4 workflow"}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        p4_project: .id
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"project_id":${p4_project},"name":"P4 epic"}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        p4_epic: .id
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${p4_project},"title":"P4 testcase workflow","brief":"Original brief"}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        p4_change: .id
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"id":${p4_change},"epic_id":${p4_epic}}'
+    response:
+      expected_status: 204

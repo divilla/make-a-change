@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"mch_api/internal/app"
 	"mch_api/internal/domain"
-	apperror "mch_api/internal/error"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -57,21 +57,21 @@ func TestServiceRejectsInvalidTestCaseInput(t *testing.T) {
 			r := &fakeTestCaseRepository{}
 			s := NewService(r)
 			ctx := context.Background()
-			_, err := s.ListTestCases(ctx, domain.TestCaseListRequest{ChangeID: id})
-			require.ErrorIs(t, err, apperror.ErrTestCaseInvalidInput)
-			_, err = s.CreateTestCase(ctx, domain.TestCaseCreateRequest{ChangeID: id, Scenario: "valid"})
-			require.ErrorIs(t, err, apperror.ErrTestCaseInvalidInput)
-			require.ErrorIs(t, s.UpdateTestCase(ctx, domain.TestCaseUpdateRequest{ID: id, Scenario: "valid"}), apperror.ErrTestCaseInvalidInput)
-			require.ErrorIs(t, s.UpdateTestCaseDone(ctx, domain.TestCaseUpdateDoneRequest{ID: id}), apperror.ErrTestCaseInvalidInput)
-			require.ErrorIs(t, s.DeleteTestCase(ctx, domain.TestCaseIDRequest{ID: id}), apperror.ErrTestCaseInvalidInput)
+			_, err := s.List(ctx, domain.TestCaseListRequest{ChangeID: id})
+			require.ErrorIs(t, err, app.ErrTestCaseInvalidInput)
+			_, err = s.Create(ctx, domain.TestCaseCreateRequest{ChangeID: id, Scenario: "valid"})
+			require.ErrorIs(t, err, app.ErrTestCaseInvalidInput)
+			require.ErrorIs(t, s.UpdateTestCase(ctx, domain.TestCaseUpdateRequest{ID: id, Scenario: "valid"}), app.ErrTestCaseInvalidInput)
+			require.ErrorIs(t, s.UpdateTestCaseDone(ctx, domain.TestCaseUpdateDoneRequest{ID: id}), app.ErrTestCaseInvalidInput)
+			require.ErrorIs(t, s.Delete(ctx, domain.TestCaseIDRequest{ID: id}), app.ErrTestCaseInvalidInput)
 			require.Empty(t, r.calls)
 		})
 	}
 	for _, blank := range []string{"", " \t\n "} {
 		s := NewService(nil)
-		_, err := s.CreateTestCase(context.Background(), domain.TestCaseCreateRequest{ChangeID: 1, Scenario: blank})
-		require.ErrorIs(t, err, apperror.ErrTestCaseInvalidInput)
-		require.ErrorIs(t, s.UpdateTestCase(context.Background(), domain.TestCaseUpdateRequest{ID: 1, Scenario: blank}), apperror.ErrTestCaseInvalidInput)
+		_, err := s.Create(context.Background(), domain.TestCaseCreateRequest{ChangeID: 1, Scenario: blank})
+		require.ErrorIs(t, err, app.ErrTestCaseInvalidInput)
+		require.ErrorIs(t, s.UpdateTestCase(context.Background(), domain.TestCaseUpdateRequest{ID: 1, Scenario: blank}), app.ErrTestCaseInvalidInput)
 	}
 }
 
@@ -82,17 +82,17 @@ func TestServiceNormalizesAndDelegatesOnce(t *testing.T) {
 		for _, cause := range []error{nil, errors.New("repository failure")} {
 			r := &fakeTestCaseRepository{err: cause, cases: []domain.TestCase{{ID: id, ChangeID: id}}}
 			s := NewService(r)
-			got, err := s.ListTestCases(ctx, domain.TestCaseListRequest{ChangeID: id})
+			got, err := s.List(ctx, domain.TestCaseListRequest{ChangeID: id})
 			require.ErrorIs(t, err, cause)
 			require.Equal(t, r.cases, got)
-			created, err := s.CreateTestCase(ctx, domain.TestCaseCreateRequest{ChangeID: id, Scenario: " \tfirst\n "})
+			createdAt, err := s.Create(ctx, domain.TestCaseCreateRequest{ChangeID: id, Scenario: " \tfirst\n "})
 			require.ErrorIs(t, err, cause)
-			require.Equal(t, 3, created.ID)
+			require.Equal(t, 3, createdAt.ID)
 			require.ErrorIs(t, s.UpdateTestCase(ctx, domain.TestCaseUpdateRequest{ID: id, Scenario: " \tsecond\n "}), cause)
 			for _, done := range []bool{true, false} {
 				require.ErrorIs(t, s.UpdateTestCaseDone(ctx, domain.TestCaseUpdateDoneRequest{ID: id, Done: done}), cause)
 			}
-			require.ErrorIs(t, s.DeleteTestCase(ctx, domain.TestCaseIDRequest{ID: id}), cause)
+			require.ErrorIs(t, s.Delete(ctx, domain.TestCaseIDRequest{ID: id}), cause)
 			require.Equal(t, []any{domain.TestCaseListRequest{ChangeID: id}, domain.TestCaseCreateRequest{ChangeID: id, Scenario: "first"}, domain.TestCaseUpdateRequest{ID: id, Scenario: "second"}, domain.TestCaseUpdateDoneRequest{ID: id, Done: true}, domain.TestCaseUpdateDoneRequest{ID: id}, domain.TestCaseIDRequest{ID: id}}, r.calls)
 			for _, actual := range r.contexts {
 				require.Same(t, ctx, actual)

@@ -4,10 +4,10 @@ services:
     build: ./docker/postgres/
     container_name: mch-postgres
     ports:
-      - 5432:5432
+      - "15432:5432"
     environment:
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: ekupi_scrape
+      POSTGRES_DB: changes
 #    command: "postgres -c 'bytea_output=escape'"
     volumes:
       - mch-postgres-data:/var/lib/postgresql

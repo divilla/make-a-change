@@ -1,0 +1,347 @@
+app: apihydra
+kind: steps
+metadata:
+  name: epic-02-main
+spec:
+  steps:
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"project_id":${epic_project}}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"project_id":${epic_missing_project}}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"project_id":${epic_project},"name":" APIHydra epic "}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        epic_id: .id
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"project_id":${epic_project}}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${epic_id},"name":"APIHydra epic","done_tc":0,"total_tc":0,"completed":0}]'
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '{"id":${epic_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${epic_id},"project_id":${epic_project},"name":"APIHydra epic","change_count":0}'
+      expected_types:
+        .created_at:
+        - string
+        .updated_at:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{"id":${epic_id},"name":" APIHydra epic renamed "}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '{"id":${epic_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"name":"APIHydra epic renamed"}'
+      expected_types:
+        if .updated_at > .created_at then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{"id":${epic_id},"name":"APIHydra epic renamed"}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '{"id":${epic_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"name":"APIHydra epic renamed"}'
+      expected_types:
+        if .updated_at > .created_at then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${epic_project},"title":"Epic child","brief":"Brief"}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        epic_change: .id
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"id":${epic_change},"epic_id":${epic_id}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '{"id":${epic_id}}'
+    response:
+      expected_status: 409
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '{"id":${epic_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"change_count":1,"done_tc":0,"total_tc":0}'
+  - request:
+      method: POST
+      path: /api/v1/change/delete
+      body: '{"id":${epic_change}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '{"id":${epic_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"change_count":0}'
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '{"id":"bad","project_id":"bad","name":3}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '{}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '{"id":-1,"project_id":-1,"name":""}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"id":"bad","project_id":"bad","name":3}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"id":-1,"project_id":-1,"name":""}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{"id":"bad","project_id":"bad","name":3}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{"id":-1,"project_id":-1,"name":""}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '{"id":"bad","project_id":"bad","name":3}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '{}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '{"id":-1,"project_id":-1,"name":""}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"id":"bad","project_id":"bad","name":3}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"id":-1,"project_id":-1,"name":""}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"id":${epic_id},"project_id":${epic_project},"name":" \t "}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{"id":${epic_id},"project_id":${epic_project},"name":" \t "}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '{"id":${epic_missing},"name":"Missing"}'
+    response:
+      expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{"id":${epic_missing},"name":"Missing"}'
+    response:
+      expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '{"id":${epic_missing},"name":"Missing"}'
+    response:
+      expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"project_id":${epic_missing_project},"name":"Missing parent"}'
+    response:
+      expected_status: 404

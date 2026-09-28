@@ -1,122 +1,172 @@
-# APIHydra final 016 campaign
+# Standalone APIHydra tests
 
-Final supervisor verification on 2026-09-28 includes both native recorder-cleanup
-and independently reviewed emergency command fixes. All five required/separate
-checks pass; unit **911/925** and APIHydra **864/925** remain unchanged. Final
-source, command exits and review evidence are in the
-[current checkpoint](../agents/backend-refactor-checkpoint.md#final-supervisor-verification).
-Production source is unchanged from merged R6 `62d9f4f`; tooling and suite
-provenance records the tested branch diff. No future squash hash is claimed.
-
-`make -C backend api-test` passes **864/925 = 93.4054%** production statements,
-above the >=90% gate. Independent unit coverage passes **911/925 = 98.4865%**,
-above strict >95%. All required checks and the complete legacy HTTP/SQL suite
-pass. No production code, dependency, database schema or public API changed.
-
-## Full campaign and evidence
-
-The authoritative command from the repository root is:
+Start the development application separately (`make run` from the repository
+root), then run the suite directly:
 
 ```sh
+cd backend/apih-tests
+apih
+```
+
+From the repository root, run the same suite manually or with statement coverage:
+
+```sh
+apih backend/apih-tests
 make -C backend api-test
 ```
 
-Do not select the suite root with apih: phases require different database states.
-A manual `apih --parallelism 0 backend/apih-tests/normal` selection against an
-independently prepared owned healthy server is diagnostic only, and cannot
-establish full-campaign coverage. The Make target validates all YAML before
-setup, then selects the three copied subtrees explicitly, serially.
+`root.yaml` selects the server, currently `http://127.0.0.1:8080`. Edit its
+`base_url` to target another development/test backend. The server must already
+be healthy and initialized with the current application schema and default
+configuration. Change creation requires `backlog` and `brief`; doc and type
+cases capture configured values from `project/config` (nonempty project/epic
+doc types and change types). No specific demo records or identity values are
+required. Do not target production.
 
-| Phase | Requests | Exit | Server PID | Database state |
-| --- | --- | --- | --- | --- |
-| normal | 408 | 0 | 1302702 | Original initialized/seeded cluster |
-| outage | 28 | 0 | 1302702 | Confirmed stopped, no postmaster PID file |
-| recovery | 22 | 0 | 1302702 | Same data directory/socket restarted with pg_ctl readiness |
+The suite always uses HTTP endpoints and captures for setup and cleanup. Neither
+invocation performs SQL setup, seeding, truncation or database shutdown.
 
-All **458 requests** pass. Server binary SHA256:
-`985bb47273813443fc1efd57cc8f8da535e92c16cf573876e9140bf7a51cf8da`.
-One covered build, one server, one cluster initialization, one init/seed/fixture
-load and one counters directory serve the campaign. No pool replacement or
-HTTP warmup occurs after database restart. Both health aliases' first recovery
-requests pass200. Original server shutdown exits0; final DB stop and cleanup
-pass before counter conversion/reporting.
+Manual `apih` uses the already-running server selected by `root.yaml`.
+`make -C backend api-test` instead builds an instrumented backend, starts it on
+`API_TEST_PORT` (default 19080) against the existing `DATABASE_URL` (default
+`postgres://postgres:postgres@localhost:15432/changes`), and runs a private copy
+of the unchanged suite against that server. The existing application server is
+left running. Override `DATABASE_URL` or `API_TEST_PORT` through Make/environment
+when necessary; an occupied test port is rejected. No database tools are needed
+by the runner; the database must already exist with the application schema and
+configuration.
 
-Normal, post-outage/pre-write, and post-recovery SQL postconditions all pass
-with ON_ERROR_STOP. They prove exact retained rows, timestamps, absent attempted
-inserts, restored testcase state, and append-only P3 documents. SQL receives no
-Go coverage credit. Initial HTTP health probes only synchronize startup and can
-contribute counters. No per-phase statement percentage is inferred from the one
-process. Unit and legacy profiles are never merged into APIHydra data.
+The Make target streams standard APIHydra output, gracefully stops only its own
+server to flush Go counters, then prints a blank line and actual statement
+coverage by package and in total. Coverage is diagnostic, with no minimum gate.
+Test, build, shutdown and invalid-profile failures still fail the command and
+remove invalid success reports. Readiness checks use TCP, not extra HTTP calls;
+the measured counters include server startup, APIHydra traffic and shutdown.
+Fresh artifacts in `backend/.coverage/api/` include `coverage.out`, `report.txt`,
+`result.json`, the source denominator, suite hashes, provenance and server/build
+logs. Unit profiles are never merged into the API measurement. Bare `apih` on an
+ordinary server does not collect statement counters.
 
-Fresh ignored artifacts live under `backend/.coverage/api/`:
+## Setup, captures and cleanup
 
-- `suite-manifest.json`: every decoded YAML document, source hash, kind,
-  executable phase/selection, stage depth and request count.
-- `suite-inputs.json`: hashes of all copied files, including the port-substituted
-  root and SQL; `suite/` retains the exact executed input tree.
-- `campaign.json`: ordered phase command/start/end/exit/error, PID/binary hash,
-  DB transitions, SQL postconditions, shutdown and cleanup results. Incomplete
-  runs retain failed/not-reached evidence and remove success reports/profiles.
-- `provenance.json`: HEAD/diff, backend input hashes (including untracked files),
-  actual apih identity/hash, commands and campaign evidence; DB source hashes
-  are in campaign evidence. `denominator.json`/`packages.json`, native counters,
-  `coverage.out`, `report.txt`, `result.json` and runner/server/PG logs preserve
-  the independently audited statement measurement.
+Seven independent endpoint groups run concurrently in APIHydra's default mode1.
+Within each group the numbered files run serially:
 
-The [checkpoint](../agents/backend-refactor-checkpoint.md) records exact command
-exits, criterion/test mapping and factory handoff. The
-[gap inventory](../agents/final-coverage-gaps.md) lists every production file,
-package total and uncovered function/source block with its practical obstacle.
-Implementation source hashes still match all three measured provenance records;
-reporting Markdown was written after measurement.
+```text
+apih-tests/
+  root.yaml
+  change/{01-init,02-main,03-post}.yaml
+  config/{01-init,02-main,03-post}.yaml
+  doc/{01-init,02-main,03-post}.yaml
+  epic/{01-init,02-main,03-post}.yaml
+  health/02-main.yaml
+  project/{01-init,02-main,03-post}.yaml
+  testcase/{01-init,02-main,03-post}.yaml
+```
 
-## Operation inventory and behavioral assertions
+`01-init.yaml` creates cross-module prerequisites through endpoints.
+`02-main.yaml` exercises behavior and checks it through independent reads.
+`03-post.yaml` deletes the group's remaining records through endpoints, in
+foreign-key dependency order. Some deletions happen in the main workflow to
+verify missing-record and conflict behavior.
 
-The [contract ledger](../agents/backend-contracts.md) and route-constructor/tooling
-tests retain **34/34 = 100%** successfully exercised method/path operations:
-16 change, 6 project, 5 epic, 5 testcase, 2 health. Operation coverage is a
-separate diagnostic, not the statement gate. No operations were omitted.
+Response captures supply all successful entity IDs. Missing mutation targets
+are captured IDs deleted earlier by the same group, never guesses at unused
+IDs. The only literal positive-ID probes are read-only oversized not-found
+cases. Config CRUD uses a unique slug derived from its own API-created project
+ID, so repeated and concurrent runs do not collide or modify shared configs.
+Global project/config list assertions allow other application data to coexist.
+The suite never updates or deletes the application's default configuration.
 
-| Selection | Retained or added contract |
-| --- | --- |
-| normal/error-steps.yaml | Seven malformed/missing/unknown-route contracts |
-| normal/health-steps.yaml | Both registered healthy aliases |
-| normal/p2-steps.yaml | 91 project/config/epic assertions; original nine global-list rows remain in order with two reserved projects appended |
-| normal/p3/steps.yaml | 212 change/document assertions: UUIDs, config, current/history reads, explicit mutations, FK failures, sanitization and missing/invalid cases |
-| normal/p4/steps.yaml | 96 testcase lifecycle/count/validation/deletion assertions |
-| outage/steps.yaml | Both503 safe degraded bodies; valid project/epic/change/documents/artifacts/testcase requests return live500 generic envelopes; direct insert/update/delete failures; procedure-preflight failures; invalid request still400 |
-| recovery/steps.yaml | Both health aliases200; independent retained parents/counts/names/scenarios/document reads; update204 followed by read/restore; create201 with phase-local capture, list/count read, delete204 and empty list/count read |
+For example, an ID captured as `.id` is reused unquoted in a JSON request:
 
-Four original normal files are byte-identical after relocation. P2 changes only
-its initial project-list expectation; every previous row/order/value remains.
-Stage ancestry is preserved beneath normal. Fixture IDs3001/3002,3101/3102,
-3201/3202,3301/3302 and3401 are independent of normal dynamic records. Existing
-P2/P3 fixtures are unchanged. Explicit reserved IDs do not advance identity
-sequences; the bounded campaign's generated identities remain below1000.
-Captures reset per invocation; only recovery-local IDs are consumed in recovery.
-No fixture reload/reset occurs between phases.
+```yaml
+response:
+  expected_status: 201
+  capture:
+    project_id: .id
+# A later request in the same group:
+request:
+  method: POST
+  path: /api/v1/project/details
+  body: '{"id":${project_id}}'
+```
 
-## Limits and historical evidence
+Captures are run-scoped and write-once. Each group has unique variable names and
+uses only its own earlier producers. Captured JSON strings retain their quotes,
+so requests interpolate them as JSON values as well. Interpolation is supported
+in request/expected bodies, not jq selectors. These rules follow the
+[APIHydra manual](https://github.com/divilla/apihydra/blob/master/docs/user-manual/apih.md#variables-and-captures).
+Tooling tests validate capture ordering/uniqueness, mutation ownership, all
+registered operations and the absence of SQL fixtures.
 
-Installed apih remains `v0.1.1-0.20260907061551-c3947513e2a4`, revision
-`c3947513e2a4b948ce732dec60e090a5e83be744`; help and the pinned local manual were
-inspected. Requests use a five-second bound; phase commands have a300-second
-bound. Mutation/error files use `retries: -1`; zero would inherit retries.
-Transport errors/timeouts cannot satisfy expected500. No Debug directives,
-assertion retries, schema corruption, production fault hooks or hidden skipped
-phases were introduced.
+Select a whole group for a focused run so its setup and cleanup are included:
 
-APIHydra compares object subsets and skips empty expected bodies. Existing
-`TestAPIRegisteredContracts`, `TestChangeAPIContracts`,
-`TestDocumentAPIShapeAndExplicitBooleans` and `TestTestCaseAPIExactContracts`
-remain authoritative for exact ID-only201 and truly empty204 contracts.
-Separate preflight/query/procedure races and append-only polymorphic document
-semantics remain as documented in the ledger; no atomicity claim was added.
+```sh
+apih backend/apih-tests/doc
+```
 
-The first016 real run passed normal/outage but failed101 on a timezone-specific
-HTTP timestamp expectation. It produced no valid profile. That assertion was
-replaced with SQL timestamp equality before recovery writes; all subsequent
-complete runs pass. Historical R6 measurement was837/925; the additional27
-covered statements are genuine outage/error/health behavior. The61 API-uncovered
-statements and14 unit-uncovered main statements are listed exactly in the gap
-report. Both targets pass; no required scenario remains failed, skipped or blocked.
+Use mode0 or the default mode1; mode2 would run dependent init/main/post files
+concurrently. A terminal failure or interruption may prevent post files from
+running. Such partial runs can leave their own records; a new run still creates
+fresh IDs and a fresh config slug. Docs and history retained by normal API
+deletion semantics remain retained: no direct database cleanup or unsupported
+delete endpoint is used.
+
+## Verified results — 2026-09-28
+
+The standalone suite previously passed repeated manual runs on the development
+server. The restored coverage target also passes all the same HTTP requests
+against its own instrumented server, using the existing database without SQL
+setup. `make -C backend tooling-test` passed 33 Python tests plus the Go validator
+tests. `make -C backend coverage` passed with fresh 1031/1045 (98.6603%) unit
+statements; the only unit gap is 14 startup/main statements in cmd/server.
+The standalone YAML and its port 8080 URL remain unchanged.
+
+| Group | Requests | Successful registered operations |
+| --- | ---: | ---: |
+| change | 143 | 11 |
+| config | 50 | 5 |
+| doc | 88 | 4 |
+| epic | 50 | 5 |
+| health | 3 | 2 |
+| project | 46 | 6 |
+| testcase | 89 | 5 |
+| **Total** | **469** | **38/38 (100%)** |
+
+Each operation has a successful case; malformed payloads, validation failures,
+missing records, reference conflicts, independent mutation reads, doc history,
+HTML sanitization and testcase completion counters are also exercised. Every
+request declares an explicit expected status. Nineteen YAML steps files pass.
+
+Fresh API **statement coverage is 943/1045 (90.2392%)**, with no threshold gate.
+The previous 980/1045 result belongs to the removed SQL/outage campaign; it is
+not reused here. Operation coverage above is a separate metric.
+
+| Production package | Covered/total statements | Uncovered |
+| --- | ---: | ---: |
+| cmd/server | 76/93 | 17 |
+| internal/app | 40/52 | 12 |
+| internal/change | 261/275 | 14 |
+| internal/config | 96/101 | 5 |
+| internal/doc | 112/127 | 15 |
+| internal/domain | 0/0 | 0 |
+| internal/epic | 106/114 | 8 |
+| internal/health | 16/21 | 5 |
+| internal/project | 109/116 | 7 |
+| internal/testcase | 96/105 | 9 |
+| pkg/config | 23/31 | 8 |
+| pkg/markdown | 8/10 | 2 |
+| **Total** | **943/1045** | **102** |
+
+No production package is excluded. Domain has no executable statements. Gaps
+include startup errors, database failures, scan/iteration failures and service
+validation not reached through already-validated HTTP requests.
+
+Cases requiring database outages, missing selected configs, assigning a custom
+config to a project, artificial wide counters or direct history-table inspection
+are outside the standalone suite: the public API cannot set up those states
+without altering shared configuration or accessing the database. The removed
+SQL-fixture and SQL-postcondition assertions are not claimed as passing here.
+Application unit tests retain the corresponding error and validation contracts.
+See the [route ledger](../agents/backend-contracts.md) for individual operations.

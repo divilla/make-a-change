@@ -1,0 +1,1017 @@
+app: apihydra
+kind: steps
+metadata:
+  name: change-02-main
+spec:
+  steps:
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":$change_project}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":$change_project,"title":" APIHydra  change ","brief":" Initial brief "}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        change_id: .id
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${change_id},"project_id":${change_project},"title":"APIHydra  change","change_phase":"backlog","after_change_id":null,"epic_id":null,"open":true,"done_tc":0,"total_tc":0,"completed":0,"pr_url":""}'
+      expected_types:
+        .created_at:
+        - string
+        .updated_at:
+        - string
+        .ref_uuid:
+        - string
+        if (.ref_uuid | test("^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")) then 0 else 1 end:
+        - zero
+      capture:
+        change_uuid: .ref_uuid
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${change_project},"title":"Duplicate UUID","brief":"Brief","ref_uuid":${change_uuid}}'
+    response:
+      expected_status: 409
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${change_project},"title":"Prerequisite","brief":"Brief"}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        change_prerequisite: .id
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{"id":${change_id},"after_change_id":${change_prerequisite}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"after_change_id":${change_prerequisite}}'
+  - request:
+      method: POST
+      path: /api/v1/change/delete
+      body: '{"id":${change_prerequisite}}'
+    response:
+      expected_status: 409
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":${change_project}}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${change_id}},{"id":${change_prerequisite}}]'
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{"id":${change_id},"after_change_id":null}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"after_change_id":null}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{"id":${change_id},"after_change_id":${change_missing}}'
+    response:
+      expected_status: 400
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"id":${change_id},"epic_id":${change_epic}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"epic_id":${change_epic},"epic_name":"APIHydra change epic"}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"id":${change_id},"epic_id":${change_other_epic}}'
+    response:
+      expected_status: 400
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"id":${change_id},"epic_id":${change_missing_epic}}'
+    response:
+      expected_status: 400
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"id":${change_id},"epic_id":null}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"epic_id":null,"epic_name":null}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/update-title
+      body: '{"id":${change_id},"title":" Updated   title "}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"title":"Updated title"}'
+      expected_types:
+        if .updated_at > .created_at then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/change/update-title
+      body: '{"id":${change_id},"title":"Updated title"}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"title":"Updated title"}'
+      expected_types:
+        if .updated_at > .created_at then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/change/update-phase
+      body: '{"id":${change_id},"change_phase":${change_phase}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"change_phase":${change_phase}}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-phase
+      body: '{"id":${change_id},"change_phase":"__apih_unknown_phase__"}'
+    response:
+      expected_status: 400
+  - request:
+      method: POST
+      path: /api/v1/change/update-types
+      body: '{"id":${change_id},"change_types":[${change_type},${change_type},"  "]}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"change_types":[${change_type}]}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-types
+      body: '{"id":${change_id},"change_types":["__apih_unknown_type__"]}'
+    response:
+      expected_status: 400
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"change_types":[${change_type}]}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-types
+      body: '{"id":${change_id},"change_types":[]}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"change_types":[]}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-types
+      body: '{"id":${change_id},"change_types":null}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/update-types
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '{"id":${change_id},"pr_url":" https://example.com/pull/123 "}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"pr_url":"https://example.com/pull/123"}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-open
+      body: '{"id":${change_id},"open":false}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"open":false}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-open
+      body: '{"id":${change_id},"open":true}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"open":true}'
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":"bad"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":0}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":-1}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_missing}}'
+    response:
+      expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":"bad"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":0}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":-1}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":${change_missing_project}}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":"bad","title":"Valid","brief":"Valid"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":0,"title":"Valid","brief":"Valid"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":-1,"title":"Valid","brief":"Valid"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${change_missing_project},"title":"Valid","brief":"Valid"}'
+    response:
+      expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/change/update-title
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-title
+      body: '{"title":"Valid","id":"bad"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-title
+      body: '{"title":"Valid","id":0}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-title
+      body: '{"title":"Valid","id":-1}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-title
+      body: '{"title":"Valid","id":${change_missing}}'
+    response:
+      expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"epic_id":null,"id":"bad"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"epic_id":null,"id":0}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"epic_id":null,"id":-1}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"epic_id":null,"id":${change_missing}}'
+    response:
+      expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{"after_change_id":null,"id":"bad"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{"after_change_id":null,"id":0}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{"after_change_id":null,"id":-1}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{"after_change_id":null,"id":${change_missing}}'
+    response:
+      expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/change/update-phase
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-phase
+      body: '{"change_phase":"backlog","id":"bad"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-phase
+      body: '{"change_phase":"backlog","id":0}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-phase
+      body: '{"change_phase":"backlog","id":-1}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-phase
+      body: '{"change_phase":"backlog","id":${change_missing}}'
+    response:
+      expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/change/update-open
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-open
+      body: '{"open":true,"id":"bad"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-open
+      body: '{"open":true,"id":0}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-open
+      body: '{"open":true,"id":-1}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-open
+      body: '{"open":true,"id":${change_missing}}'
+    response:
+      expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/change/update-types
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-types
+      body: '{"change_types":[],"id":"bad"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-types
+      body: '{"change_types":[],"id":0}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-types
+      body: '{"change_types":[],"id":-1}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-types
+      body: '{"change_types":[],"id":${change_missing}}'
+    response:
+      expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '{"pr_url":"https://example.com/pr","id":"bad"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '{"pr_url":"https://example.com/pr","id":0}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '{"pr_url":"https://example.com/pr","id":-1}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '{"pr_url":"https://example.com/pr","id":${change_missing}}'
+    response:
+      expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/change/delete
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/delete
+      body: '{"id":"bad"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/delete
+      body: '{"id":0}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/delete
+      body: '{"id":-1}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/delete
+      body: '{"id":${change_missing}}'
+    response:
+      expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/change/update-title
+      body: '{"id":${change_id},"title":""}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-phase
+      body: '{"id":${change_id},"change_phase":""}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${change_project},"title":"","brief":"Brief"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${change_project},"title":"Title","brief":""}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-title
+      body: '{"id":${change_id},"title":" \t "}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-phase
+      body: '{"id":${change_id},"change_phase":" \t "}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${change_project},"title":" \t ","brief":"Brief"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${change_project},"title":"Title","brief":" \t "}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-open
+      body: '{"id":${change_id},"open":null}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-open
+      body: '{"id":${change_id},"open":"true"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-open
+      body: '{"id":${change_id},"open":1}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-open
+      body: '{"id":${change_id},"open":[]}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-open
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"id":${change_id},"epic_id":-1}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"id":${change_id},"epic_id":0}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"id":${change_id},"epic_id":"bad"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{"id":${change_id},"after_change_id":-1}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{"id":${change_id},"after_change_id":0}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{"id":${change_id},"after_change_id":"bad"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '{"id":${change_id},"pr_url":""}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '{"id":${change_id},"pr_url":" "}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '{"id":${change_id},"pr_url":"javascript:alert(1)"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '{"id":${change_id},"pr_url":"ftp://example.com/file"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '{"id":${change_id},"pr_url":"https:///path"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '{"id":${change_id},"pr_url":"%zz"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${change_project},"title":"Title","brief":"Brief","ref_uuid":"invalid"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-types
+      body: '{"id":${change_id},"change_types":"feature"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/update-types
+      body: '{"id":${change_id},"change_types":[1]}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"title":"Updated title","open":true,"after_change_id":null,"epic_id":null,"pr_url":"https://example.com/pull/123","change_types":[]}'

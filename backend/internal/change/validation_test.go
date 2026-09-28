@@ -2,7 +2,7 @@ package change
 
 import (
 	"errors"
-	apperror "mch_api/internal/error"
+	"mch_api/internal/app"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -15,29 +15,23 @@ import (
 func TestAPIValidationCauses(t *testing.T) {
 	for _, tc := range []struct{ path, body, field, rule, bindMessage string }{
 		{"list", `{"project_id":-1,"scenario":"valid"}`, "project_id", "min", "list"},
-		{"get", `{"id":-1,"scenario":"valid"}`, "id", "min", "get"},
+		{"details", `{"id":-1,"scenario":"valid"}`, "id", "min", "details"},
 		{"create", `{"project_id":-1,"scenario":"valid"}`, "project_id", "min", "create"},
+		{"update-after-change", `{"id":-1}`, "id", "min", "after change"},
 		{"update-epic", `{"id":-1,"scenario":"valid"}`, "id", "min", "epic"},
-		{"update-change-types", `{"id":-1,"scenario":"valid"}`, "id", "min", "types"},
+		{"update-types", `{"id":-1,"scenario":"valid"}`, "id", "min", "types"},
 		{"update-title", `{"id":-1,"scenario":"valid"}`, "id", "min", "title"},
-		{"update-brief", `{"id":-1,"scenario":"valid"}`, "id", "min", "brief"},
-		{"update-spec", `{"id":-1,"scenario":"valid"}`, "id", "min", "spec"},
-		{"update-pr", `{"id":-1,"scenario":"valid"}`, "id", "min", "pr"},
 		{"update-pr-url", `{"id":-1,"scenario":"valid"}`, "id", "min", "pr url"},
 		{"update-phase", `{"id":-1,"scenario":"valid"}`, "id", "min", "phase"},
 		{"update-open", `{"id":-1,"scenario":"valid"}`, "id", "min", "open"},
 		{"delete", `{"id":-1,"scenario":"valid"}`, "id", "min", "delete"},
-		{"documents", `{"id":-1,"scenario":"valid"}`, "id", "min", "documents"},
-		{"set-document", `{"id":-1,"scenario":"valid"}`, "id", "min", "document"},
-		{"set-document", `{"id":1,"body":"valid"}`, "doc_type", "required", "document"},
-		{"set-document", `{"id":1,"doc_type":"spec"}`, "body", "required", "document"},
 	} {
 		t.Run(tc.path+tc.field, func(t *testing.T) {
 			for _, binding := range []bool{false, true} {
 				repo := &fakeChangeRepository{}
 				config := defaultConfig()
 				e := echo.New()
-				NewAPI(e, NewService(repo, Renderer{}, config))
+				NewAPI(e, NewService(repo, config))
 				var returned error
 				e.HTTPErrorHandler = func(c *echo.Context, err error) {
 					returned = err
@@ -59,7 +53,7 @@ func TestAPIValidationCauses(t *testing.T) {
 					require.NotNil(t, errors.Unwrap(returned))
 					require.JSONEq(t, `{"message":"invalid change `+tc.bindMessage+` payload"}`, rec.Body.String())
 				} else {
-					require.ErrorIs(t, returned, apperror.ErrChangeInvalidInput)
+					require.ErrorIs(t, returned, app.ErrChangeInvalidInput)
 					var validation validate.Errors
 					require.ErrorAs(t, returned, &validation)
 					require.Contains(t, validation, tc.field)

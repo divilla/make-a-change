@@ -1,4 +1,4 @@
-// Command validate-apih-suite rejects APIHydra breakpoints before coverage runs.
+// Command validate-apih-suite checks standalone APIHydra suites.
 package main
 
 import (
@@ -46,7 +46,7 @@ func inspect(node *yaml.Node, seen map[*yaml.Node]bool) error {
 				key = key.Alias
 			}
 			if key != nil && strings.EqualFold(key.Value, "debug") {
-				return fmt.Errorf("Debug directives are prohibited in the full campaign (line %d)", node.Content[i].Line)
+				return fmt.Errorf("Debug directives are prohibited in the full suite (line %d)", node.Content[i].Line)
 			}
 		}
 	}
@@ -121,8 +121,8 @@ func decodeStrict(data []byte, target any) error {
 }
 
 func suiteManifest(directory string) (manifest, error) {
-	result := manifest{Phases: []string{"normal", "outage", "recovery"}}
-	counts := map[string]int{"normal": 0, "outage": 0, "recovery": 0}
+	result := manifest{Phases: []string{"standalone"}}
+	counts := map[string]int{"standalone": 0}
 	rootCount := 0
 	defaultsDirs := map[string]bool{}
 	err := filepath.WalkDir(directory, func(path string, entry fs.DirEntry, err error) error {
@@ -188,7 +188,12 @@ func suiteManifest(directory string) (manifest, error) {
 			if err := decodeStrict(spec, &value); err != nil {
 				return fmt.Errorf("%s: %w", path, err)
 			}
-			phase, _, found := strings.Cut(rel, "/")
+			selection, _, found := strings.Cut(rel, "/")
+			phase := selection
+			switch selection {
+			case "change", "config", "doc", "epic", "health", "project", "testcase":
+				phase = "standalone"
+			}
 			if _, ok := counts[phase]; !found || !ok {
 				return fmt.Errorf("unclassified executable: %s", rel)
 			}
@@ -200,7 +205,7 @@ func suiteManifest(directory string) (manifest, error) {
 					return fmt.Errorf("%s: each step needs method, path and explicit HTTP status", rel)
 				}
 			}
-			item.Phase, item.Selection, item.Steps = phase, phase, len(value.Steps)
+			item.Phase, item.Selection, item.Steps = phase, selection, len(value.Steps)
 			counts[phase] += len(value.Steps)
 		default:
 			return fmt.Errorf("%s: unknown document kind %q", path, doc.Kind)

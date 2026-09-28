@@ -3,8 +3,8 @@ package project
 import (
 	"context"
 	"errors"
+	"mch_api/internal/app"
 	"mch_api/internal/domain"
-	apperror "mch_api/internal/error"
 	"reflect"
 	"strings"
 	"testing"
@@ -97,7 +97,7 @@ func TestRepositoryReads(t *testing.T) {
 	now := time.Now()
 	failure := errors.New("read failed")
 	values := []any{7, "Name", "custom", int32(42), now, now, 70000}
-	for _, op := range []string{"get", "list"} {
+	for _, op := range []string{"details", "list"} {
 		scenarios := []string{"success", "scan", "missing", "wrapped missing"}
 		if op == "list" {
 			scenarios = []string{"success", "empty", "scan", "query", "iteration"}
@@ -123,21 +123,21 @@ func TestRepositoryReads(t *testing.T) {
 				case "missing":
 					row.err = pgx.ErrNoRows
 				case "wrapped missing":
-					row.err = apperror.Wrap(pgx.ErrNoRows, "query")
+					row.err = app.Wrap(pgx.ErrNoRows, "query")
 				}
 				p.row = row
 				p.rows = rows
-				if op == "get" {
-					got, err := r.Get(p.ctx, domain.ProjectIDRequest{ID: 7})
+				if op == "details" {
+					got, err := r.Details(p.ctx, domain.ProjectIDRequest{ID: 7})
 					switch scenario {
 					case "scan", "query":
 						require.ErrorIs(t, err, failure)
 					case "missing", "wrapped missing":
 						require.ErrorIs(t, err, pgx.ErrNoRows)
-						require.ErrorIs(t, err, apperror.ErrProjectNotFound)
+						require.ErrorIs(t, err, app.ErrProjectNotFound)
 					default:
 						require.NoError(t, err)
-						require.Equal(t, domain.Project{ID: 7, Name: "Name", Config: "custom", LastRef: 42, Created: now, Modified: now, ChangeCount: 70000}, got)
+						require.Equal(t, domain.Project{ID: 7, Name: "Name", Config: "custom", LastRef: 42, CreatedAt: now, UpdatedAt: now, ChangeCount: 70000}, got)
 					}
 					require.Contains(t, p.sql, "where v.id = $1")
 				} else {
@@ -153,13 +153,13 @@ func TestRepositoryReads(t *testing.T) {
 							require.Empty(t, got)
 						} else {
 							require.Len(t, got, 1)
-							require.Equal(t, domain.Project{ID: 7, Name: "Name", Config: "custom", LastRef: 42, Created: now, Modified: now, ChangeCount: 70000}, got[0])
+							require.Equal(t, domain.Project{ID: 7, Name: "Name", Config: "custom", LastRef: 42, CreatedAt: now, UpdatedAt: now, ChangeCount: 70000}, got[0])
 						}
 					}
 					require.Equal(t, scenario != "query", rows.closed)
-					require.Contains(t, p.sql, "order by v.modified desc, v.id desc")
+					require.Contains(t, p.sql, "order by v.updated_at desc, v.id desc")
 				}
-				require.Contains(t, p.sql, "v.id, v.name, p.config, p.last_ref, v.created, v.modified, v.change_count from public.vw_project v join public.project p on p.id = v.id")
+				require.Contains(t, p.sql, "v.id, v.name, p.config, p.last_ref, v.created_at, v.updated_at, v.change_count from public.vw_project v join public.project p on p.id = v.id")
 			})
 		}
 	}
@@ -170,7 +170,7 @@ func TestRepositorySingleStatementMutations(t *testing.T) {
 	failure := errors.New("write failed")
 	fk := &pgconn.PgError{Code: "23503"}
 	for _, op := range []string{"create", "update", "delete"} {
-		for _, cause := range []error{nil, failure, pgx.ErrNoRows, apperror.Wrap(fk, "constraint")} {
+		for _, cause := range []error{nil, failure, pgx.ErrNoRows, app.Wrap(fk, "constraint")} {
 			affectedRows := []string{"1"}
 			if cause == nil && op != "create" {
 				affectedRows = []string{"0", "1"}
@@ -196,19 +196,19 @@ func TestRepositorySingleStatementMutations(t *testing.T) {
 				case "update":
 					p.args = []any{7, "Name"}
 					err = r.Update(p.ctx, domain.ProjectUpdateRequest{ID: 7, Name: "Name"})
-					require.Equal(t, "update public.project set name = $2, modified = now() where id = $1", p.sql)
+					require.Equal(t, "update public.project set name = $2, updated_at = now() where id = $1", p.sql)
 					if cause == nil && affected == "0" {
-						want = apperror.ErrProjectNotFound
+						want = app.ErrProjectNotFound
 					}
 				case "delete":
 					p.args = []any{7}
 					err = r.Delete(p.ctx, domain.ProjectIDRequest{ID: 7})
 					require.Equal(t, "delete from public.project where id = $1", p.sql)
 					if cause == nil && affected == "0" {
-						want = apperror.ErrProjectNotFound
+						want = app.ErrProjectNotFound
 					}
 					if errors.Is(cause, fk) {
-						want = apperror.ErrProjectHasChanges
+						want = app.ErrProjectHasChanges
 					}
 				}
 				require.ErrorIs(t, err, want)
@@ -233,7 +233,7 @@ func TestRepositorySelectedConfig(t *testing.T) {
 			require.ErrorIs(t, err, cause)
 		}
 		if errors.Is(cause, pgx.ErrNoRows) {
-			require.ErrorIs(t, err, apperror.ErrProjectConfigNotFound)
+			require.ErrorIs(t, err, app.ErrProjectConfigNotFound)
 		}
 		require.Contains(t, p.sql, "c.slug, c.project_docs, c.epic_docs, c.change_docs, c.change_phases, c.change_colors, c.change_types")
 		require.Contains(t, p.sql, "join public.config c on c.slug = p.config where p.id = $1")

@@ -2,7 +2,7 @@ package testcase
 
 import (
 	"errors"
-	apperror "mch_api/internal/error"
+	"mch_api/internal/app"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -49,7 +49,7 @@ func TestAPIValidationCauses(t *testing.T) {
 					require.NotNil(t, errors.Unwrap(returned))
 					require.JSONEq(t, `{"message":"invalid test case `+tc.bindMessage+` payload"}`, rec.Body.String())
 				} else {
-					require.ErrorIs(t, returned, apperror.ErrTestCaseInvalidInput)
+					require.ErrorIs(t, returned, app.ErrTestCaseInvalidInput)
 					var validation validate.Errors
 					require.ErrorAs(t, returned, &validation)
 					require.Contains(t, validation, tc.field)

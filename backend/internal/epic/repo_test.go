@@ -3,8 +3,8 @@ package epic
 import (
 	"context"
 	"errors"
+	"mch_api/internal/app"
 	"mch_api/internal/domain"
-	apperror "mch_api/internal/error"
 	"reflect"
 	"strings"
 	"testing"
@@ -97,7 +97,7 @@ func TestRepositoryReads(t *testing.T) {
 	now := time.Now()
 	failure := errors.New("read failed")
 	values := []any{7, 9, "Name", int64(70000), int64(100000), 80000, now, now}
-	for _, op := range []string{"get", "list"} {
+	for _, op := range []string{"details", "list"} {
 		scenarios := []string{"success", "scan", "missing", "wrapped missing"}
 		if op == "list" {
 			scenarios = []string{"success", "empty", "scan", "query", "iteration"}
@@ -123,21 +123,21 @@ func TestRepositoryReads(t *testing.T) {
 				case "missing":
 					row.err = pgx.ErrNoRows
 				case "wrapped missing":
-					row.err = apperror.Wrap(pgx.ErrNoRows, "query")
+					row.err = app.Wrap(pgx.ErrNoRows, "query")
 				}
 				p.row = row
 				p.rows = rows
-				if op == "get" {
-					got, err := r.Get(p.ctx, domain.EpicIDRequest{ID: 7})
+				if op == "details" {
+					got, err := r.Details(p.ctx, domain.EpicIDRequest{ID: 7})
 					switch scenario {
 					case "scan", "query":
 						require.ErrorIs(t, err, failure)
 					case "missing", "wrapped missing":
 						require.ErrorIs(t, err, pgx.ErrNoRows)
-						require.ErrorIs(t, err, apperror.ErrEpicNotFound)
+						require.ErrorIs(t, err, app.ErrEpicNotFound)
 					default:
 						require.NoError(t, err)
-						require.Equal(t, domain.Epic{ID: 7, ProjectID: 9, Name: "Name", DoneTC: 70000, TotalTC: 100000, ChangeCount: 80000, Created: now, Modified: now}, got)
+						require.Equal(t, domain.Epic{ID: 7, ProjectID: 9, Name: "Name", DoneTC: 70000, TotalTC: 100000, ChangeCount: 80000, CreatedAt: now, UpdatedAt: now}, got)
 					}
 					require.Contains(t, p.sql, "where id = $1")
 				} else {
@@ -153,13 +153,13 @@ func TestRepositoryReads(t *testing.T) {
 							require.Empty(t, got)
 						} else {
 							require.Len(t, got, 1)
-							require.Equal(t, domain.Epic{ID: 7, ProjectID: 9, Name: "Name", DoneTC: 70000, TotalTC: 100000, ChangeCount: 80000, Created: now, Modified: now}, got[0])
+							require.Equal(t, domain.Epic{ID: 7, ProjectID: 9, Name: "Name", DoneTC: 70000, TotalTC: 100000, ChangeCount: 80000, CreatedAt: now, UpdatedAt: now}, got[0])
 						}
 					}
 					require.Equal(t, scenario != "query", rows.closed)
-					require.Contains(t, p.sql, "order by created, id")
+					require.Contains(t, p.sql, "order by created_at, id")
 				}
-				require.Contains(t, p.sql, "id, project_id, name, done_tc, total_tc, change_count, created, modified from public.vw_epic")
+				require.Contains(t, p.sql, "id, project_id, name, done_tc, total_tc, change_count, created_at, updated_at from public.vw_epic")
 			})
 		}
 	}
@@ -170,7 +170,7 @@ func TestRepositorySingleStatementMutations(t *testing.T) {
 	failure := errors.New("write failed")
 	fk := &pgconn.PgError{Code: "23503"}
 	for _, op := range []string{"create", "update", "delete"} {
-		for _, cause := range []error{nil, failure, pgx.ErrNoRows, apperror.Wrap(fk, "constraint")} {
+		for _, cause := range []error{nil, failure, pgx.ErrNoRows, app.Wrap(fk, "constraint")} {
 			affectedRows := []string{"1"}
 			if cause == nil && op != "create" {
 				affectedRows = []string{"0", "1"}
@@ -193,24 +193,24 @@ func TestRepositorySingleStatementMutations(t *testing.T) {
 					}
 					require.Equal(t, "insert into public.epic (project_id, name) select id, $2 from public.project where id = $1 returning id", p.sql)
 					if errors.Is(cause, pgx.ErrNoRows) || errors.Is(cause, fk) {
-						want = apperror.ErrEpicNotFound
+						want = app.ErrEpicNotFound
 					}
 				case "update":
 					p.args = []any{7, "Name"}
 					err = r.Update(p.ctx, domain.EpicUpdateRequest{ID: 7, Name: "Name"})
-					require.Equal(t, "update public.epic set name = $2, modified = now() where id = $1", p.sql)
+					require.Equal(t, "update public.epic set name = $2, updated_at = now() where id = $1", p.sql)
 					if cause == nil && affected == "0" {
-						want = apperror.ErrEpicNotFound
+						want = app.ErrEpicNotFound
 					}
 				case "delete":
 					p.args = []any{7}
 					err = r.Delete(p.ctx, domain.EpicIDRequest{ID: 7})
 					require.Equal(t, "delete from public.epic where id = $1", p.sql)
 					if cause == nil && affected == "0" {
-						want = apperror.ErrEpicNotFound
+						want = app.ErrEpicNotFound
 					}
 					if errors.Is(cause, fk) {
-						want = apperror.ErrEpicHasChanges
+						want = app.ErrEpicHasChanges
 					}
 				}
 				require.ErrorIs(t, err, want)

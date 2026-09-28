@@ -1,5 +1,8 @@
 app: apihydra
 kind: root
 spec:
-  base_url: http://127.0.0.1:19080
+  base_url: http://127.0.0.1:8080
   timeout: 5
+  retries: -1
+  headers:
+    Content-Type: application/json

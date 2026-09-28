@@ -12,8 +12,8 @@ type (
 		TotalTC     int64     `json:"total_tc"`
 		Completed   int64     `json:"completed"`
 		ChangeCount int       `json:"change_count"`
-		Created     time.Time `json:"created"`
-		Modified    time.Time `json:"modified"`
+		CreatedAt   time.Time `json:"created_at"`
+		UpdatedAt   time.Time `json:"updated_at"`
 	}
 
 	// EpicListRequest defines EpicListRequest values.

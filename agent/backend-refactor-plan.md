@@ -1,5 +1,20 @@
 # Backend refactor plan
 
+Current HTTP-test layout (2026-09-28 standalone follow-up): run `apih` from
+`backend/apih-tests/`, or `make -C backend api-test` from the repository root,
+with manual runs using `root.yaml` (default port 8080). The Make target restores
+statement reporting through an owned instrumented backend (default port 19080)
+against the existing `DATABASE_URL`, without database setup or lifecycle control.
+Endpoint groups run in parallel with serial numbered init/main/post files.
+All test data is created and cleaned up through endpoints with captured IDs;
+SQL fixtures, outage/recovery suites and the database lifecycle runner are removed.
+API statement coverage is no longer a gate by explicit user clarification.
+Fresh API coverage is 943/1045 (90.2392%), diagnostic with no threshold gate.
+The earlier 980/1045 measurement belongs to the removed SQL/outage suite.
+See [the suite guide](../backend/apih-tests/coverage.md) for current commands.
+Earlier P/R descriptions below are historical, including old coverage gates.
+
+
 Status: P0–P4, R1, separate011 validation-cause repair, R3–R6 and016 implementation/local review are completed. R2 had no actionable duplicate cleanup. Final016 retains all408 normal requests and adds28 outage plus22 recovery requests on one owned server/database lifecycle. All34 operations remain covered. Fresh unit911/925 (98.4865%) and APIHydra864/925 (93.4054%) pass both strict gates. Required checks and the separate legacy campaign are recorded in [the current checkpoint](../backend/agents/backend-refactor-checkpoint.md). Factory native review resolved a cleanup evidence failure; final native review of `da7481f` passed with no findings. Dev merge/hash verification completes the handoff. No future squash hash is asserted. No stage/production promotion.
 
 Historical preparation inspection: 2026-09-28 at `7a89905`, branch `change/004-refactor-backend`. Preparation findings and proposed pass tables below are historical baseline evidence, not current failures or outstanding P0 work.
@@ -175,7 +190,11 @@ make -C backend coverage-html
 
 The gate must use covered/total statement counts before display rounding, not an arithmetic average of package percentages. Verify that all inventoried production packages are represented. A failed/partial run never passes the gate.
 
-## APIHydra integration tests and genuine 90% code coverage
+## Historical APIHydra integration tests and 90% code coverage
+
+Superseded by the standalone HTTP-only suite described above. The following
+records the earlier instrumentation requirements; do not use them to run or
+extend the current suite.
 
 ### Tool and suite layout
 

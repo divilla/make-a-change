@@ -2,8 +2,8 @@ package project
 
 import (
 	"context"
+	"mch_api/internal/app"
 	"mch_api/internal/domain"
-	apperror "mch_api/internal/error"
 	"strings"
 )
 
@@ -17,24 +17,24 @@ func NewService(projectRepository Repository) *Service {
 	return &Service{repo: projectRepository}
 }
 
-// ListProjects executes ListProjects behavior.
-func (s *Service) ListProjects(ctx context.Context) ([]domain.Project, error) {
+// List executes List behavior.
+func (s *Service) List(ctx context.Context) ([]domain.Project, error) {
 	return s.repo.List(ctx)
 }
 
-// GetProject executes GetProject behavior.
-func (s *Service) GetProject(ctx context.Context, req domain.ProjectIDRequest) (domain.Project, error) {
+// Details executes Details behavior.
+func (s *Service) Details(ctx context.Context, req domain.ProjectIDRequest) (domain.Project, error) {
 	if req.ID <= 0 {
-		return domain.Project{}, apperror.ErrProjectInvalidInput
+		return domain.Project{}, app.ErrProjectInvalidInput
 	}
-	return s.repo.Get(ctx, req)
+	return s.repo.Details(ctx, req)
 }
 
-// CreateProject executes CreateProject behavior.
-func (s *Service) CreateProject(ctx context.Context, req domain.ProjectCreateRequest) (domain.ProjectIDRequest, error) {
+// Create executes Create behavior.
+func (s *Service) Create(ctx context.Context, req domain.ProjectCreateRequest) (domain.ProjectIDRequest, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
-		return domain.ProjectIDRequest{}, apperror.ErrProjectInvalidInput
+		return domain.ProjectIDRequest{}, app.ErrProjectInvalidInput
 	}
 	return s.repo.Create(ctx, req)
 }
@@ -43,15 +43,15 @@ func (s *Service) CreateProject(ctx context.Context, req domain.ProjectCreateReq
 func (s *Service) UpdateProject(ctx context.Context, req domain.ProjectUpdateRequest) error {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.ID <= 0 || req.Name == "" {
-		return apperror.ErrProjectInvalidInput
+		return app.ErrProjectInvalidInput
 	}
 	return s.repo.Update(ctx, req)
 }
 
-// DeleteProject executes DeleteProject behavior.
-func (s *Service) DeleteProject(ctx context.Context, req domain.ProjectIDRequest) error {
+// Delete executes Delete behavior.
+func (s *Service) Delete(ctx context.Context, req domain.ProjectIDRequest) error {
 	if req.ID <= 0 {
-		return apperror.ErrProjectInvalidInput
+		return app.ErrProjectInvalidInput
 	}
 	return s.repo.Delete(ctx, req)
 }
@@ -59,7 +59,7 @@ func (s *Service) DeleteProject(ctx context.Context, req domain.ProjectIDRequest
 // Config returns only the selected configuration, without a default fallback.
 func (s *Service) Config(ctx context.Context, req domain.ProjectIDRequest) (domain.Config, error) {
 	if req.ID <= 0 {
-		return domain.Config{}, apperror.ErrProjectInvalidInput
+		return domain.Config{}, app.ErrProjectInvalidInput
 	}
 	return s.repo.Config(ctx, req)
 }

@@ -1,10 +1,27 @@
 # Backend route, schema and error ledger — validation-cause repair
 
 Authority: read-only `../../docs/backend-architecture.md`, `../../db/init.sql`
-and `../../db/seed.sql`. The inventory is **34 registered method/path pairs**:
-32 after P2 plus documents and set-document. APIHydra exercises all 16 change,
-11 project/epic, five testcase and two health operations successfully (34/34).
-No authentication middleware or invented authentication contract exists.
+and `../../db/seed.sql`. The current inventory is **38 registered method/path
+pairs**: 11 change, four doc, five config, 11 project/epic, five testcase and two
+health operations. APIHydra exercises all 38. The current shared doc/config
+contract is recorded at the end of this ledger; numbered P/R sections preserve
+historical refactor evidence and are superseded where they describe removed doc
+routes, get routes, old timestamp names, or silent change-type filtering.
+No authentication middleware or session/token implementation is added.
+
+
+Current HTTP tests use only `backend/apih-tests/`, with seven endpoint groups
+running concurrently in APIHydra mode1. Each group executes numbered init/main/post
+files serially. Setup and cleanup use API endpoints and captured response IDs only.
+Plain `apih` from the suite directory and `make -C backend api-test` run the same
+469 requests against the configured backend. SQL fixtures, forced outages and
+the database lifecycle runner have been removed. All 38 operations have passing
+success cases. The Make target now runs an owned instrumented backend against
+the existing database and reports 943/1045 (90.2392%) statements without a gate;
+manual `apih` still uses the configured running server.
+The legacy Go HTTP harness and runner have been removed. See
+[the current suite guide](../apih-tests/coverage.md) for the runnable layout and
+latest coverage; older P/R sections below retain historical evidence.
 
 ## 011 validation-cause repair
 
@@ -37,7 +54,7 @@ This is an error-contract repair; R2 remains no actionable duplicate cleanup.
 
 ## R1 removal audit and retained contracts
 
-Audited clean specification HEAD `12ae35ac5d1cbbc77e9460e1fae1e0476bb199b8`
+Audited clean specification HEAD `12ae35ac5d1cbbc77e9460e1fae1e0469bb199b8`
 over merged P4 `b9f630f0466d93381cf8e8935563672c92c0f6b1` before editing.
 Local dev and origin/dev both identify that P4 commit; HEAD adds only spec010.
 Backend production/test symbol and import inspection, route registration,
@@ -72,38 +89,32 @@ statement counts, baseline lint debt and the factory/R2 handoff.
 | --- | --- | --- | --- | --- |
 | GET | /api/v1/health | 200 health JSON after pool ping; 503 degraded JSON on ping error | Retain; exact body unit tested | pass |
 | GET | /api/health | Same health alias and database ping | Retain | pass |
-| POST | /api/v1/project/list | 200 array; current view columns; explicit deterministic ordering | P2 aligned | pass (normal/p2-steps.yaml) |
-| POST | /api/v1/project/get | 200 database-backed details | P2 aligned | pass (normal/p2-steps.yaml) |
-| POST | /api/v1/project/config | 200 selected config slug and all six ordered arrays; unavailable join 404 | P2 aligned, no fallback | pass (normal/p2-steps.yaml) |
-| POST | /api/v1/project/create | 201 {id}; one INSERT returning ID | P2 aligned | pass (normal/p2-steps.yaml) |
-| POST | /api/v1/project/update | 204 empty; one name/modified UPDATE, including same name | P2 aligned | pass (normal/p2-steps.yaml) |
-| POST | /api/v1/project/delete | 204 empty; one DELETE, FK conflict 409, missing 404 | P2 aligned | pass (normal/p2-steps.yaml) |
-| POST | /api/v1/epic/list | 200 array; current view columns; explicit deterministic ordering | P2 aligned | pass (normal/p2-steps.yaml) |
-| POST | /api/v1/epic/get | 200 database-backed details | P2 aligned | pass (normal/p2-steps.yaml) |
-| POST | /api/v1/epic/create | 201 {id}; one INSERT returning ID | P2 aligned | pass (normal/p2-steps.yaml) |
-| POST | /api/v1/epic/update | 204 empty; one name/modified UPDATE, including same name | P2 aligned | pass (normal/p2-steps.yaml) |
-| POST | /api/v1/epic/delete | 204 empty; one DELETE, FK conflict 409, missing 404 | P2 aligned | pass (normal/p2-steps.yaml) |
-| POST | /api/v1/change/list | 200 current vw_change_list columns; service int64 completion; modified DESC,id; [] for absent project | P3 aligned | pass (normal/p3/steps.yaml) |
-| POST | /api/v1/change/get | 200 current vw_change_details; flat fields, nullable references, no inline docs/version/testcases; 404 missing | P3 aligned | pass (normal/p3/steps.yaml) |
-| POST | /api/v1/change/rendered-artifacts | 200 artifacts wrapper; ordered deduplicated IDs; live-parent current doc spec/pr, sanitized HTML; absent IDs omitted | P3 aligned | pass (normal/p3/steps.yaml) |
-| POST | /api/v1/change/create | 201 exact {id}; selected config must support backlog/brief; UUIDv7 default or preserved caller UUID; fn_change_insert only | P3 aligned | pass (normal/p3/steps.yaml) |
-| POST | /api/v1/change/update-epic | 204; targeted parent/epic project preflight, sp_change_epic_update; nil detaches; no config | P3 aligned | pass (normal/p3/steps.yaml) |
-| POST | /api/v1/change/update-phase | 204; selected-config phase validation then sp_change_phase_update | P3 aligned | pass (normal/p3/steps.yaml) |
-| POST | /api/v1/change/update-open | 204; explicit bool; direct UPDATE open/modified; affected-row 404 | P3 aligned | pass (normal/p3/steps.yaml) |
-| POST | /api/v1/change/update-change-types | 204; ordered trim/dedup/filter using selected config; direct UPDATE types/modified, including clears | P3 aligned | pass (normal/p3/steps.yaml) |
-| POST | /api/v1/change/update-title | 204; existence preflight then sp_change_title_update; DB whitespace normalization; no config | P3 aligned | pass (normal/p3/steps.yaml) |
-| POST | /api/v1/change/update-brief | 204; service maps brief to ChangeDocumentSetRequest; sp_change_doc_set appends | P3 aligned | pass (normal/p3/steps.yaml) |
-| POST | /api/v1/change/update-spec | 204; service maps spec to ChangeDocumentSetRequest; sp_change_doc_set appends | P3 aligned | pass (normal/p3/steps.yaml) |
-| POST | /api/v1/change/update-pr | 204; service maps pr to ChangeDocumentSetRequest; sp_change_doc_set appends | P3 aligned | pass (normal/p3/steps.yaml) |
-| POST | /api/v1/change/update-pr-url | 204; nonblank http(s) URL; direct UPDATE pr_url/modified; affected-row 404; no config | P3 aligned | pass (normal/p3/steps.yaml) |
-| POST | /api/v1/change/delete | 204; direct DELETE; actual testcase FK 409; missing 404; docs retained; no config | P3 aligned | pass (normal/p3/steps.yaml) |
-| POST | /api/v1/change/documents | 200 current docs ordered doc_type,id with raw body and sanitized html; [] if none; live-parent preflight; no config | P3 aligned | pass (normal/p3/steps.yaml) |
-| POST | /api/v1/change/set-document | 204; explicit agent_edit, nonblank kind/body, selected-config validation; sp_change_doc_set appends even identical body | P3 aligned | pass (normal/p3/steps.yaml) |
-| POST | /api/v1/test-case/list | 200 ordered six-column public.testcase array after live-parent check; [] for no cases; missing parent404 | P4 aligned | pass (normal/p4/steps.yaml) |
-| POST | /api/v1/test-case/create | 201 exact {id}; one INSERT returning ID; default false/timestamps; missing parent FK404 | P4 aligned | pass (normal/p4/steps.yaml) |
-| POST | /api/v1/test-case/update | 204 empty; one scenario/modified UPDATE; affected rows0 means404; same-value writes execute | P4 aligned | pass (normal/p4/steps.yaml) |
-| POST | /api/v1/test-case/update-done | 204 empty; one done/modified UPDATE; omitted/null done=false; affected rows0 means404 | P4 aligned | pass (normal/p4/steps.yaml) |
-| POST | /api/v1/test-case/delete | 204 empty; one testcase DELETE; affected rows0 means404; no cascade or reload | P4 aligned | pass (normal/p4/steps.yaml) |
+| POST | /api/v1/project/list | 200 array; current view columns; explicit deterministic ordering | P2 aligned | pass (project/02-main.yaml) |
+| POST | /api/v1/project/details | 200 database-backed details | P2 aligned | pass (project/02-main.yaml) |
+| POST | /api/v1/project/config | 200 selected config slug and all six ordered arrays; unavailable join 404 | P2 aligned, no fallback | pass (project/02-main.yaml) |
+| POST | /api/v1/project/create | 201 {id}; one INSERT returning ID | P2 aligned | pass (project/02-main.yaml) |
+| POST | /api/v1/project/update | 204 empty; one name/updated_at UPDATE, including same name | P2 aligned | pass (project/02-main.yaml) |
+| POST | /api/v1/project/delete | 204 empty; one DELETE, FK conflict 409, missing 404 | P2 aligned | pass (project/02-main.yaml) |
+| POST | /api/v1/epic/list | 200 array; current view columns; explicit deterministic ordering | P2 aligned | pass (epic/02-main.yaml) |
+| POST | /api/v1/epic/details | 200 database-backed details | P2 aligned | pass (epic/02-main.yaml) |
+| POST | /api/v1/epic/create | 201 {id}; one INSERT returning ID | P2 aligned | pass (epic/02-main.yaml) |
+| POST | /api/v1/epic/update | 204 empty; one name/updated_at UPDATE, including same name | P2 aligned | pass (epic/02-main.yaml) |
+| POST | /api/v1/epic/delete | 204 empty; one DELETE, FK conflict 409, missing 404 | P2 aligned | pass (epic/02-main.yaml) |
+| POST | /api/v1/change/list | 200 current vw_change_list columns; service int64 completion; updated_at DESC,id; [] for absent project | P3 aligned | pass (change/02-main.yaml) |
+| POST | /api/v1/change/details | 200 current vw_change_details; flat fields, nullable after_change_id and references, no inline docs/version/testcases; 404 missing | P3 aligned | pass (change/02-main.yaml) |
+| POST | /api/v1/change/create | 201 exact {id}; selected config must support backlog/brief; UUIDv7 default or preserved caller UUID; fn_change_insert only | P3 aligned | pass (change/02-main.yaml) |
+| POST | /api/v1/change/update-epic | 204; targeted parent/epic project preflight, sp_change_epic_update; nil detaches; no config | P3 aligned | pass (change/02-main.yaml) |
+| POST | /api/v1/change/update-phase | 204; selected-config phase validation then sp_change_phase_update | P3 aligned | pass (change/02-main.yaml) |
+| POST | /api/v1/change/update-open | 204; explicit bool; direct UPDATE open/updated_at; affected-row 404 | P3 aligned | pass (change/02-main.yaml) |
+| POST | /api/v1/change/update-types | 204; ordered trim/dedup/validation using selected config; direct UPDATE types/updated_at, including clears | P3 aligned | pass (change/02-main.yaml) |
+| POST | /api/v1/change/update-title | 204; existence preflight then sp_change_title_update; DB whitespace normalization; no config | P3 aligned | pass (change/02-main.yaml) |
+| POST | /api/v1/change/update-pr-url | 204; nonblank http(s) URL; direct UPDATE pr_url/updated_at; affected-row 404; no config | P3 aligned | pass (change/02-main.yaml) |
+| POST | /api/v1/change/delete | 204; direct DELETE; actual testcase FK 409; missing 404; docs retained; no config | P3 aligned | pass (change/02-main.yaml) |
+| POST | /api/v1/test-case/list | 200 ordered six-column public.testcase array after live-parent check; [] for no cases; missing parent404 | P4 aligned | pass (testcase/02-main.yaml) |
+| POST | /api/v1/test-case/create | 201 exact {id}; one INSERT returning ID; default false/timestamps; missing parent FK404 | P4 aligned | pass (testcase/02-main.yaml) |
+| POST | /api/v1/test-case/update | 204 empty; one scenario/updated_at UPDATE; affected rows0 means404; same-value writes execute | P4 aligned | pass (testcase/02-main.yaml) |
+| POST | /api/v1/test-case/update-done | 204 empty; one done/updated_at UPDATE; omitted/null done=false; affected rows0 means404 | P4 aligned | pass (testcase/02-main.yaml) |
+| POST | /api/v1/test-case/delete | 204 empty; one testcase DELETE; affected rows0 means404; no cascade or reload | P4 aligned | pass (testcase/02-main.yaml) |
 
 
 ## P3 change/document contracts and concurrency limits
@@ -350,3 +361,31 @@ Make checks are green; fresh unit911/925 and integration837/925 both pass.
 The14-statement denominator change is Go instrumentation of scoped declarations,
 not removed behavior or excluded production. Separate016 retains final audit
 and owned-DB-outage scope.
+
+## Shared doc and config API update
+
+The earlier P3/P4 notes describe historical contracts. The current contract
+moves all doc routes out of change. Doc reads filter public.doc directly without
+a live-parent preflight. Both lists use descending ID order; current also filters
+current=true. Insert validates the owning project's selected configuration, uses
+project_docs/epic_docs/change_docs for the respective ref_table, and atomically
+appends a row while retiring previous current rows of the same parent/type.
+Created/modified fields are now named created_at/updated_at throughout the backend.
+User/session/token implementation is deferred; existing SQL defaults remain authoritative.
+Change types retain their established normalization but reject values outside
+change_types; phases reject values outside change_phases. Config update replaces all six arrays.
+Config deletion locks project writes while checking references and deleting.
+
+| POST | /api/v1/doc/list | 200 all docs filtered by ref_id/ref_table; id desc | current | doc/02-main.yaml |
+| POST | /api/v1/doc/current | 200 current docs filtered by ref_id/ref_table; id desc | current | doc/02-main.yaml |
+| POST | /api/v1/doc/details | 200 one doc by id; 404 absent | current | doc/02-main.yaml |
+| POST | /api/v1/doc/insert | 201 ID only; append and retire prior current docs | current | doc/02-main.yaml |
+| POST | /api/v1/config/list | 200 configs ordered by slug | current | config/02-main.yaml |
+| POST | /api/v1/config/details | 200 config by slug; 404 absent | current | config/02-main.yaml |
+| POST | /api/v1/config/insert | 201 slug only; 409 duplicate | current | config/02-main.yaml |
+| POST | /api/v1/config/update | 204 full-array replacement; immutable slug; 404 absent | current | config/02-main.yaml |
+| POST | /api/v1/config/delete | 204; 409 referenced by project; 404 absent | current | config/02-main.yaml |
+| POST | /api/v1/change/update-after-change | 204 set nullable prerequisite; 400 invalid FK; 404 absent target | current | change/02-main.yaml |
+
+Change details includes nullable after_change_id. This stores the prerequisite
+reference; no run scheduler or prerequisite-completion enforcement is added.

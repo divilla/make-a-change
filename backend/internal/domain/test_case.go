@@ -5,12 +5,12 @@ import "time"
 type (
 	// TestCase defines TestCase values.
 	TestCase struct {
-		ID       int       `json:"id"`
-		Scenario string    `json:"scenario"`
-		Done     bool      `json:"done"`
-		ChangeID int       `json:"change_id"`
-		Created  time.Time `json:"created"`
-		Modified time.Time `json:"modified"`
+		ID        int       `json:"id"`
+		Scenario  string    `json:"scenario"`
+		Done      bool      `json:"done"`
+		ChangeID  int       `json:"change_id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
 	}
 
 	// TestCaseListRequest defines TestCaseListRequest values.

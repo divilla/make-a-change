@@ -14,7 +14,7 @@ From inside `backend/`, omit `-C backend`.
 | `make -C backend format` | Apply gofumpt/goimports formatting; explicitly modifies Go files. |
 | `make -C backend format-check` | Check formatting without modifying files. |
 | `make -C backend lint` | Run standard golangci-lint checks plus revive, including staticcheck. |
-| `make -C backend vet` | Vet backend production code and the HTTP test harness. |
+| `make -C backend vet` | Vet backend Go packages. |
 | `make -C backend test` | Run uncached short unit tests. |
 | `make -C backend race` | Run uncached short unit tests with the race detector. |
 | `make -C backend tooling-test` | Run isolated tests for backend build/test tooling. |
@@ -22,7 +22,7 @@ From inside `backend/`, omit `-C backend`.
 | `make -C backend coverage` | Run unit tests with race detection and report production statement coverage. |
 | `make -C backend coverage-html` | Rerun coverage and generate an HTML report for investigating gaps. |
 | `make -C backend deps-audit` | Run govulncheck; requires access to the vulnerability database. |
-| `make -C backend api-test` | Run HTTP integration tests against an isolated test database; see migration status below. |
+| `make -C backend api-test` | Run APIHydra on an instrumented backend using the existing database; report statement coverage. |
 | `make -C backend benchmark` | Run benchmarks without ordinary/integration tests. |
 | `make -C backend test_version` | Run checks in Docker using the Go version from go.mod; override with `goversion=X`. |
 | `make -C backend help` | Show the current target list; default when no target is supplied. |
@@ -49,16 +49,27 @@ Successful commands are necessary but not sufficient:
   no tests. Report package-level gaps as well as the aggregate. Evaluate actual
   statement counts, not a rounded percentage or an average of package percentages.
 - API integration tests must use **APIHydra (`apih`)**, with suites under
-  `backend/apih-tests/`, and execute **at least 90% of backend production Go
-  statements** in an instrumented real server. Endpoint/operation coverage is a
-  separate diagnostic and cannot substitute for code coverage. Never merge unit
-  or legacy Go HTTP-test profiles into the APIHydra result.
-- Record the commands actually run, their exit results, both measured coverage
-  totals, and any failing, skipped, or blocked scenarios. Use fresh coverage data
+  `backend/apih-tests/`. A plain `apih` invocation there must pass against a
+  configured, running development backend. Setup, assertions and cleanup use
+  endpoints and captured response values only: no direct database access, SQL
+  fixtures, forced outages or database lifecycle management. Plain `apih` uses
+  the configured running server; `make api-test` may start and stop its own
+  instrumented backend against the existing development database to collect
+  coverage. It must not stop another server. Test-created records are isolated
+  from existing data.
+  API statement coverage is diagnostic, not a completion gate (user clarification,
+  2026-09-28). The Make target reports fresh measured statements after normal
+  APIHydra output and a blank line. Bare `apih` against an uninstrumented server
+  does not measure coverage; endpoint coverage is a separate metric. Never merge
+  unit profiles into the API result or report failed/incomplete runs as passing.
+- Record the commands actually run, their exit results, measured coverage
+  totals (or explicitly unmeasured API coverage), and any failing, skipped, or
+  blocked scenarios. Use fresh coverage data
   for the tested revision; failed or incomplete runs cannot establish a passing
   coverage result. Keep generated artifacts under `backend/` or temporary storage.
-- Run API tests only against an isolated disposable database and a server owned
-  by the test run. `import-db` resets data and is not a routine completion check.
+- Run API tests only against a user-designated development/test server. Never
+  mutate unrelated records. `import-db` resets data and is not an API test step
+  or routine completion check.
 - Missing tools, unavailable services, vulnerability findings, compiler errors,
   and unmet thresholds must remain visible. Do not suppress failures, weaken
   assertions, omit difficult production code, or add artificial tests to make
@@ -67,10 +78,12 @@ Successful commands are necessary but not sufficient:
 
 **Refactor execution policy (user clarification, 2026-09-28):** the numerical
 coverage targets apply to the final refactor result, not to each intermediate
-branch. Implement meaningful tests and measure both suites in every pass;
+branch. Implement meaningful tests and run both suites in every pass; measure
+unit coverage and report API statement coverage only when it is available;
 continue the agreed specification/review/merge sequence when a valid measurement
 is below target. Make coverage gates must still return failure honestly. Aim for
->95% unit and >=90% integration at the end; if legitimate testing falls short,
+>95% unit at the end; the later standalone API requirement supersedes the
+integration coverage gate. If legitimate testing falls short,
 finish the remaining work and report actual counts, uncovered behavior and
 options for discussion. A coverage shortfall alone does not stop implementation
 or merging to dev. This is not permission to hide failing tests, introduce
@@ -78,10 +91,14 @@ regressions, manipulate coverage or claim unmet targets passed. Known baseline
 format/lint issues are tracked for repair in the relevant passes; new failures
 must be repaired. Do not promote to stage or production.
 
-**Current migration status:** P0 implements strict statement-count gates in
-`coverage` and `api-test`; the latter runs APIHydra against an instrumented server
-and an owned disposable PostgreSQL cluster. `legacy-api-test` retains the Go HTTP
-harness separately and contributes no APIHydra coverage. See
+**Current migration status:** `coverage` retains its strict unit statement-count
+gate. `api-test` instruments an owned backend (default port19080) against the
+existing `DATABASE_URL`, runs a private copy of the same standalone suite, and
+reports coverage without a threshold gate. Manual `apih` uses the unchanged
+`backend/apih-tests/root.yaml` URL (default port8080). SQL fixtures, outage/recovery
+suites and database lifecycle management remain removed, as do the Go HTTP
+harness and `legacy-api-test` target. APIHydra mode1 runs endpoint groups in
+parallel and each group's numbered init/main/post files serially. See
 `agent/backend-refactor-plan.md` and the backend checkpoint for current results.
 
 `check` already includes formatting, lint, vet, race tests, and tooling tests;

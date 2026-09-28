@@ -2,8 +2,8 @@ package testcase
 
 import (
 	"context"
+	"mch_api/internal/app"
 	"mch_api/internal/domain"
-	apperror "mch_api/internal/error"
 	"strings"
 )
 
@@ -28,19 +28,19 @@ func NewService(testCaseRepository Repository) *Service {
 	return &Service{repo: testCaseRepository}
 }
 
-// ListTestCases executes ListTestCases behavior.
-func (s *Service) ListTestCases(ctx context.Context, req domain.TestCaseListRequest) ([]domain.TestCase, error) {
+// List executes List behavior.
+func (s *Service) List(ctx context.Context, req domain.TestCaseListRequest) ([]domain.TestCase, error) {
 	if req.ChangeID <= 0 {
-		return nil, apperror.ErrTestCaseInvalidInput
+		return nil, app.ErrTestCaseInvalidInput
 	}
 	return s.repo.List(ctx, req)
 }
 
-// CreateTestCase executes CreateTestCase behavior.
-func (s *Service) CreateTestCase(ctx context.Context, req domain.TestCaseCreateRequest) (domain.TestCaseIDRequest, error) {
+// Create executes Create behavior.
+func (s *Service) Create(ctx context.Context, req domain.TestCaseCreateRequest) (domain.TestCaseIDRequest, error) {
 	req.Scenario = strings.TrimSpace(req.Scenario)
 	if req.ChangeID <= 0 || req.Scenario == "" {
-		return domain.TestCaseIDRequest{}, apperror.ErrTestCaseInvalidInput
+		return domain.TestCaseIDRequest{}, app.ErrTestCaseInvalidInput
 	}
 	return s.repo.Create(ctx, req)
 }
@@ -49,7 +49,7 @@ func (s *Service) CreateTestCase(ctx context.Context, req domain.TestCaseCreateR
 func (s *Service) UpdateTestCase(ctx context.Context, req domain.TestCaseUpdateRequest) error {
 	req.Scenario = strings.TrimSpace(req.Scenario)
 	if req.ID <= 0 || req.Scenario == "" {
-		return apperror.ErrTestCaseInvalidInput
+		return app.ErrTestCaseInvalidInput
 	}
 	return s.repo.Update(ctx, req)
 }
@@ -57,15 +57,15 @@ func (s *Service) UpdateTestCase(ctx context.Context, req domain.TestCaseUpdateR
 // UpdateTestCaseDone executes UpdateTestCaseDone behavior.
 func (s *Service) UpdateTestCaseDone(ctx context.Context, req domain.TestCaseUpdateDoneRequest) error {
 	if req.ID <= 0 {
-		return apperror.ErrTestCaseInvalidInput
+		return app.ErrTestCaseInvalidInput
 	}
 	return s.repo.UpdateDone(ctx, req)
 }
 
-// DeleteTestCase executes DeleteTestCase behavior.
-func (s *Service) DeleteTestCase(ctx context.Context, req domain.TestCaseIDRequest) error {
+// Delete executes Delete behavior.
+func (s *Service) Delete(ctx context.Context, req domain.TestCaseIDRequest) error {
 	if req.ID <= 0 {
-		return apperror.ErrTestCaseInvalidInput
+		return app.ErrTestCaseInvalidInput
 	}
 	return s.repo.Delete(ctx, req)
 }

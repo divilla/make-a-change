@@ -1,0 +1,24 @@
+app: apihydra
+kind: steps
+metadata:
+  name: project-03-post
+spec:
+  steps:
+  - request:
+      method: POST
+      path: /api/v1/project/delete
+      body: '{"id":${project_id}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/project/details
+      body: '{"id":${project_id}}'
+    response:
+      expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/project/delete
+      body: '{"id":${project_id}}'
+    response:
+      expected_status: 404

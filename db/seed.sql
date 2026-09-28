@@ -1,6 +1,7 @@
 begin;
 
 truncate table public.config;
+truncate table public.user;
 
 insert into public.config (
     project_docs,
@@ -16,6 +17,12 @@ insert into public.config (
     array['backlog', 'todo', 'in-progress', 'in-review', 'in-test', 'in-prod'],
     array['15', '14', '10', '11', '12', '13'],
     array['feature', 'fix', 'refactor', 'upgrade', 'chore', 'docs', 'test', 'ci', 'security', 'migration', 'revert', 'spike']
+);
+
+insert into public.user (
+    id, email, name, token
+) values (
+    0, 'vitodivilla@gmail.com', 'superadmin', 'xxx-token'
 );
 
 commit;

@@ -114,7 +114,7 @@ func TestTestCaseAPIInvalidPayloads(t *testing.T) {
 
 func TestTestCaseListExactCurrentFields(t *testing.T) {
 	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
-	r := &fakeTestCaseRepository{cases: []domain.TestCase{{ID: 1 << 40, ChangeID: 42, Scenario: "Current", Done: true, Created: now, Modified: now}}}
+	r := &fakeTestCaseRepository{cases: []domain.TestCase{{ID: 1 << 40, ChangeID: 42, Scenario: "Current", Done: true, CreatedAt: now, UpdatedAt: now}}}
 	e := echo.New()
 	NewAPI(e, NewService(r))
 	req := httptest.NewRequest("POST", "/api/v1/test-case/list", strings.NewReader(`{"change_id":42}`))
@@ -122,6 +122,6 @@ func TestTestCaseListExactCurrentFields(t *testing.T) {
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	require.Equal(t, 200, rec.Code)
-	require.JSONEq(t, `[{"id":1099511627776,"change_id":42,"scenario":"Current","done":true,"created":"2026-09-28T12:00:00Z","modified":"2026-09-28T12:00:00Z"}]`, rec.Body.String())
+	require.JSONEq(t, `[{"id":1099511627776,"change_id":42,"scenario":"Current","done":true,"created_at":"2026-09-28T12:00:00Z","updated_at":"2026-09-28T12:00:00Z"}]`, rec.Body.String())
 	require.Equal(t, []any{domain.TestCaseListRequest{ChangeID: 42}}, r.calls)
 }

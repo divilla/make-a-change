@@ -1,0 +1,48 @@
+app: apihydra
+kind: steps
+metadata:
+  name: change-03-post
+spec:
+  steps:
+  - request:
+      method: POST
+      path: /api/v1/change/delete
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/change/delete
+      body: '{"id":${change_prerequisite}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '{"id":${change_epic}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '{"id":${change_other_epic}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/project/delete
+      body: '{"id":${change_other_project}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/project/delete
+      body: '{"id":${change_project}}'
+    response:
+      expected_status: 204

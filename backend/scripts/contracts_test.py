@@ -16,12 +16,12 @@ class ContractsTest(unittest.TestCase):
                 routes.add((method,(prefix if receiver=='a.g' else '')+path))
         ledger=(BACKEND/'agents/backend-contracts.md').read_text()
         documented=set(re.findall(r'^\| (GET|POST) \| (\S+) \|',ledger,re.M))
-        self.assertEqual(len(routes),34)
+        self.assertEqual(len(routes),38)
         self.assertEqual(routes,documented)
 
     def test_health_suite_has_explicit_contracts_for_both_aliases(self):
-        text=(BACKEND/'apih-tests/normal/health-steps.yaml').read_text()
-        self.assertEqual(re.findall(r'path: (\S+)',text),['/api/v1/health','/api/health'])
+        text=(BACKEND/'apih-tests/health/02-main.yaml').read_text()
+        self.assertEqual(re.findall(r'path: (\S+)',text),['/api/v1/health','/api/health','/api/v1/unknown'])
         self.assertEqual(text.count('expected_status: 200'),2)
-        self.assertEqual(text.count('expected_body:'),2)
+        self.assertEqual(text.count('expected_body:'),3)
         self.assertNotIn('debug:',text)

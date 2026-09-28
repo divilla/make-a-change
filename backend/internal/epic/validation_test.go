@@ -2,7 +2,7 @@ package epic
 
 import (
 	"errors"
-	apperror "mch_api/internal/error"
+	"mch_api/internal/app"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -15,7 +15,7 @@ import (
 func TestAPIValidationCauses(t *testing.T) {
 	for _, tc := range []struct{ path, body, field, rule, bindMessage string }{
 		{"list", `{"project_id":-1,"scenario":"valid"}`, "project_id", "min", "list"},
-		{"get", `{"id":-1,"scenario":"valid"}`, "id", "min", "get"},
+		{"details", `{"id":-1,"scenario":"valid"}`, "id", "min", "details"},
 		{"create", `{"project_id":-1,"scenario":"valid"}`, "project_id", "min", "create"},
 		{"update", `{"id":-1,"scenario":"valid"}`, "id", "min", "update"},
 		{"delete", `{"id":-1,"scenario":"valid"}`, "id", "min", "delete"},
@@ -49,7 +49,7 @@ func TestAPIValidationCauses(t *testing.T) {
 					require.NotNil(t, errors.Unwrap(returned))
 					require.JSONEq(t, `{"message":"invalid epic `+tc.bindMessage+` payload"}`, rec.Body.String())
 				} else {
-					require.ErrorIs(t, returned, apperror.ErrEpicInvalidInput)
+					require.ErrorIs(t, returned, app.ErrEpicInvalidInput)
 					var validation validate.Errors
 					require.ErrorAs(t, returned, &validation)
 					require.Contains(t, validation, tc.field)

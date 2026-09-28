@@ -1,0 +1,23 @@
+app: apihydra
+kind: steps
+metadata:
+  name: project-01-init
+spec:
+  steps:
+  - request:
+      method: POST
+      path: /api/v1/project/create
+      body: '{"name":"APIHydra deleted project"}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        project_missing: .id
+  - request:
+      method: POST
+      path: /api/v1/project/delete
+      body: '{"id":${project_missing}}'
+    response:
+      expected_status: 204

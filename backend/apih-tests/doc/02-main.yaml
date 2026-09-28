@@ -1,0 +1,631 @@
+app: apihydra
+kind: steps
+metadata:
+  name: doc-02-main
+spec:
+  steps:
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_id":${doc_project},"ref_table":"project"}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/doc/current
+      body: '{"ref_id":${doc_project},"ref_table":"project"}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","doc_type":${doc_project_doc},"body":" # Old doc ","agent_edit":false}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        doc_project_old: .id
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_project_old}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${doc_project_old},"ref_id":${doc_project},"ref_table":"project","doc_type":${doc_project_doc},"body":"#
+        Old doc","agent_edit":false,"current":true,"html":"<h1>Old doc</h1>\n"}'
+      expected_types:
+        .created_at:
+        - string
+        .updated_at:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","doc_type":${doc_project_doc},"body":" # Latest doc ","agent_edit":true}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        doc_project_new: .id
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_project_new}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${doc_project_new},"ref_id":${doc_project},"ref_table":"project","doc_type":${doc_project_doc},"body":"#
+        Latest doc","agent_edit":true,"current":true,"html":"<h1>Latest doc</h1>\n"}'
+      expected_types:
+        .created_at:
+        - string
+        .updated_at:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_id":${doc_project},"ref_table":"project"}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_project_new},"current":true},{"id":${doc_project_old},"current":false}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/current
+      body: '{"ref_id":${doc_project},"ref_table":"project"}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_project_new},"current":true}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_project_old}}'
+    response:
+      expected_status: 200
+      expected_body: '{"body":"# Old doc","current":false}'
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","doc_type":"__apih_unknown_doc__","body":"Invalid","agent_edit":false}'
+    response:
+      expected_status: 400
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_id":${doc_epic},"ref_table":"epic"}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/doc/current
+      body: '{"ref_id":${doc_epic},"ref_table":"epic"}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_epic},"ref_table":"epic","doc_type":${doc_epic_doc},"body":" # Old doc ","agent_edit":false}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        doc_epic_old: .id
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_epic_old}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${doc_epic_old},"ref_id":${doc_epic},"ref_table":"epic","doc_type":${doc_epic_doc},"body":"#
+        Old doc","agent_edit":false,"current":true,"html":"<h1>Old doc</h1>\n"}'
+      expected_types:
+        .created_at:
+        - string
+        .updated_at:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_epic},"ref_table":"epic","doc_type":${doc_epic_doc},"body":" # Latest doc ","agent_edit":true}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        doc_epic_new: .id
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_epic_new}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${doc_epic_new},"ref_id":${doc_epic},"ref_table":"epic","doc_type":${doc_epic_doc},"body":"#
+        Latest doc","agent_edit":true,"current":true,"html":"<h1>Latest doc</h1>\n"}'
+      expected_types:
+        .created_at:
+        - string
+        .updated_at:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_id":${doc_epic},"ref_table":"epic"}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_epic_new},"current":true},{"id":${doc_epic_old},"current":false}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/current
+      body: '{"ref_id":${doc_epic},"ref_table":"epic"}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_epic_new},"current":true}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_epic_old}}'
+    response:
+      expected_status: 200
+      expected_body: '{"body":"# Old doc","current":false}'
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_epic},"ref_table":"epic","doc_type":"__apih_unknown_doc__","body":"Invalid","agent_edit":false}'
+    response:
+      expected_status: 400
+  - request:
+      method: POST
+      path: /api/v1/doc/current
+      body: '{"ref_id":${doc_change},"ref_table":"change"}'
+    response:
+      expected_status: 200
+      expected_body: '[{"body":"Original brief","doc_type":"brief","current":true}]'
+      capture:
+        doc_original: .[0].id
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_change},"ref_table":"change","doc_type":"brief","body":" # Old doc ","agent_edit":false}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        doc_change_old: .id
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_change_old}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${doc_change_old},"ref_id":${doc_change},"ref_table":"change","doc_type":"brief","body":"#
+        Old doc","agent_edit":false,"current":true,"html":"<h1>Old doc</h1>\n"}'
+      expected_types:
+        .created_at:
+        - string
+        .updated_at:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_change},"ref_table":"change","doc_type":"brief","body":" # Latest doc ","agent_edit":true}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        doc_change_new: .id
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_change_new}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${doc_change_new},"ref_id":${doc_change},"ref_table":"change","doc_type":"brief","body":"#
+        Latest doc","agent_edit":true,"current":true,"html":"<h1>Latest doc</h1>\n"}'
+      expected_types:
+        .created_at:
+        - string
+        .updated_at:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_id":${doc_change},"ref_table":"change"}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_change_new},"current":true},{"id":${doc_change_old},"current":false},{"id":${doc_original},"current":false}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/current
+      body: '{"ref_id":${doc_change},"ref_table":"change"}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_change_new},"current":true}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_change_old}}'
+    response:
+      expected_status: 200
+      expected_body: '{"body":"# Old doc","current":false}'
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_change},"ref_table":"change","doc_type":"__apih_unknown_doc__","body":"Invalid","agent_edit":false}'
+    response:
+      expected_status: 400
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_change},"ref_table":"change","doc_type":"brief","body":"<script>alert(1)</script>\n\n[unsafe](javascript:alert(1))\n\n**safe**","agent_edit":false}'
+    response:
+      expected_status: 201
+      capture:
+        doc_safe: .id
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_safe}}'
+    response:
+      expected_status: 200
+      expected_body: '{"current":true}'
+      expected_types:
+        if (.html | test("<script|javascript:";"i") | not) and (.html | contains("<strong>safe</strong>")) then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_id":${doc_change},"ref_table":"change"}'
+    response:
+      expected_status: 200
+      expected_types:
+        .:
+        - array
+        if all(.[]; (.html | test("<script|javascript:";"i") | not)) then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/doc/current
+      body: '{"ref_id":${doc_change},"ref_table":"change"}'
+    response:
+      expected_status: 200
+      expected_types:
+        .:
+        - array
+        if all(.[]; (.html | test("<script|javascript:";"i") | not)) then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_id":0,"ref_table":"change"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_id":-1,"ref_table":"change"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_id":"bad","ref_table":"change"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_id":${doc_change},"ref_table":"invalid"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_id":${doc_missing_project},"ref_table":"project"}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/doc/current
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/current
+      body: '{}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/current
+      body: '{"ref_id":0,"ref_table":"change"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/current
+      body: '{"ref_id":-1,"ref_table":"change"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/current
+      body: '{"ref_id":"bad","ref_table":"change"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/current
+      body: '{"ref_id":${doc_change},"ref_table":"invalid"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/current
+      body: '{"ref_id":${doc_missing_project},"ref_table":"project"}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":0}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":-1}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":"bad"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":9223372036854775807}'
+    response:
+      expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":0,"ref_table":"change","doc_type":"brief","body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":-1,"ref_table":"change","doc_type":"brief","body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":"bad","ref_table":"change","doc_type":"brief","body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_change},"ref_table":"invalid","doc_type":"brief","body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_change},"ref_table":"","doc_type":"brief","body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_change},"ref_table":"change","doc_type":"","body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_change},"ref_table":"change","doc_type":" ","body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_change},"ref_table":"change","doc_type":"brief","body":"","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_change},"ref_table":"change","doc_type":"brief","body":" ","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_change},"ref_table":"change","doc_type":"brief","body":null,"agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_change},"ref_table":"change","doc_type":"brief","body":"Valid","agent_edit":null}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_change},"ref_table":"change","doc_type":"brief","body":"Valid","agent_edit":"false"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_change},"ref_table":"change","doc_type":"brief","body":"Valid","agent_edit":1}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_change},"ref_table":"change","doc_type":"brief","body":"Valid"}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_missing_project},"ref_table":"project","doc_type":"brief","body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 404

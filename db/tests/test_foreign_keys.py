@@ -164,13 +164,13 @@ class ForeignKeyTests(DatabaseTestCase):
 
     def test_change_title_and_phase_updates(self):
         project = self.create_project()
-        change = self.sql(f"insert into change(project_id,modified) values({project},'2000-01-01') returning id;")
+        change = self.sql(f"insert into change(project_id,updated_at) values({project},'2000-01-01') returning id;")
         self.sql(f"call sp_change_title_update({change}, E'  spaced  title\\nwith\\t tab  ');")
-        self.assertEqual(self.sql(f"select title,modified > '2000-01-01' from change where id={change};"),
+        self.assertEqual(self.sql(f"select title,updated_at > '2000-01-01' from change where id={change};"),
                          "spaced title with tab|t")
-        self.sql(f"update change set modified='2000-01-01' where id={change}; "
+        self.sql(f"update change set updated_at='2000-01-01' where id={change}; "
                  f"call sp_change_phase_update({change},'todo');")
-        self.assertEqual(self.sql(f"select change_phase,modified > '2000-01-01' from change where id={change};"),
+        self.assertEqual(self.sql(f"select change_phase,updated_at > '2000-01-01' from change where id={change};"),
                          "todo|t")
         self.sql("call sp_change_title_update(-1,'missing'); call sp_change_phase_update(-1,'todo');")
 

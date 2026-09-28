@@ -3,7 +3,7 @@ package testcase
 import (
 	"errors"
 	"fmt"
-	apperror "mch_api/internal/error"
+	"mch_api/internal/app"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -18,11 +18,11 @@ func TestTestCaseHandlerErrorContracts(t *testing.T) {
 		handler             func(*API, *echo.Context) error
 		success             int
 	}{
-		{"list", `{"change_id":1}`, "list", (*API).listTestCases, 200},
-		{"create", `{"change_id":1,"scenario":"Test"}`, "create", (*API).createTestCase, 201},
+		{"list", `{"change_id":1}`, "list", (*API).list, 200},
+		{"create", `{"change_id":1,"scenario":"Test"}`, "create", (*API).create, 201},
 		{"update", `{"id":1,"scenario":"Test"}`, "update", (*API).updateTestCase, 204},
 		{"update-done", `{"id":1,"done":true}`, "done", (*API).updateTestCaseDone, 204},
-		{"delete", `{"id":1}`, "delete", (*API).deleteTestCase, 204},
+		{"delete", `{"id":1}`, "delete", (*API).delete, 204},
 	} {
 		t.Run(op.name, func(t *testing.T) {
 			unknown := errors.New("private database detail")
@@ -33,9 +33,9 @@ func TestTestCaseHandlerErrorContracts(t *testing.T) {
 				message string
 			}{
 				{"success", nil, op.success, ""},
-				{"missing", apperror.ErrTestCaseNotFound, 404, "test case not found"},
-				{"wrapped missing", fmt.Errorf("outer: %w", apperror.ErrTestCaseNotFound), 404, "test case not found"},
-				{"invalid", apperror.ErrTestCaseInvalidInput, 400, "invalid test case payload"},
+				{"missing", app.ErrTestCaseNotFound, 404, "test case not found"},
+				{"wrapped missing", fmt.Errorf("outer: %w", app.ErrTestCaseNotFound), 404, "test case not found"},
+				{"invalid", app.ErrTestCaseInvalidInput, 400, "invalid test case payload"},
 				{"unknown", unknown, 500, "Internal Server Error"},
 			} {
 				t.Run(tc.name, func(t *testing.T) {

@@ -1,0 +1,24 @@
+app: apihydra
+kind: steps
+metadata:
+  name: health-02-main
+spec:
+  steps:
+  - request:
+      method: GET
+      path: /api/v1/health
+    response:
+      expected_status: 200
+      expected_body: '{"status":"ok","api":"ok","database":"ok"}'
+  - request:
+      method: GET
+      path: /api/health
+    response:
+      expected_status: 200
+      expected_body: '{"status":"ok","api":"ok","database":"ok"}'
+  - request:
+      method: GET
+      path: /api/v1/unknown
+    response:
+      expected_status: 404
+      expected_body: '{"message":"Not Found"}'

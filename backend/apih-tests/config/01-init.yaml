@@ -1,0 +1,25 @@
+app: apihydra
+kind: steps
+metadata:
+  name: config-01-init
+spec:
+  steps:
+  - request:
+      method: POST
+      path: /api/v1/project/create
+      body: '{"name":"APIHydra config namespace"}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        config_project: .id
+  - request:
+      method: POST
+      path: /api/v1/project/details
+      body: '{"id":${config_project}}'
+    response:
+      expected_status: 200
+      capture:
+        config_slug: '"apih-config-" + (.id|tostring)'

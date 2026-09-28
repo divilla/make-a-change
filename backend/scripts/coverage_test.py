@@ -32,6 +32,17 @@ class CoverageTest(unittest.TestCase):
                 self.assertEqual(self.measure(covered,total,api), expected)
         self.assertIn('no executable statements', (self.root/'report.txt').read_text())
 
+    def test_diagnostic_report_below_threshold_retains_actual_counts(self):
+        meta = dict(packages=['m/p'], blocks={'m/p/a.go:1.1,2.1':1, 'm/p/a.go:3.1,4.1':9}, sources={})
+        self.profile.write_text('mode: atomic\nm/p/a.go:1.1,2.1 1 1\nm/p/a.go:3.1,4.1 9 0\n')
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertTrue(coverage.report(meta, self.profile, self.root, integration=True, enforce=False))
+        self.assertIn('TOTAL 1/10 10.0000% — diagnostic (no coverage gate)', output.getvalue())
+        result = json.loads((self.root/'result.json').read_text())
+        self.assertEqual((result['covered'], result['total']), (1, 10))
+        self.assertIsNone(result['passed'])
+        self.assertFalse(result['threshold_enforced'])
+
     def test_denominator_missing_unlinked_and_partial_packages(self):
         meta = dict(packages=['m/p','m/q'], blocks={'m/p/a.go:1.1,2.1':9, 'm/q/a.go:1.1,2.1':1}, sources={})
         self.profile.write_text('mode: atomic\nm/p/a.go:1.1,2.1 9 1\n')

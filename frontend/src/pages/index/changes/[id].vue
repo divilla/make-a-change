@@ -327,7 +327,7 @@ const route = useRoute();
 const router = useRouter();
 const projectSelection = useProjectSelectionStore();
 const changeCache = useChangeCacheStore();
-const { changes, epics } = storeToRefs(changeCache);
+const { epics } = storeToRefs(changeCache);
 
 const testCases = ref<TestCase[]>([]);
 const detailChange = ref<Change | null>(null);

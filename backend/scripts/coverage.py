@@ -108,7 +108,7 @@ def parse_profile(path):
     return blocks
 
 
-def report(metadata, profile, directory, integration=False):
+def report(metadata, profile, directory, integration=False, *, enforce=True):
     unchanged(metadata)
     blocks = parse_profile(profile)
     if not blocks:
@@ -142,14 +142,16 @@ def report(metadata, profile, directory, integration=False):
     lines = ['package covered/total percent']
     for name, (hit, size) in sorted(totals.items()):
         lines.append(f'{name} {hit}/{size} ' + (f'{100*hit/size:.4f}%' if size else 'no executable statements'))
-    lines.append(f'TOTAL {covered}/{total} {100*covered/total:.4f}% — gate {"PASS" if passed else "FAIL"}')
+    outcome = f'gate {"PASS" if passed else "FAIL"}' if enforce else 'diagnostic (no coverage gate)'
+    lines.append(f'TOTAL {covered}/{total} {100*covered/total:.4f}% — {outcome}')
     missing_packages = sorted(set(metadata['packages']) - represented)
     lines.append('Absent from runtime profile (structural zero): ' + ', '.join(missing_packages))
     result = '\n'.join(lines) + '\n'
     (directory / 'report.txt').write_text(result)
-    (directory / 'result.json').write_text(json.dumps(dict(covered=covered, total=total, passed=passed, packages=totals), indent=2))
+    (directory / 'result.json').write_text(json.dumps(dict(covered=covered, total=total,
+        passed=passed if enforce else None, threshold_enforced=enforce, packages=totals), indent=2))
     print(result, end='')
-    return passed
+    return passed if enforce else True
 
 
 def provenance(directory, extra=None):

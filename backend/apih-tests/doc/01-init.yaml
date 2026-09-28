@@ -1,0 +1,73 @@
+app: apihydra
+kind: steps
+metadata:
+  name: doc-01-init
+spec:
+  steps:
+  - request:
+      method: POST
+      path: /api/v1/project/create
+      body: '{"name":"APIHydra doc project"}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        doc_project: .id
+  - request:
+      method: POST
+      path: /api/v1/project/config
+      body: '{"id":${doc_project}}'
+    response:
+      expected_status: 200
+      expected_body: '{"slug":"default"}'
+      expected_types:
+        .change_docs:
+        - array
+        .change_phases:
+        - array
+      capture:
+        doc_phase: .change_phases[-1]
+        doc_type: .change_types[0]
+        doc_project_doc: .project_docs[0]
+        doc_epic_doc: .epic_docs[0]
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"project_id":${doc_project},"name":"APIHydra doc epic"}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        doc_epic: .id
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${doc_project},"title":"APIHydra doc change","brief":"Original brief"}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        doc_change: .id
+  - request:
+      method: POST
+      path: /api/v1/project/create
+      body: '{"name":"Deleted doc parent"}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        doc_missing_project: .id
+  - request:
+      method: POST
+      path: /api/v1/project/delete
+      body: '{"id":${doc_missing_project}}'
+    response:
+      expected_status: 204

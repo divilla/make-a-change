@@ -3,7 +3,7 @@ package epic
 import (
 	"errors"
 	"fmt"
-	apperror "mch_api/internal/error"
+	"mch_api/internal/app"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -18,11 +18,11 @@ func TestEpicHandlerErrorContracts(t *testing.T) {
 		handler             func(*API, *echo.Context) error
 		success             int
 	}{
-		{"list", `{"project_id":1}`, "list", (*API).listEpics, 200},
-		{"get", `{"id":1}`, "get", (*API).getEpic, 200},
-		{"create", `{"project_id":1,"name":"Name"}`, "create", (*API).createEpic, 201},
+		{"list", `{"project_id":1}`, "list", (*API).list, 200},
+		{"details", `{"id":1}`, "details", (*API).details, 200},
+		{"create", `{"project_id":1,"name":"Name"}`, "create", (*API).create, 201},
 		{"update", `{"id":1,"name":"Name"}`, "update", (*API).updateEpic, 204},
-		{"delete", `{"id":1}`, "delete", (*API).deleteEpic, 204},
+		{"delete", `{"id":1}`, "delete", (*API).delete, 204},
 	} {
 		t.Run(op.name, func(t *testing.T) {
 			unknown := errors.New("private database detail")
@@ -33,10 +33,10 @@ func TestEpicHandlerErrorContracts(t *testing.T) {
 				message string
 			}{
 				{"success", nil, op.success, ""},
-				{"missing", apperror.ErrEpicNotFound, 404, "epic not found"},
-				{"wrapped missing", fmt.Errorf("outer: %w", apperror.ErrEpicNotFound), 404, "epic not found"},
-				{"invalid", apperror.ErrEpicInvalidInput, 400, "invalid epic payload"},
-				{"conflict", apperror.ErrEpicHasChanges, 409, "epic has changes and cannot be deleted"},
+				{"missing", app.ErrEpicNotFound, 404, "epic not found"},
+				{"wrapped missing", fmt.Errorf("outer: %w", app.ErrEpicNotFound), 404, "epic not found"},
+				{"invalid", app.ErrEpicInvalidInput, 400, "invalid epic payload"},
+				{"conflict", app.ErrEpicHasChanges, 409, "epic has changes and cannot be deleted"},
 				{"unknown", unknown, 500, "Internal Server Error"},
 			} {
 				t.Run(tc.name, func(t *testing.T) {

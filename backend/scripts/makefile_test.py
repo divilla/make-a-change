@@ -1,4 +1,4 @@
-"""Exercise Make recipes and the legacy runner without external services."""
+"""Exercise Make recipes without external services."""
 
 import json
 import os
@@ -12,7 +12,7 @@ import unittest
 
 BACKEND = Path(__file__).resolve().parents[1]
 UNIT = ["./cmd/...", "./internal/...", "./pkg/..."]
-ALL = UNIT + ["./api-tests/..."]
+ALL = UNIT
 STUB = r'''
 import json, os, pathlib, sys, time
 name = pathlib.Path(sys.argv[0]).name
@@ -61,11 +61,10 @@ class MakefileTest(unittest.TestCase):
         self.backend.mkdir(parents=True)
         (self.backend / "scripts").mkdir()
         shutil.copy2(BACKEND / "Makefile", self.backend)
-        shutil.copy2(BACKEND / "scripts/run-api-tests.sh", self.backend / "scripts")
         (self.backend / "go.mod").write_text("module mch_api\n\ngo 1.26.0\n")
         self.bin = self.root / "bin"
         self.bin.mkdir()
-        for tool in ["go", "golangci-lint", "govulncheck", "psql", "curl", "docker", "python3", "sleep"]:
+        for tool in ["go", "golangci-lint", "govulncheck", "psql", "curl", "docker", "python3", "sleep", "apih"]:
             path = self.bin / tool
             path.write_text("#!" + sys.executable + "\n" + STUB)
             path.chmod(0o755)
@@ -125,7 +124,7 @@ class MakefileTest(unittest.TestCase):
         self.assertIn(("python3", ["-B", "-m", "unittest", "discover", "-s", "scripts", "-p", "*_test.py", "-v"]), commands)
         self.assertFalse(any(name in ["psql", "curl"] or "--fix" in args for name, args in commands))
 
-    def test_format_is_explicit_and_includes_backend_test_harness(self):
+    def test_format_is_explicit_and_includes_all_backend_go(self):
         self.make("format")
         self.assertEqual(self.commands(), [("golangci-lint", ["fmt", "--no-config", "--enable", "gofumpt", "--enable", "goimports"] + ALL)])
 
@@ -155,7 +154,7 @@ class MakefileTest(unittest.TestCase):
             ("python3", ["-B", "scripts/coverage.py", "--html"])])
         self.make("coverage", failure=True, FAIL_COMMAND="python3")
 
-    def test_api_target_runs_instrumented_apih_driver(self):
+    def test_api_target_runs_coverage_driver_without_database_setup(self):
         self.make("api-test")
         self.assertEqual(self.commands(), [("python3", ["-B", "scripts/api_coverage.py"])])
         self.make("api-test", failure=True, FAIL_COMMAND="python3")
@@ -180,10 +179,6 @@ class MakefileTest(unittest.TestCase):
         self.make("import-db", failure=True, FAIL_COMMAND="psql")
         self.assertEqual(len(self.calls()), 1)
 
-    def test_legacy_runner_uses_private_lifecycle_and_separate_output(self):
-        self.make("legacy-api-test")
-        self.assertEqual(self.commands(), [("python3", ["-B", "scripts/api_coverage.py", "--legacy"])])
-        self.make("legacy-api-test", failure=True, FAIL_COMMAND="python3")
 
 
 if __name__ == "__main__":

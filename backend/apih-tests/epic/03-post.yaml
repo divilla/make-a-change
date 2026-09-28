@@ -1,0 +1,30 @@
+app: apihydra
+kind: steps
+metadata:
+  name: epic-03-post
+spec:
+  steps:
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '{"id":${epic_id}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '{"id":${epic_id}}'
+    response:
+      expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/project/delete
+      body: '{"id":${epic_project}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/project/details
+      body: '{"id":${epic_project}}'
+    response:
+      expected_status: 404

@@ -9,21 +9,20 @@ GOLANGCI_LINT_VERSION := v2.13.1
 GOVULNCHECK_VERSION := v1.7.0
 
 # Explicit patterns fail visibly on build errors; no parse-time go list pipeline.
-# The HTTP test client is a test harness, not production coverage.
+# HTTP integration tests live exclusively in apih-tests.
 UNIT_PACKAGES := ./cmd/... ./internal/... ./pkg/...
-ALL_PACKAGES := $(UNIT_PACKAGES) ./api-tests/...
+ALL_PACKAGES := $(UNIT_PACKAGES)
 COVER_PACKAGES := ./cmd/...,./internal/...,./pkg/...
 COVERAGE_FILE := .coverage/unit/coverage.out
 
 goversion ?= $(shell awk '$$1 == "go" { print $$2; exit }' go.mod)
-DATABASE_URL ?= postgres://postgres:postgres@localhost:5432/changes
-API_TEST_DB_URL ?= postgres://postgres:postgres@localhost:5432/changes_test
+DATABASE_URL ?= postgres://postgres:postgres@localhost:15432/changes
+APIH ?= apih
 API_TEST_PORT ?= 19080
-API_TEST_BASE_URL ?= http://localhost:$(API_TEST_PORT)
-export API_TEST_DB_URL API_TEST_PORT API_TEST_BASE_URL GO
+export GO APIH API_TEST_PORT DATABASE_URL
 
 .PHONY: check init format format-check lint vet test race coverage coverage-html \
-        benchmark deps-audit tooling-test help test_version import-db api-test legacy-api-test
+        benchmark deps-audit tooling-test help test_version import-db api-test
 
 check: format-check lint vet race tooling-test ## Run read-only formatting, lint, vet, race and tooling checks
 
@@ -40,7 +39,7 @@ format-check: ## Report formatting differences without rewriting files
 lint: ## Run standard golangci-lint checks plus revive (includes staticcheck)
 	$(GOLANGCI_LINT) run --no-config --default standard --enable revive --timeout 5m $(ALL_PACKAGES)
 
-vet: ## Vet all backend packages, including the HTTP test harness
+vet: ## Vet all backend Go packages
 	$(GO) vet $(ALL_PACKAGES)
 
 test: ## Run uncached unit tests without database or HTTP integration tests
@@ -70,11 +69,9 @@ import-db: ## Initialize and seed DATABASE_URL (destructive; explicit target onl
 	psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f ../db/seed.sql
 	psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f ../db/seed-demo.sql
 
-api-test: ## Run isolated APIHydra suites and enforce at least 90% server statement coverage
+api-test: ## Run the HTTP-only suite on an instrumented server and report statement coverage (no DB setup)
 	python3 -B scripts/api_coverage.py
 
-legacy-api-test: ## Legacy Go HTTP scenarios (excluded from APIHydra coverage; explicit disposable DB only)
-	bash scripts/run-api-tests.sh
 
 help: ## Display available backend targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "%-20s %s\n", $$1, $$2}' Makefile

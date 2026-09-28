@@ -195,3 +195,262 @@ All implementation, final-source validations and final native review are complet
 The authorized factory now merges this reviewed branch to dev; the root supervisor will
 verify actual local/remote dev equality and rerun checks after merge. Neither
 numerical target is unmet. No stage or production promotion is authorized.
+
+
+## 2026-09-28 — shared doc/config modules and schema naming
+
+User-authorized follow-up on the current branch; no commit, merge or deployment.
+All business reads formerly named `get` are now `details`. Fields, scans, SQL,
+fixtures and tests use `created_at`/`updated_at` (`CreatedAt`/`UpdatedAt` in Go).
+Project/epic/testcase/change API handlers and layer methods follow the same
+list/details/create/delete naming. Existing user table/seed remain untouched;
+no user service, session, token or attribution behavior was implemented.
+
+Current endpoints and behavior:
+
+- POST `doc/list`: `{ref_id,ref_table}`; all matching history, ID descending.
+- POST `doc/current`: same reference, additionally `current=true`, ID descending.
+- POST `doc/details`: `{id}`; exactly one stored doc, including historical docs.
+- POST `doc/insert`: `{ref_id,ref_table,doc_type,body,agent_edit}`; returns201
+  `{id}`. PostgreSQL locks the live parent, retires prior current rows of that
+  parent/type and appends a new row even for identical content. Existing SQL doc
+  procedures share `fn_doc_insert`. Reads do not perform parent preflights.
+  Each ref_table uses its project's `project_docs`, `epic_docs` or `change_docs`.
+  Raw stored content and sanitized HTML are returned together on explicit reads.
+- No doc operations, including rendered-artifacts, remain in the change group.
+- POST `change/update-after-change`: `{id,after_change_id}`; null clears the
+  prerequisite, success204, invalid FK400, absent change404. `change/details`
+  returns the nullable reference. No scheduling/completion enforcement is added.
+- POST `config/list`, `details`, `insert`, `update`, `delete`; slug is the key,
+  insert201 returns `{slug}`, update/delete204, missing404, duplicate409.
+  Insert/update require all six arrays (empty arrays accepted). Update never
+  changes the slug. Deletion locks project writes and rejects referenced slugs409.
+- Change phases and normalized change types must occur in the selected config.
+  Unknown change types now fail400 without mutating state instead of being
+  silently discarded. Doc kinds must occur in the respective configured array.
+
+`seed-demo.sql` now includes project/epic docs and nullable prerequisite examples.
+It was executed twice in an owned disposable PostgreSQL cluster; neither the
+application database nor the user's server was used. SQL assertions cover exact
+retained history, returned IDs, repeated appends, current-row uniqueness,
+attribution defaults, missing parents, and config deletion protection.
+
+### Final commands and outcomes
+
+| Command actually run | Exit | Result |
+| --- | --- | --- |
+| `make -C backend format` | 0 | Applied formatting; diff inspected |
+| `GOLANGCI_LINT_CACHE=/tmp/mch-golangci-cache make -C backend check` | 0 | Format, lint (0 issues), vet, uncached race tests, 62 Python tooling tests and Go suite-validator tests pass |
+| `make -C backend coverage` | 0 | Fresh unit profile: **1031/1045 = 98.6603%**, strict >95% gate passes |
+| `make -C backend deps-audit` | 0 | No vulnerabilities found |
+| `make -C backend api-test` | 0 | Fresh APIHydra-only profile: **980/1045 = 93.7799%**, >=90% gate passes |
+| `python3 /tmp/verify_seed.py` | 0 | Owned cluster: init, seed, demo seed, `db/tests/doc_config.sql`, `change_history.sql`, `test_case.sql`, repeated demo seed all pass |
+| `git diff --check` | 0 | No whitespace errors |
+
+The seed verification script uses the existing Runner/private_cluster helpers,
+loads only the named SQL files with ON_ERROR_STOP, and shuts down its owned
+cluster. Its output is in `.coverage/seed/runner.log` and `/tmp/backend-seed.log`.
+The API campaign ran 521 normal, 37 outage and 22 recovery requests (580 total),
+with all SQL postconditions and cleanup checks passing. No unit or legacy HTTP
+profiles were merged into the integration profile. Production source hashes in
+both coverage inventories were checked against the final files with no changes.
+
+| Package (mch_api/) | Unit covered/total | APIHydra covered/total |
+| --- | ---: | ---: |
+| cmd/server | 79/93 | 78/93 |
+| internal/app | 52/52 | 43/52 |
+| internal/change | 275/275 | 267/275 |
+| internal/config | 101/101 | 100/101 |
+| internal/doc | 127/127 | 119/127 |
+| internal/domain | 0/0 (no executable statements) | 0/0 |
+| internal/epic | 114/114 | 110/114 |
+| internal/health | 21/21 | 21/21 |
+| internal/project | 116/116 | 112/116 |
+| internal/testcase | 105/105 | 100/105 |
+| pkg/config | 31/31 | 22/31 |
+| pkg/markdown | 10/10 | 8/10 |
+| **Total** | **1031/1045** | **980/1045** |
+
+The only unit gap is 14 startup/main statements in cmd/server. Integration gaps
+are distributed as shown, including scan/iteration failures, direct-caller
+validation unreachable after API validation, and startup/error branches. No
+production package was excluded. Earlier development runs failed on stale
+removed-route types, timestamp identifier formatting/lint, old error-message
+assertions and the old suite request count; all were corrected. Initial lint
+cache warnings were resolved by using a writable /tmp cache. No failing,
+skipped or blocked scenario remains in the required final checks. Legacy HTTP,
+benchmarks and Docker toolchain checks were not run; there was no toolchain or
+performance-contract change.
+
+
+## 2026-09-28 — APIHydra-only parallel endpoint groups
+
+User-requested follow-up removes `backend/api-tests/` entirely, the
+`legacy-api-test` target, `scripts/run-api-tests.sh`, legacy campaign branches,
+and Go harness package/environment references in Make. Application Go code was
+not changed in this follow-up. Earlier entries describing the legacy harness
+are historical, superseded by this entry and `apih-tests/coverage.md`.
+
+Normal HTTP cases are organized as change/config/doc/epic/health/project/testcase,
+with `01-init.yaml`, `02-main.yaml`, and optional `03-post.yaml`. Mode1 runs
+independent directories concurrently and their files serially. Cross-module
+parent setup uses each group's init file; dependent count/history assertions
+remain alongside the mutations they verify. Fixture identity ranges and capture
+names are isolated; the validator tests local producer/consumer ordering and
+rejects duplicate captures. SQL outage/recovery phases remain separately ordered
+around the database lifecycle. A normal selection cannot include outage tests.
+
+Timestamp comparisons from the removed Go harness are preserved using a
+fixture-only update audit plus SQL postconditions, including every same-value
+write. UUIDv7, list ordering after mutation and retained docs after parent deletion
+are asserted through APIHydra. Public application schema/functions were not
+changed for test coverage. SQL fixture assertions contribute no Go counters.
+
+Final validation (all exits0):
+
+- `make -C backend tooling-test`: 60 Python tooling tests and Go validator tests.
+- `GOLANGCI_LINT_CACHE=/tmp/mch-golangci-cache make -C backend check`: formatting,
+  lint (zero issues), vet, race, tooling tests; no Go harness packages remain.
+- `make -C backend coverage`: fresh **1031/1045 (98.6603%)** unit statements.
+- `make -C backend deps-audit`: no vulnerabilities.
+- `make -C backend api-test`: fresh **980/1045 (93.7799%)** APIHydra statements;
+  540 normal +37 outage +22 recovery =599 successful requests, 38/38 operations.
+- `git diff --check`: no whitespace errors.
+
+Both complete parallel campaigns passed; the second includes the added
+UUID/order/history/timestamp assertions. No failed, skipped or blocked scenario
+remains. Unit and API package gaps are unchanged from the preceding table:
+cmd/server is the only unit gap (14 statements); API gaps remain startup/errors,
+scan/iteration and direct-service validation branches. No profiles were merged
+with unit or legacy data. Artifacts are under `.coverage/api/` and `.coverage/unit/`.
+The suite guide records exact package counts and the manual selection commands.
+
+## 2026-09-28 — Standard APIHydra output
+
+`api-test` now inherits terminal stdout/stderr for APIHydra and prints a blank
+line before the coverage report. Setup commands still write to `runner.log`;
+APIHydra failures point to the displayed output. Exit and cleanup behavior is
+unchanged. This follow-up changes only tooling and documentation.
+
+Validation: `make -C backend tooling-test` exited0 (62 Python tests plus Go
+validator tests); `make -C backend api-test` exited0 with all three phases
+passing and fresh **980/1045 (93.7799%)** API statement coverage. The terminal
+output showed standard APIHydra results, then the blank line and package report.
+Unit coverage was not rerun for this tooling-only change; the preceding
+**1031/1045 (98.6603%)** measurement still describes the unchanged production Go
+code. Package gaps remain as recorded above. No failed, skipped or blocked
+scenarios.
+
+## 2026-09-28 — Local Docker database setup
+
+Docker PostgreSQL now publishes host port15432 and declares `changes` as its
+initial database. Root and backend database targets and the development config
+use that port; root Make exports `DATABASE_URL` to the server. Removed an unused
+frontend binding that caused the development ESLint error. Restored the APIHydra
+suite's canonical port19080 for the isolated runner.
+
+With explicit user authorization, created the missing Docker `changes` database
+and ran `make db` (init.sql, seed.sql, seed-demo.sql), exit0. The first creation
+attempt encountered PostgreSQL startup; after readiness succeeded, creation and
+refresh passed. Result: 3 projects, 5 epics, 200 changes, 590 docs, 600 testcases.
+Backend health and frontend HTTP checks both returned200. No existing database
+was reset; the three scripts ran against the newly created `changes` database.
+
+Validation: frontend ESLint and typecheck exited0; backend tooling-test exited0
+(62 Python tests and Go validator tests); the final `make -C backend api-test`
+exited0 with **980/1045 (93.7799%)** API statement coverage. Unit coverage was
+not rerun because production Go code is unchanged; its preceding measurement is
+**1031/1045 (98.6603%)**, with package gaps recorded above. API tests used their
+own disposable cluster, separate from Docker development data.
+
+## 2026-09-28 — Standalone APIHydra suite (current)
+
+The user's latest requirement supersedes the owned-database runner and API
+statement gate: manual `apih` must work against the configured running backend,
+with setup and cleanup performed through endpoints and captured response values.
+Removed API SQL fixtures/postconditions, forced outage/recovery files and
+`scripts/api_coverage.py` with its obsolete lifecycle tests. `api-test` now runs
+`apih apih-tests` directly and reports statement coverage as unmeasured after a
+blank line. No database client, server build, shutdown or direct SQL runs in
+that target. Unit coverage tooling and its strict >95% gate remain unchanged.
+
+The default suite URL is port8080. Each of the seven parallel groups uses its
+own init/main/post files, captured IDs and deletion order. Config slugs derive
+from an API-created project ID. No shared default config is mutated. Missing
+mutation targets come from records deleted by that group's earlier requests.
+Only read-only oversized-ID probes retain literal positive IDs. Global lists
+allow existing data; docs retained by normal API deletion remain as history.
+Cases that require unexposed database state are explicitly excluded in the suite
+guide, not relabeled as passing. Seven duplicate negative requests produced by
+replacing fixed IDs with captures were removed.
+
+Final validation (temporary writable XDG_CACHE_HOME for APIHydra in the sandbox):
+
+- `make -C backend tooling-test`: exit0, 24 Python tests plus Go suite-validator
+  tests. Tests check direct Make invocation/failure propagation, local ordered
+  captures, API-only mutation targets, absence of SQL and the route inventory.
+- `make -C backend api-test`: exit0, **469 requests** in19 steps files, covering
+  **38/38 registered operations** with successful cases.
+- Plain `apih` from `backend/apih-tests/`: exit0 on the same server after the
+  Make run. Repeated manual runs also passed without resets or SQL setup.
+- Before/after full project/config responses compared equal during a repeat
+  run, proving that existing active records were preserved and owned active
+  records were cleaned up. Older unrelated partial-run records were untouched.
+- `git diff --check`: exit0.
+
+Initial authoring runs exposed incorrect new assertions about create-time title
+spacing, missing epic status, last_ref and project-list ordering; corrected
+against the implementation. An initial sandbox run needed a writable APIHydra
+cache, and an invocation from the repository root without a suite selection
+was corrected to the documented suite directory. Final runs have no failed,
+skipped or blocked requests. No application Go code changed, so unrelated
+production checks were not rerun for this test/tooling-only follow-up.
+
+API statement coverage is **unmeasured**, explicitly accepted by the user.
+The earlier 980/1045 value is historical and does not describe this suite; its
+obsolete generated `.coverage/api/` report was removed. Unit coverage was not
+rerun here; the previous production measurement is **1031/1045 (98.6603%)**,
+with the unchanged cmd/server gap recorded above. Operation coverage is not
+substituted for statement coverage. `AGENTS.md`, Make and the suite guide now
+agree on the standalone contract.
+
+## 2026-09-28 — Restore measured API coverage without DB control (current)
+
+The user clarified that removing the API coverage threshold did not mean
+removing reporting. `make -C backend api-test` now builds an instrumented backend
+on an owned port (default 19080), runs a copied standalone suite against it, and
+stops only that server to collect counters. It uses the existing DATABASE_URL;
+there are no database clients, SQL fixtures, resets, outage phases, container
+commands or DB lifecycle actions. The checked-in suite still targets port 8080
+and remains directly runnable with `apih`. TCP readiness does not add HTTP
+traffic. Counters include the owned server's normal startup and shutdown.
+
+Standard APIHydra output is followed by a blank line and the full package/total
+statement report. The source inventory includes every production package, even
+if unlinked or unexecuted. Threshold enforcement is explicitly disabled only
+for this diagnostic report; the strict unit gate is unchanged. Test failures,
+missing counters, invalid profiles and abnormal shutdown remain errors; failed
+runs discard coverage/report/result files. The runner logs provenance and the
+binary and suite hashes without recording DATABASE_URL credentials.
+
+Validation (all final commands exit 0):
+
+- `make -C backend tooling-test`: 33 Python tests plus Go suite-validator tests.
+  Added coverage tests for below-threshold reporting with actual counts, native
+  output/blank-line ordering, copied-suite isolation, occupied ports, process
+  signal masks, child timeouts, failed runs and cleanup/report invalidation.
+- `make -C backend api-test`: 469 requests, 38/38 operations; fresh
+  **943/1045 (90.2392%)** API statements, diagnostic with no coverage gate.
+- `make -C backend coverage`: fresh **1031/1045 (98.6603%)** unit statements,
+  strict >95% gate passes. Production Go source is unchanged.
+- Existing development server health still returns 200 after the coverage run.
+- `git diff --check`:exit 0.
+
+API package covered/total counts: cmd/server 76/93; internal/app 40/52;
+change 261/275; config 96/101; doc 112/127; domain 0/0; epic 106/114; health 16/21;
+project 109/116; testcase 96/105; pkg/config 23/31; pkg/markdown 8/10.
+The 102 uncovered statements include startup/error paths, database failures and
+scan/iteration branches. Unit coverage's only gap remains 14 cmd/server statements.
+No failed, skipped or blocked scenario remains. Artifacts are under
+`.coverage/api/` and `.coverage/unit/`; no profiles were combined. AGENTS.md,
+Make, the suite guide and the refactor plan reflect the restored reporting.

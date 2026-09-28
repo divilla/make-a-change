@@ -3,8 +3,8 @@ package project
 import (
 	"context"
 	"errors"
+	"mch_api/internal/app"
 	"mch_api/internal/domain"
-	apperror "mch_api/internal/error"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -30,8 +30,8 @@ func (r *fakeProjectRepository) List(ctx context.Context) ([]domain.Project, err
 	return []domain.Project{r.item}, r.err
 }
 
-func (r *fakeProjectRepository) Get(ctx context.Context, req domain.ProjectIDRequest) (domain.Project, error) {
-	r.record(ctx, "get", req)
+func (r *fakeProjectRepository) Details(ctx context.Context, req domain.ProjectIDRequest) (domain.Project, error) {
+	r.record(ctx, "details", req)
 	return r.item, r.err
 }
 
@@ -59,7 +59,7 @@ func TestServiceRequestsAndErrors(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for _, cause := range []error{nil, errors.New("repository failure")} {
-		for _, op := range []string{"list", "get", "create", "update", "delete", "config"} {
+		for _, op := range []string{"list", "details", "create", "update", "delete", "config"} {
 			t.Run(op, func(t *testing.T) {
 				r := &fakeProjectRepository{err: cause}
 				s := NewService(r)
@@ -67,22 +67,22 @@ func TestServiceRequestsAndErrors(t *testing.T) {
 				var want any
 				switch op {
 				case "list":
-					_, err = s.ListProjects(ctx)
+					_, err = s.List(ctx)
 					want = nil
-				case "get":
+				case "details":
 					want = domain.ProjectIDRequest{ID: 7}
-					_, err = s.GetProject(ctx, want.(domain.ProjectIDRequest))
+					_, err = s.Details(ctx, want.(domain.ProjectIDRequest))
 				case "create":
 					want = domain.ProjectCreateRequest{Name: "Name"}
 					var id domain.ProjectIDRequest
-					id, err = s.CreateProject(ctx, domain.ProjectCreateRequest{Name: " Name "})
+					id, err = s.Create(ctx, domain.ProjectCreateRequest{Name: " Name "})
 					require.Equal(t, 7, id.ID)
 				case "update":
 					want = domain.ProjectUpdateRequest{ID: 7, Name: "Name"}
 					err = s.UpdateProject(ctx, domain.ProjectUpdateRequest{ID: 7, Name: " Name "})
 				case "delete":
 					want = domain.ProjectIDRequest{ID: 7}
-					err = s.DeleteProject(ctx, want.(domain.ProjectIDRequest))
+					err = s.Delete(ctx, want.(domain.ProjectIDRequest))
 				case "config":
 					want = domain.ProjectIDRequest{ID: 7}
 					_, err = s.Config(ctx, want.(domain.ProjectIDRequest))
@@ -100,23 +100,23 @@ func TestServiceRejectsInvalidProjectInput(t *testing.T) {
 	s := NewService(nil)
 	ctx := context.Background()
 	for _, id := range []int{0, -1} {
-		_, err := s.GetProject(ctx, domain.ProjectIDRequest{ID: id})
-		require.ErrorIs(t, err, apperror.ErrProjectInvalidInput)
-		require.ErrorIs(t, s.DeleteProject(ctx, domain.ProjectIDRequest{ID: id}), apperror.ErrProjectInvalidInput)
-		require.ErrorIs(t, s.UpdateProject(ctx, domain.ProjectUpdateRequest{ID: id, Name: "Valid"}), apperror.ErrProjectInvalidInput)
+		_, err := s.Details(ctx, domain.ProjectIDRequest{ID: id})
+		require.ErrorIs(t, err, app.ErrProjectInvalidInput)
+		require.ErrorIs(t, s.Delete(ctx, domain.ProjectIDRequest{ID: id}), app.ErrProjectInvalidInput)
+		require.ErrorIs(t, s.UpdateProject(ctx, domain.ProjectUpdateRequest{ID: id, Name: "Valid"}), app.ErrProjectInvalidInput)
 		_, err = s.Config(ctx, domain.ProjectIDRequest{ID: id})
-		require.ErrorIs(t, err, apperror.ErrProjectInvalidInput)
+		require.ErrorIs(t, err, app.ErrProjectInvalidInput)
 	}
 	for _, name := range []string{"", " ", "\t\n"} {
-		_, err := s.CreateProject(ctx, domain.ProjectCreateRequest{Name: name})
-		require.ErrorIs(t, err, apperror.ErrProjectInvalidInput)
-		require.ErrorIs(t, s.UpdateProject(ctx, domain.ProjectUpdateRequest{ID: 7, Name: name}), apperror.ErrProjectInvalidInput)
+		_, err := s.Create(ctx, domain.ProjectCreateRequest{Name: name})
+		require.ErrorIs(t, err, app.ErrProjectInvalidInput)
+		require.ErrorIs(t, s.UpdateProject(ctx, domain.ProjectUpdateRequest{ID: 7, Name: name}), app.ErrProjectInvalidInput)
 	}
 }
 
 func TestServiceConfigNeverSubstitutes(t *testing.T) {
-	r := &fakeProjectRepository{err: apperror.ErrProjectConfigNotFound}
+	r := &fakeProjectRepository{err: app.ErrProjectConfigNotFound}
 	_, err := NewService(r).Config(context.Background(), domain.ProjectIDRequest{ID: 7})
-	require.ErrorIs(t, err, apperror.ErrProjectConfigNotFound)
+	require.ErrorIs(t, err, app.ErrProjectConfigNotFound)
 	require.Equal(t, []string{"config"}, r.calls)
 }

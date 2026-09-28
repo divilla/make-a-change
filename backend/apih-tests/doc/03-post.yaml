@@ -1,0 +1,84 @@
+app: apihydra
+kind: steps
+metadata:
+  name: doc-03-post
+spec:
+  steps:
+  - request:
+      method: POST
+      path: /api/v1/change/delete
+      body: '{"id":${doc_change}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '{"id":${doc_epic}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/project/delete
+      body: '{"id":${doc_project}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/current
+      body: '{"ref_id":${doc_project},"ref_table":"project"}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_project_new},"current":true}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_project_new}}'
+    response:
+      expected_status: 200
+      expected_body: '{"current":true}'
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","doc_type":${doc_project_doc},"body":"No resurrection","agent_edit":false}'
+    response:
+      expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/doc/current
+      body: '{"ref_id":${doc_epic},"ref_table":"epic"}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_epic_new},"current":true}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_epic_new}}'
+    response:
+      expected_status: 200
+      expected_body: '{"current":true}'
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_epic},"ref_table":"epic","doc_type":${doc_epic_doc},"body":"No resurrection","agent_edit":false}'
+    response:
+      expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/doc/current
+      body: '{"ref_id":${doc_change},"ref_table":"change"}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_safe},"current":true}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_safe}}'
+    response:
+      expected_status: 200
+      expected_body: '{"current":true}'
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_change},"ref_table":"change","doc_type":"brief","body":"No resurrection","agent_edit":false}'
+    response:
+      expected_status: 404

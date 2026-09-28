@@ -36,13 +36,13 @@ func TestRouterMiddlewareParity(t *testing.T) {
 		code                                                 int
 		preflight                                            bool
 	}{
-		{name: "allowed trailing slash", method: "POST", path: "/api/v1/project/get/", origin: "https://allowed.example", allowOrigin: "https://allowed.example", code: 400, body: `{"message":"invalid project payload"}`},
-		{name: "denied origin reaches handler", method: "POST", path: "/api/v1/project/get/", origin: "https://denied.example", code: 400, body: `{"message":"invalid project payload"}`},
-		{name: "second configured origin", method: "POST", path: "/api/v1/project/get", origin: "https://second.example", allowOrigin: "https://second.example", code: 400, body: `{"message":"invalid project payload"}`},
-		{name: "allowed preflight", method: "OPTIONS", path: "/api/v1/project/get", origin: "https://allowed.example", allowOrigin: "https://allowed.example", code: 204, allow: "OPTIONS, POST", preflight: true},
-		{name: "denied preflight", method: "OPTIONS", path: "/api/v1/project/get", origin: "https://denied.example", code: 204, allow: "OPTIONS, POST", preflight: true},
+		{name: "allowed trailing slash", method: "POST", path: "/api/v1/project/details/", origin: "https://allowed.example", allowOrigin: "https://allowed.example", code: 400, body: `{"message":"invalid project payload"}`},
+		{name: "denied origin reaches handler", method: "POST", path: "/api/v1/project/details/", origin: "https://denied.example", code: 400, body: `{"message":"invalid project payload"}`},
+		{name: "second configured origin", method: "POST", path: "/api/v1/project/details", origin: "https://second.example", allowOrigin: "https://second.example", code: 400, body: `{"message":"invalid project payload"}`},
+		{name: "allowed preflight", method: "OPTIONS", path: "/api/v1/project/details", origin: "https://allowed.example", allowOrigin: "https://allowed.example", code: 204, allow: "OPTIONS, POST", preflight: true},
+		{name: "denied preflight", method: "OPTIONS", path: "/api/v1/project/details", origin: "https://denied.example", code: 204, allow: "OPTIONS, POST", preflight: true},
 		{name: "router missing", method: "GET", path: "/missing", code: 404, body: `{"message":"Not Found"}`},
-		{name: "router method", method: "GET", path: "/api/v1/project/get", code: 405, body: `{"message":"Method Not Allowed"}`, allow: "OPTIONS, POST"},
+		{name: "router method", method: "GET", path: "/api/v1/project/details", code: 405, body: `{"message":"Method Not Allowed"}`, allow: "OPTIONS, POST"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var output bytes.Buffer

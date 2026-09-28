@@ -9,8 +9,8 @@ type (
 		Name        string    `json:"name"`
 		Config      string    `json:"config"`
 		LastRef     int32     `json:"last_ref"`
-		Created     time.Time `json:"created"`
-		Modified    time.Time `json:"modified"`
+		CreatedAt   time.Time `json:"created_at"`
+		UpdatedAt   time.Time `json:"updated_at"`
 		ChangeCount int       `json:"change_count"`
 	}
 

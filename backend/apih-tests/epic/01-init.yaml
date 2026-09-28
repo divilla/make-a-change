@@ -1,0 +1,51 @@
+app: apihydra
+kind: steps
+metadata:
+  name: epic-01-init
+spec:
+  steps:
+  - request:
+      method: POST
+      path: /api/v1/project/create
+      body: '{"name":"APIHydra epic parent"}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        epic_project: .id
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"project_id":${epic_project},"name":"Deleted epic"}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        epic_missing: .id
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '{"id":${epic_missing}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/project/create
+      body: '{"name":"APIHydra deleted epic parent"}'
+    response:
+      expected_status: 201
+      expected_types:
+        .id:
+        - int
+      capture:
+        epic_missing_project: .id
+  - request:
+      method: POST
+      path: /api/v1/project/delete
+      body: '{"id":${epic_missing_project}}'
+    response:
+      expected_status: 204

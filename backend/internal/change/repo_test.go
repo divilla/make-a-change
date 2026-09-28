@@ -3,8 +3,8 @@ package change
 import (
 	"context"
 	"errors"
+	"mch_api/internal/app"
 	"mch_api/internal/domain"
-	apperror "mch_api/internal/error"
 	"reflect"
 	"strings"
 	"testing"
@@ -97,36 +97,31 @@ func TestRepositoryCurrentReads(t *testing.T) {
 	slug := "slug"
 	epic := 4
 	name := "Epic"
-	for _, op := range []string{"list", "get", "documents", "artifacts"} {
+	for _, op := range []string{"list", "details"} {
 		for _, scenario := range []string{"values", "nullable", "empty", "scan", "query", "iteration", "missing"} {
 			t.Run(op+"/"+scenario, func(t *testing.T) {
 				failure := errors.New("read failed")
 				p := newBoundary(t)
 				p.args = []any{7}
-				c := domain.ChangeListItem{ID: 7, RefUUID: "uuid", Ref: &ref, Slug: &slug, ProjectID: 9, ChangePhase: "backlog", ChangeTypes: []string{"fix"}, EpicID: &epic, EpicName: &name, Title: "Title", Open: true, DoneTC: 70000, TotalTC: 100000, Modified: now}
+				c := domain.ChangeListItem{ID: 7, RefUUID: "uuid", Ref: &ref, Slug: &slug, ProjectID: 9, ChangePhase: "backlog", ChangeTypes: []string{"fix"}, EpicID: &epic, EpicName: &name, Title: "Title", Open: true, DoneTC: 70000, TotalTC: 100000, UpdatedAt: now}
 				if scenario == "nullable" {
 					c.Ref = nil
 					c.Slug = nil
 					c.EpicID = nil
 					c.EpicName = nil
 				}
-				values := []any{c.ID, c.RefUUID, c.Ref, c.Slug, c.ProjectID, c.ChangePhase, c.ChangeTypes, c.EpicID, c.EpicName, c.Title, c.Open, c.DoneTC, c.TotalTC, c.Modified}
+				values := []any{c.ID, c.RefUUID, c.Ref, c.Slug, c.ProjectID, c.ChangePhase, c.ChangeTypes, c.EpicID, c.EpicName, c.Title, c.Open, c.DoneTC, c.TotalTC, c.UpdatedAt}
 				switch op {
-				case "get":
-					values = append(values, "https://pr", now)
-				case "documents":
-					values = []any{8, "brief", "Raw", true, now}
-				case "artifacts":
-					values = []any{7, "Spec", "PR"}
-					p.args = []any{[]int{7, 8}}
+				case "details":
+					values = append(values, "https://pr", now, &epic)
 				}
 				row := valueRow{t: t, values: values}
 				rows := &valueRows{}
 				if scenario == "scan" {
 					row.err = failure
 				}
-				if scenario == "missing" && op == "get" {
-					row.err = apperror.Wrap(pgx.ErrNoRows, "nested")
+				if scenario == "missing" && op == "details" {
+					row.err = app.Wrap(pgx.ErrNoRows, "nested")
 				}
 				if scenario == "query" {
 					row.err = failure
@@ -155,54 +150,24 @@ func TestRepositoryCurrentReads(t *testing.T) {
 							require.Empty(t, got)
 						}
 					}
-					require.Contains(t, p.sql, "from public.vw_change_list where project_id = $1 order by modified desc, id")
-				case "get":
+					require.Contains(t, p.sql, "from public.vw_change_list where project_id = $1 order by updated_at desc, id")
+				case "details":
 					var got domain.ChangeDetails
 					got, err = r.Details(p.ctx, domain.ChangeIDRequest{ID: 7})
 					if err == nil {
-						require.Equal(t, domain.ChangeDetails{ChangeListItem: c, PRUrl: "https://pr", Created: now}, got)
+						require.Equal(t, domain.ChangeDetails{ChangeListItem: c, PRUrl: "https://pr", CreatedAt: now, AfterChangeID: &epic}, got)
 					}
 					require.Contains(t, p.sql, "from public.vw_change_details where id = $1")
-				case "documents":
-					var got []domain.ChangeDocument
-					got, err = r.Documents(p.ctx, domain.ChangeIDRequest{ID: 7})
-					if err == nil {
-						require.NotNil(t, got)
-						if scenario != "empty" {
-							require.Equal(t, []domain.ChangeDocument{{ID: 8, DocType: "brief", Body: "Raw", AgentEdit: true, Created: now}}, got)
-						} else {
-							require.Empty(t, got)
-						}
-					}
-					require.Contains(t, p.sql, "select d.id, d.doc_type, d.body, d.agent_edit, d.created")
-					require.Contains(t, p.sql, "join public.change c on c.id = d.ref_id")
-					require.Contains(t, p.sql, "c.id = $1 and d.ref_table = 'change' and d.current order by d.doc_type, d.id")
-				case "artifacts":
-					var got []domain.ChangeArtifactSource
-					got, err = r.Artifacts(p.ctx, domain.ChangeRenderedArtifactsRequest{IDs: []int{7, 8}})
-					if err == nil {
-						require.NotNil(t, got)
-						if scenario != "empty" {
-							require.Equal(t, []domain.ChangeArtifactSource{{ID: 7, Spec: "Spec", PR: "PR"}}, got)
-						} else {
-							require.Empty(t, got)
-						}
-					}
-					require.Contains(t, p.sql, "select c.id, coalesce(s.body, ''), coalesce(p.body, '') from public.change c")
-					for _, kind := range []string{"spec", "pr"} {
-						require.Contains(t, p.sql, "ref_table = 'change' and ref_id = c.id and doc_type = '"+kind+"' and current order by id desc limit 1")
-					}
-					require.Contains(t, p.sql, "where c.id = any($1::bigint[]) order by array_position($1::bigint[], c.id)")
 				}
-				if scenario == "scan" || scenario == "query" || scenario == "iteration" && op != "get" {
+				if scenario == "scan" || scenario == "query" || scenario == "iteration" && op != "details" {
 					require.ErrorIs(t, err, failure)
-				} else if scenario == "missing" && op == "get" {
+				} else if scenario == "missing" && op == "details" {
 					require.ErrorIs(t, err, pgx.ErrNoRows)
-					require.ErrorIs(t, err, apperror.ErrChangeNotFound)
+					require.ErrorIs(t, err, app.ErrChangeNotFound)
 				} else {
 					require.NoError(t, err)
 				}
-				if op != "get" {
+				if op != "details" {
 					require.Equal(t, scenario != "query", rows.closed)
 				}
 				for _, removed := range []string{"version", "completed", "select *", "100 *"} {
@@ -217,14 +182,14 @@ func TestRepositoryCurrentReads(t *testing.T) {
 func TestRepositoryTargetedContext(t *testing.T) {
 	failure := errors.New("query failure")
 	for _, op := range []string{"exists", "project", "epic"} {
-		for _, cause := range []error{nil, failure, apperror.Wrap(pgx.ErrNoRows, "nested")} {
+		for _, cause := range []error{nil, failure, app.Wrap(pgx.ErrNoRows, "nested")} {
 			p := newBoundary(t)
 			p.args = []any{7}
 			p.row = valueRow{t: t, values: []any{9}, err: cause}
 			r := &Repo{pool: p}
 			var err error
 			var got domain.ProjectIDRequest
-			want := apperror.ErrChangeNotFound
+			want := app.ErrChangeNotFound
 			switch op {
 			case "exists":
 				err = r.Exists(p.ctx, domain.ChangeIDRequest{ID: 7})
@@ -234,7 +199,7 @@ func TestRepositoryTargetedContext(t *testing.T) {
 				require.Equal(t, "select project_id from public.change where id = $1", p.sql)
 			case "epic":
 				got, err = r.EpicProject(p.ctx, domain.EpicIDRequest{ID: 7})
-				want = apperror.ErrChangeInvalidReference
+				want = app.ErrChangeInvalidReference
 				require.Equal(t, "select project_id from public.epic where id = $1", p.sql)
 			}
 			require.ErrorIs(t, err, cause)
@@ -263,9 +228,9 @@ func TestRepositoryCreateOnlyID(t *testing.T) {
 		var pgErr *pgconn.PgError
 		if errors.As(cause, &pgErr) {
 			if pgErr.Code == "23505" {
-				require.ErrorIs(t, err, apperror.ErrChangeDuplicateUUID)
+				require.ErrorIs(t, err, app.ErrChangeDuplicateUUID)
 			} else {
-				require.ErrorIs(t, err, apperror.ErrProjectNotFound)
+				require.ErrorIs(t, err, app.ErrProjectNotFound)
 			}
 		}
 	}
@@ -289,24 +254,24 @@ func TestRepositorySingleStatementMutations(t *testing.T) {
 		}, false, nil},
 		{"epic", "call public.sp_change_epic_update($1,$2)", []any{7, &epic}, func(r *Repo, c context.Context) error {
 			return r.UpdateEpic(c, domain.ChangeUpdateEpicRequest{ID: 7, EpicID: &epic})
-		}, false, apperror.ErrChangeInvalidReference},
-		{"document", "call public.sp_change_doc_set($1,$2,$3,$4)", []any{7, "spec", "Raw", &flag}, func(r *Repo, c context.Context) error {
-			return r.SetDocument(c, domain.ChangeDocumentSetRequest{ID: 7, DocType: "spec", Body: "Raw", AgentEdit: &flag})
-		}, false, nil},
-		{"open", "update public.change set open = $2, modified = now() where id = $1", []any{7, &flag}, func(r *Repo, c context.Context) error {
+		}, false, app.ErrChangeInvalidReference},
+		{"after-change", "update public.change set after_change_id = $2, updated_at = now() where id = $1", []any{7, &epic}, func(r *Repo, c context.Context) error {
+			return r.UpdateAfterChange(c, domain.ChangeUpdateAfterChangeRequest{ID: 7, AfterChangeID: &epic})
+		}, true, app.ErrChangeInvalidReference},
+		{"open", "update public.change set open = $2, updated_at = now() where id = $1", []any{7, &flag}, func(r *Repo, c context.Context) error {
 			return r.UpdateOpen(c, domain.ChangeUpdateOpenRequest{ID: 7, Open: &flag})
 		}, true, nil},
-		{"types", "update public.change set change_types = $2, modified = now() where id = $1", []any{7, []string{}}, func(r *Repo, c context.Context) error {
-			return r.UpdateChangeTypes(c, domain.ChangeUpdateChangeTypesRequest{ID: 7, ChangeTypes: []string{}})
+		{"types", "update public.change set change_types = $2, updated_at = now() where id = $1", []any{7, []string{}}, func(r *Repo, c context.Context) error {
+			return r.UpdateTypes(c, domain.ChangeUpdateTypesRequest{ID: 7, ChangeTypes: []string{}})
 		}, true, nil},
-		{"pr-url", "update public.change set pr_url = $2, modified = now() where id = $1", []any{7, "https://pr"}, func(r *Repo, c context.Context) error {
+		{"pr-url", "update public.change set pr_url = $2, updated_at = now() where id = $1", []any{7, "https://pr"}, func(r *Repo, c context.Context) error {
 			return r.UpdatePRUrl(c, domain.ChangeUpdatePRUrlRequest{ID: 7, PRUrl: "https://pr"})
 		}, true, nil},
-		{"delete", "delete from public.change where id = $1", []any{7}, func(r *Repo, c context.Context) error { return r.Delete(c, domain.ChangeIDRequest{ID: 7}) }, true, apperror.ErrChangeHasTestCases},
+		{"delete", "delete from public.change where id = $1", []any{7}, func(r *Repo, c context.Context) error { return r.Delete(c, domain.ChangeIDRequest{ID: 7}) }, true, app.ErrChangeHasTestCases},
 	}
 	for _, tc := range cases {
 		for _, tag := range []string{"UPDATE 0", "UPDATE 1"} {
-			for _, cause := range []error{nil, errors.New("exec failed"), apperror.Wrap(&pgconn.PgError{Code: "23503"}, "nested")} {
+			for _, cause := range []error{nil, errors.New("exec failed"), app.Wrap(&pgconn.PgError{Code: "23503"}, "nested")} {
 				t.Run(tc.name+"/"+tag, func(t *testing.T) {
 					p := newBoundary(t)
 					p.args = tc.args
@@ -315,7 +280,7 @@ func TestRepositorySingleStatementMutations(t *testing.T) {
 					err := tc.call(&Repo{pool: p}, p.ctx)
 					require.Equal(t, tc.sql, p.sql)
 					if cause == nil && tc.direct && tag == "UPDATE 0" {
-						require.ErrorIs(t, err, apperror.ErrChangeNotFound)
+						require.ErrorIs(t, err, app.ErrChangeNotFound)
 					} else {
 						require.ErrorIs(t, err, cause)
 					}

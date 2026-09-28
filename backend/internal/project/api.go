@@ -2,8 +2,8 @@
 package project
 
 import (
+	"mch_api/internal/app"
 	"mch_api/internal/domain"
-	apperror "mch_api/internal/error"
 	"net/http"
 
 	"github.com/gookit/validate/v2"
@@ -23,57 +23,57 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 		s: s,
 	}
 
-	a.g.POST("/list", a.listProjects)
+	a.g.POST("/list", a.list)
 	a.g.POST("/config", a.config)
-	a.g.POST("/get", a.getProject)
-	a.g.POST("/create", a.createProject)
+	a.g.POST("/details", a.details)
+	a.g.POST("/create", a.create)
 	a.g.POST("/update", a.updateProject)
-	a.g.POST("/delete", a.deleteProject)
+	a.g.POST("/delete", a.delete)
 
 	return a
 }
 
-func (a *API) listProjects(c *echo.Context) error {
+func (a *API) list(c *echo.Context) error {
 	ctx := c.Request().Context()
-	res, err := a.s.ListProjects(ctx)
+	res, err := a.s.List(ctx)
 	if err != nil {
-		return apperror.HTTP(err)
+		return app.HTTP(err)
 	}
 
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *API) getProject(c *echo.Context) error {
+func (a *API) details(c *echo.Context) error {
 	ctx := c.Request().Context()
 	var req domain.ProjectIDRequest
 	if err := c.Bind(&req); err != nil {
-		return apperror.InvalidPayload(err, "invalid project get payload")
+		return app.InvalidPayload(err, "invalid project details payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrProjectInvalidInput))
+		return app.HTTP(app.Validation(v.Errors, app.ErrProjectInvalidInput))
 	}
 
-	res, err := a.s.GetProject(ctx, req)
+	res, err := a.s.Details(ctx, req)
 	if err != nil {
-		return apperror.HTTP(err)
+		return app.HTTP(err)
 	}
 
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *API) createProject(c *echo.Context) error {
+func (a *API) create(c *echo.Context) error {
 	ctx := c.Request().Context()
 	var req domain.ProjectCreateRequest
 	if err := c.Bind(&req); err != nil {
-		return apperror.InvalidPayload(err, "invalid project create payload")
+		return app.InvalidPayload(err, "invalid project create payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrProjectInvalidInput))
+		return app.HTTP(app.Validation(v.Errors, app.ErrProjectInvalidInput))
 	}
 
-	res, err := a.s.CreateProject(ctx, req)
+	res, err := a.s.Create(ctx, req)
 	if err != nil {
-		return apperror.HTTP(err)
+		return app.HTTP(err)
 	}
 
 	return c.JSON(http.StatusCreated, &res)
@@ -83,31 +83,31 @@ func (a *API) updateProject(c *echo.Context) error {
 	ctx := c.Request().Context()
 	var req domain.ProjectUpdateRequest
 	if err := c.Bind(&req); err != nil {
-		return apperror.InvalidPayload(err, "invalid project update payload")
+		return app.InvalidPayload(err, "invalid project update payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrProjectInvalidInput))
+		return app.HTTP(app.Validation(v.Errors, app.ErrProjectInvalidInput))
 	}
 
 	if err := a.s.UpdateProject(ctx, req); err != nil {
-		return apperror.HTTP(err)
+		return app.HTTP(err)
 	}
 
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *API) deleteProject(c *echo.Context) error {
+func (a *API) delete(c *echo.Context) error {
 	ctx := c.Request().Context()
 	var req domain.ProjectIDRequest
 	if err := c.Bind(&req); err != nil {
-		return apperror.InvalidPayload(err, "invalid project delete payload")
+		return app.InvalidPayload(err, "invalid project delete payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrProjectInvalidInput))
+		return app.HTTP(app.Validation(v.Errors, app.ErrProjectInvalidInput))
 	}
 
-	if err := a.s.DeleteProject(ctx, req); err != nil {
-		return apperror.HTTP(err)
+	if err := a.s.Delete(ctx, req); err != nil {
+		return app.HTTP(err)
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -116,14 +116,14 @@ func (a *API) deleteProject(c *echo.Context) error {
 func (a *API) config(c *echo.Context) error {
 	var req domain.ProjectIDRequest
 	if err := c.Bind(&req); err != nil {
-		return apperror.InvalidPayload(err, "invalid project config payload")
+		return app.InvalidPayload(err, "invalid project config payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrProjectInvalidInput))
+		return app.HTTP(app.Validation(v.Errors, app.ErrProjectInvalidInput))
 	}
 	res, err := a.s.Config(c.Request().Context(), req)
 	if err != nil {
-		return apperror.HTTP(err)
+		return app.HTTP(err)
 	}
 	return c.JSON(http.StatusOK, &res)
 }

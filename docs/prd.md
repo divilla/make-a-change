@@ -31,7 +31,7 @@ operations and metadata, from commit
 changes, removes, or defers it. The baseline is defined by the [CLI](../cli/),
 [backend](../backend/), [database](../db/init.sql),
 [CLI integration tests](../cli/integration/), and
-[backend API tests](../backend/api-tests/). This PRD takes precedence.
+[backend API tests](../backend/apih-tests/). This PRD takes precedence.
 
 ## Changes and identifiers
 

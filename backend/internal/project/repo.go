@@ -2,8 +2,8 @@ package project
 
 import (
 	"context"
+	"mch_api/internal/app"
 	"mch_api/internal/domain"
-	apperror "mch_api/internal/error"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -19,7 +19,7 @@ type (
 	// Repository defines Repository values.
 	Repository interface {
 		List(ctx context.Context) ([]domain.Project, error)
-		Get(ctx context.Context, req domain.ProjectIDRequest) (domain.Project, error)
+		Details(ctx context.Context, req domain.ProjectIDRequest) (domain.Project, error)
 		Create(ctx context.Context, req domain.ProjectCreateRequest) (domain.ProjectIDRequest, error)
 		Update(ctx context.Context, req domain.ProjectUpdateRequest) error
 		Delete(ctx context.Context, req domain.ProjectIDRequest) error
@@ -32,17 +32,17 @@ func NewRepo(pool *pgxpool.Pool) *Repo {
 	return &Repo{pool: pool}
 }
 
-const projectColumns = "v.id, v.name, p.config, p.last_ref, v.created, v.modified, v.change_count"
+const projectColumns = "v.id, v.name, p.config, p.last_ref, v.created_at, v.updated_at, v.change_count"
 
 // List executes List behavior.
 func (r *Repo) List(ctx context.Context) ([]domain.Project, error) {
 	rows, err := r.pool.Query(ctx, `
 		select `+projectColumns+`
 		from public.vw_project v join public.project p on p.id = v.id
- order by v.modified desc, v.id desc
+ order by v.updated_at desc, v.id desc
 	`)
 	if err != nil {
-		return nil, apperror.Database(err, nil, nil)
+		return nil, app.Database(err, nil, nil)
 	}
 	defer rows.Close()
 	projects := make([]domain.Project, 0)
@@ -53,18 +53,18 @@ func (r *Repo) List(ctx context.Context) ([]domain.Project, error) {
 		}
 		projects = append(projects, project)
 	}
-	return projects, apperror.Database(rows.Err(), nil, nil)
+	return projects, app.Database(rows.Err(), nil, nil)
 }
 
-// Get executes Get behavior.
-func (r *Repo) Get(ctx context.Context, req domain.ProjectIDRequest) (domain.Project, error) {
+// Details executes Details behavior.
+func (r *Repo) Details(ctx context.Context, req domain.ProjectIDRequest) (domain.Project, error) {
 	project, err := scanProject(r.pool.QueryRow(ctx, `
 		select `+projectColumns+`
 		from public.vw_project v join public.project p on p.id = v.id
 		where v.id = $1
 	`, req.ID))
 	if err != nil {
-		return domain.Project{}, apperror.Database(err, apperror.ErrProjectNotFound, nil)
+		return domain.Project{}, app.Database(err, app.ErrProjectNotFound, nil)
 	}
 	return project, nil
 }
@@ -73,17 +73,17 @@ func (r *Repo) Get(ctx context.Context, req domain.ProjectIDRequest) (domain.Pro
 func (r *Repo) Create(ctx context.Context, req domain.ProjectCreateRequest) (domain.ProjectIDRequest, error) {
 	var result domain.ProjectIDRequest
 	err := r.pool.QueryRow(ctx, "insert into public.project (name) values ($1) returning id", req.Name).Scan(&result.ID)
-	return result, apperror.Database(err, nil, nil)
+	return result, app.Database(err, nil, nil)
 }
 
 // Update changes the name and timestamp, including same-name updates.
 func (r *Repo) Update(ctx context.Context, req domain.ProjectUpdateRequest) error {
-	tag, err := r.pool.Exec(ctx, "update public.project set name = $2, modified = now() where id = $1", req.ID, req.Name)
+	tag, err := r.pool.Exec(ctx, "update public.project set name = $2, updated_at = now() where id = $1", req.ID, req.Name)
 	if err != nil {
-		return apperror.Database(err, nil, nil)
+		return app.Database(err, nil, nil)
 	}
 	if tag.RowsAffected() == 0 {
-		return apperror.ErrProjectNotFound
+		return app.ErrProjectNotFound
 	}
 	return nil
 }
@@ -92,18 +92,18 @@ func (r *Repo) Update(ctx context.Context, req domain.ProjectUpdateRequest) erro
 func (r *Repo) Delete(ctx context.Context, req domain.ProjectIDRequest) error {
 	tag, err := r.pool.Exec(ctx, "delete from public.project where id = $1", req.ID)
 	if err != nil {
-		return apperror.Database(err, nil, apperror.ErrProjectHasChanges)
+		return app.Database(err, nil, app.ErrProjectHasChanges)
 	}
 	if tag.RowsAffected() == 0 {
-		return apperror.ErrProjectNotFound
+		return app.ErrProjectNotFound
 	}
 	return nil
 }
 
 func scanProject(row pgx.Row) (domain.Project, error) {
 	var project domain.Project
-	err := row.Scan(&project.ID, &project.Name, &project.Config, &project.LastRef, &project.Created, &project.Modified, &project.ChangeCount)
-	return project, apperror.Database(err, nil, nil)
+	err := row.Scan(&project.ID, &project.Name, &project.Config, &project.LastRef, &project.CreatedAt, &project.UpdatedAt, &project.ChangeCount)
+	return project, app.Database(err, nil, nil)
 }
 
 type projectPool interface {
@@ -120,5 +120,5 @@ func (r *Repo) Config(ctx context.Context, req domain.ProjectIDRequest) (domain.
  from public.project p join public.config c on c.slug = p.config where p.id = $1`, req.ID).Scan(
 		&result.Slug, &result.ProjectDocs, &result.EpicDocs, &result.ChangeDocs,
 		&result.ChangePhases, &result.ChangeColors, &result.ChangeTypes)
-	return result, apperror.Database(err, apperror.ErrProjectConfigNotFound, nil)
+	return result, app.Database(err, app.ErrProjectConfigNotFound, nil)
 }

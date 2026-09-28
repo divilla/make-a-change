@@ -2,7 +2,7 @@ package health
 
 import (
 	"context"
-	apperror "mch_api/internal/error"
+	"mch_api/internal/app"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -28,5 +28,5 @@ func NewRepo(pool *pgxpool.Pool) *Repo {
 
 // Ping executes Ping behavior.
 func (r *Repo) Ping(ctx context.Context) error {
-	return apperror.Database(r.pool.Ping(ctx), nil, nil)
+	return app.Database(r.pool.Ping(ctx), nil, nil)
 }

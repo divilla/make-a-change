@@ -1,6 +1,6 @@
 begin;
 
--- Replace demo data and its documents together; preserve identity sequences.
+-- Replace demo data and its docs together; preserve identity sequences.
 truncate table
     public.doc,
     public.testcase,
@@ -4510,5 +4510,26 @@ begin
     end loop;
 end;
 $$;
+
+-- Shared docs demonstrate project/epic ownership and retained history.
+do $$
+declare _parent record;
+begin
+ for _parent in select id, name from public.project loop
+  perform public.fn_doc_insert(_parent.id, 'project', 'brief', '# ' || _parent.name, false);
+ end loop;
+ for _parent in select id, name from public.epic loop
+  perform public.fn_doc_insert(_parent.id, 'epic', 'brief', '# ' || _parent.name, false);
+ end loop;
+end;
+$$;
+
+-- A nullable dependency points to the preceding change in the same project.
+with dependencies as (
+ select id, lag(id) over (partition by project_id order by ref, id) as prerequisite
+ from public.change
+)
+update public.change c set after_change_id=d.prerequisite
+from dependencies d where c.id=d.id and c.ref % 5=0;
 
 commit;

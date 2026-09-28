@@ -18,7 +18,7 @@ begin
     assert exists (
         select from public.doc d join public.change c on c.id = d.ref_id
         where c.id = _change_id and d.ref_table = 'change' and d.doc_type = 'brief'
-            and d.body = 'initial' and not d.agent_edit and d.created = c.created
+            and d.body = 'initial' and not d.agent_edit and d.created_at = c.created_at
     ), 'creation records the initial brief';
 
     for _entity in select * from (values
@@ -30,7 +30,7 @@ begin
                 using -1::bigint, _doc_type, 'missing', false;
             assert (select count(*) = _before from public.doc), 'missing parents do not create documents';
 
-            execute format('update public.%I set modified = ''2000-01-01'' where id = $1', _entity.kind)
+            execute format('update public.%I set updated_at = ''2000-01-01'' where id = $1', _entity.kind)
                 using _entity.id;
             execute format('call public.sp_%s_doc_set($1, $2, $3, $4)', _entity.kind)
                 using _entity.id, _doc_type, 'first body', true;
@@ -41,11 +41,11 @@ begin
                 and doc_type = _doc_type and body = 'first body' and agent_edit), 'earlier body is retained';
             assert exists (select from public.doc where ref_id = _entity.id and ref_table = _entity.kind
                 and doc_type = _doc_type and body = 'second body' and not agent_edit), 'new body is retained';
-            execute format('select modified = now() from public.%I where id = $1', _entity.kind)
+            execute format('select updated_at = now() from public.%I where id = $1', _entity.kind)
                 into strict _modified_matches using _entity.id;
             assert _modified_matches, 'document writes update the parent timestamp';
             assert exists (select from public.doc where ref_id = _entity.id and ref_table = _entity.kind
-                and doc_type = _doc_type and body = 'second body' and created = now()),
+                and doc_type = _doc_type and body = 'second body' and created_at = now()),
                 'document timestamp matches the parent update';
         end loop;
     end loop;

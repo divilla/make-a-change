@@ -1,9 +1,11 @@
 package main
 
 import (
+	"mch_api/internal/app"
 	"mch_api/internal/change"
+	"mch_api/internal/config"
+	"mch_api/internal/doc"
 	"mch_api/internal/epic"
-	apperror "mch_api/internal/error"
 	"mch_api/internal/health"
 	"mch_api/internal/project"
 	"mch_api/internal/testcase"
@@ -44,13 +46,13 @@ func newRouter(pool *pgxpool.Pool, allowedOrigins []string, logger zerolog.Logge
 	e.Use(middleware.Recover())
 	cors, err := defaultCORSConfig.ToMiddleware()
 	if err != nil {
-		return nil, apperror.Wrap(err, "configure CORS")
+		return nil, app.Wrap(err, "configure CORS")
 	}
 	e.Use(cors)
 
 	markdownParser := markdown.NewGoldmarkParser()
 	htmlSanitizer := markdown.NewBluemondaySanitizer()
-	changeRenderer := change.NewRenderer(markdownParser, htmlSanitizer)
+	docRenderer := doc.NewRenderer(markdownParser, htmlSanitizer)
 
 	healthRepository := health.NewRepo(pool)
 	healthService := health.NewService(healthRepository)
@@ -64,8 +66,11 @@ func newRouter(pool *pgxpool.Pool, allowedOrigins []string, logger zerolog.Logge
 	epicService := epic.NewService(epicRepository)
 	epic.NewAPI(e, epicService)
 
+	doc.NewAPI(e, doc.NewService(doc.NewRepo(pool), docRenderer, projectService))
+	config.NewAPI(e, config.NewService(config.NewRepo(pool)))
+
 	changeRepository := change.NewRepo(pool)
-	changeService := change.NewService(changeRepository, changeRenderer, projectService)
+	changeService := change.NewService(changeRepository, projectService)
 	change.NewAPI(e, changeService)
 
 	testCaseRepository := testcase.NewRepo(pool)
@@ -80,13 +85,13 @@ type errorResponse struct {
 }
 
 func jsonErrorHandler(c *echo.Context, err error) {
-	code, message := apperror.Interpret(err)
+	code, message := app.Interpret(err)
 
 	if code >= http.StatusInternalServerError {
 		log.Error().Err(err).Msg("request failed")
 	}
 
 	if writeErr := c.JSON(code, errorResponse{Message: message}); writeErr != nil {
-		log.Error().Err(apperror.Wrap(writeErr, "write error response")).Msg("failed to write error response")
+		log.Error().Err(app.Wrap(writeErr, "write error response")).Msg("failed to write error response")
 	}
 }

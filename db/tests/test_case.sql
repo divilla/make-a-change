@@ -15,13 +15,13 @@ begin
     insert into public.change (project_id) values (_project_id) returning id into _other_change_id;
     assert (select total_tc = 0 and done_tc = 0 from public.vw_change_details where id = _change_id), 'empty counts';
     insert into public.testcase (change_id, scenario) values (_change_id, 'original') returning id into _testcase_id;
-    assert (select not done and created = modified from public.testcase where id = _testcase_id), 'creation defaults';
+    assert (select not done and created_at = updated_at from public.testcase where id = _testcase_id), 'creation defaults';
     assert (select done_tc = 0 and total_tc = 1 from public.vw_change_list where id = _change_id), 'creation counts';
 
     update public.testcase set done = true where id = _testcase_id;
     assert (select done_tc = 1 and total_tc = 1 from public.vw_change_details where id = _change_id), 'done counts';
     assert (select done_tc = 1 and total_tc = 1 from public.vw_epic where id = _epic_id), 'epic done counts';
-    update public.testcase set scenario = 'edited', modified = now() where id = _testcase_id;
+    update public.testcase set scenario = 'edited', updated_at = now() where id = _testcase_id;
     assert (select scenario = 'edited' and done from public.testcase where id = _testcase_id), 'scenario preserves done';
     update public.testcase set done = true where id = _testcase_id;
     assert (select done_tc = 1 from public.vw_change_list where id = _change_id), 'repeated done counts';

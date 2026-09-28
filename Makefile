@@ -1,4 +1,5 @@
-DATABASE_URL ?= postgres://postgres:postgres@localhost:5432/changes
+DATABASE_URL ?= postgres://postgres:postgres@localhost:15432/changes
+export DATABASE_URL
 
 .PHONY: init run db
 

@@ -2,8 +2,8 @@
 package testcase
 
 import (
+	"mch_api/internal/app"
 	"mch_api/internal/domain"
-	apperror "mch_api/internal/error"
 	"net/http"
 
 	"github.com/gookit/validate/v2"
@@ -23,41 +23,41 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 		s: s,
 	}
 
-	a.g.POST("/list", a.listTestCases)
-	a.g.POST("/create", a.createTestCase)
+	a.g.POST("/list", a.list)
+	a.g.POST("/create", a.create)
 	a.g.POST("/update", a.updateTestCase)
 	a.g.POST("/update-done", a.updateTestCaseDone)
-	a.g.POST("/delete", a.deleteTestCase)
+	a.g.POST("/delete", a.delete)
 
 	return a
 }
 
-func (a *API) listTestCases(c *echo.Context) error {
+func (a *API) list(c *echo.Context) error {
 	var req domain.TestCaseListRequest
 	if err := c.Bind(&req); err != nil {
-		return apperror.InvalidPayload(err, "invalid test case list payload")
+		return app.InvalidPayload(err, "invalid test case list payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrTestCaseInvalidInput))
+		return app.HTTP(app.Validation(v.Errors, app.ErrTestCaseInvalidInput))
 	}
-	res, err := a.s.ListTestCases(c.Request().Context(), req)
+	res, err := a.s.List(c.Request().Context(), req)
 	if err != nil {
-		return apperror.HTTP(err)
+		return app.HTTP(err)
 	}
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *API) createTestCase(c *echo.Context) error {
+func (a *API) create(c *echo.Context) error {
 	var req domain.TestCaseCreateRequest
 	if err := c.Bind(&req); err != nil {
-		return apperror.InvalidPayload(err, "invalid test case create payload")
+		return app.InvalidPayload(err, "invalid test case create payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrTestCaseInvalidInput))
+		return app.HTTP(app.Validation(v.Errors, app.ErrTestCaseInvalidInput))
 	}
-	res, err := a.s.CreateTestCase(c.Request().Context(), req)
+	res, err := a.s.Create(c.Request().Context(), req)
 	if err != nil {
-		return apperror.HTTP(err)
+		return app.HTTP(err)
 	}
 	return c.JSON(http.StatusCreated, &res)
 }
@@ -65,13 +65,13 @@ func (a *API) createTestCase(c *echo.Context) error {
 func (a *API) updateTestCase(c *echo.Context) error {
 	var req domain.TestCaseUpdateRequest
 	if err := c.Bind(&req); err != nil {
-		return apperror.InvalidPayload(err, "invalid test case update payload")
+		return app.InvalidPayload(err, "invalid test case update payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrTestCaseInvalidInput))
+		return app.HTTP(app.Validation(v.Errors, app.ErrTestCaseInvalidInput))
 	}
 	if err := a.s.UpdateTestCase(c.Request().Context(), req); err != nil {
-		return apperror.HTTP(err)
+		return app.HTTP(err)
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -79,27 +79,27 @@ func (a *API) updateTestCase(c *echo.Context) error {
 func (a *API) updateTestCaseDone(c *echo.Context) error {
 	var req domain.TestCaseUpdateDoneRequest
 	if err := c.Bind(&req); err != nil {
-		return apperror.InvalidPayload(err, "invalid test case done payload")
+		return app.InvalidPayload(err, "invalid test case done payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrTestCaseInvalidInput))
+		return app.HTTP(app.Validation(v.Errors, app.ErrTestCaseInvalidInput))
 	}
 	if err := a.s.UpdateTestCaseDone(c.Request().Context(), req); err != nil {
-		return apperror.HTTP(err)
+		return app.HTTP(err)
 	}
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (a *API) deleteTestCase(c *echo.Context) error {
+func (a *API) delete(c *echo.Context) error {
 	var req domain.TestCaseIDRequest
 	if err := c.Bind(&req); err != nil {
-		return apperror.InvalidPayload(err, "invalid test case delete payload")
+		return app.InvalidPayload(err, "invalid test case delete payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return apperror.HTTP(apperror.Validation(v.Errors, apperror.ErrTestCaseInvalidInput))
+		return app.HTTP(app.Validation(v.Errors, app.ErrTestCaseInvalidInput))
 	}
-	if err := a.s.DeleteTestCase(c.Request().Context(), req); err != nil {
-		return apperror.HTTP(err)
+	if err := a.s.Delete(c.Request().Context(), req); err != nil {
+		return app.HTTP(err)
 	}
 	return c.NoContent(http.StatusNoContent)
 }
