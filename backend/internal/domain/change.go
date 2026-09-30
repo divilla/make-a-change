@@ -12,8 +12,7 @@ type (
 	ChangeListItem struct {
 		ID          int       `json:"id"`
 		RefUUID     string    `json:"ref_uuid"`
-		Ref         *int32    `json:"ref"`
-		Slug        *string   `json:"slug"`
+		RefSlug     *string   `json:"ref_slug"`
 		ProjectID   int       `json:"project_id"`
 		ChangePhase string    `json:"change_phase"`
 		ChangeTypes []string  `json:"change_types"`
@@ -30,9 +29,10 @@ type (
 	// ChangeDetails contains fields exposed by the current change details view.
 	ChangeDetails struct {
 		ChangeListItem
-		AfterChangeID *int      `json:"after_change_id"`
-		PRUrl         string    `json:"pr_url"`
-		CreatedAt     time.Time `json:"created_at"`
+		AfterChangeID   *int      `json:"after_change_id"`
+		AfterChangeName *string   `json:"after_change_name"`
+		PRUrl           string    `json:"pr_url"`
+		CreatedAt       time.Time `json:"created_at"`
 	}
 
 	// ChangeListRequest defines ChangeListRequest values.
@@ -75,6 +75,12 @@ type (
 	ChangeUpdateTitleRequest struct {
 		ID    int    `json:"id" validate:"required|min:1"`
 		Title string `json:"title"`
+	}
+
+	// ChangeUpdateSlugRequest updates the editable suffix of a change slug.
+	ChangeUpdateSlugRequest struct {
+		ID   int    `json:"id" validate:"required|min:1"`
+		Slug string `json:"slug"`
 	}
 
 	// ChangeUpdatePRUrlRequest defines ChangeUpdatePRUrlRequest values.

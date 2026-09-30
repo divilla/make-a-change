@@ -37,6 +37,7 @@ func TestChangeAPIContracts(t *testing.T) {
 		"update-open":         {[]string{"UpdateOpen"}, domain.ChangeUpdateOpenRequest{ID: 7, Open: boolPtr(false)}},
 		"update-types":        {[]string{"Project", "UpdateTypes"}, domain.ChangeUpdateTypesRequest{ID: 7, ChangeTypes: []string{"fix"}}},
 		"update-title":        {[]string{"Exists", "UpdateTitle"}, domain.ChangeUpdateTitleRequest{ID: 7, Title: "Title"}},
+		"update-slug":         {[]string{"UpdateSlug"}, domain.ChangeUpdateSlugRequest{ID: 7, Slug: "new-slug"}},
 		"update-pr-url":       {[]string{"UpdatePRUrl"}, domain.ChangeUpdatePRUrlRequest{ID: 7, PRUrl: "https://pr"}},
 	}
 	cases := []struct {
@@ -52,6 +53,7 @@ func TestChangeAPIContracts(t *testing.T) {
 		{"update-open", `{"id":7,"open":false}`, 204},
 		{"update-types", `{"id":7,"change_types":["fix"]}`, 204},
 		{"update-title", `{"id":7,"title":"Title"}`, 204},
+		{"update-slug", `{"id":7,"slug":"new-slug"}`, 204},
 		{"update-pr-url", `{"id":7,"pr_url":"https://pr"}`, 204},
 		{"delete", `{"id":7}`, 204},
 	}
@@ -112,8 +114,8 @@ func TestChangeAPIContracts(t *testing.T) {
 							for k := range body {
 								keys = append(keys, k)
 							}
-							require.ElementsMatch(t, []string{"id", "ref_uuid", "ref", "slug", "project_id", "change_phase", "change_types", "epic_id", "epic_name", "title", "open", "done_tc", "total_tc", "completed", "updated_at", "pr_url", "created_at", "after_change_id"}, keys)
-							for _, k := range []string{"ref", "slug", "epic_id", "epic_name"} {
+							require.ElementsMatch(t, []string{"id", "ref_uuid", "ref_slug", "project_id", "change_phase", "change_types", "epic_id", "epic_name", "title", "open", "done_tc", "total_tc", "completed", "updated_at", "pr_url", "created_at", "after_change_id", "after_change_name"}, keys)
+							for _, k := range []string{"ref_slug", "epic_id", "epic_name", "after_change_name"} {
 								require.Nil(t, body[k])
 							}
 						case "list":

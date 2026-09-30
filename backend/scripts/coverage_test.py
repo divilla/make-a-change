@@ -26,7 +26,7 @@ class CoverageTest(unittest.TestCase):
             return coverage.report(meta, self.profile, self.root, integration)
 
     def test_exact_boundaries_not_rounded(self):
-        for covered, total, api, expected in [(95,100,False,False), (95001,100000,False,True),
+        for covered, total, api, expected in [(95,100,False,True), (95001,100000,False,True),
                 (94999,100000,False,False), (90,100,True,True), (89999,100000,True,False)]:
             with self.subTest(covered=covered, api=api):
                 self.assertEqual(self.measure(covered,total,api), expected)

@@ -148,7 +148,7 @@ def campaign(directory, port):
             'server_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
             'database': 'existing configured database; credentials not recorded',
             'readiness': 'TCP only; all HTTP requests come from APIHydra',
-            'coverage_threshold_enforced': False})
+            'coverage_threshold_enforced': True})
         server = None
         try:
             with deferred_signals() as previous:
@@ -171,7 +171,7 @@ def campaign(directory, port):
         profile = directory / 'coverage.out'
         execute([coverage.GO, 'tool', 'covdata', 'textfmt', '-i=' + str(counters), '-o=' + str(profile)], env, log)
     print(flush=True)
-    coverage.report(metadata, profile, directory, integration=True, enforce=False)
+    return coverage.report(metadata, profile, directory, integration=True)
 
 
 def interrupted(signum, _frame):
@@ -183,12 +183,12 @@ def main():
     try:
         with coverage.fresh_run('api') as directory:
             try:
-                campaign(directory, int(os.environ.get('API_TEST_PORT', '19080')))
+                passed = campaign(directory, int(os.environ.get('API_TEST_PORT', '19080')))
             except BaseException:
                 for name in ('coverage.out', 'report.txt', 'result.json'):
                     (directory / name).unlink(missing_ok=True)
                 raise
-        return 0
+        return 0 if passed else 1
     finally:
         for sig, handler in handlers.items():
             signal.signal(sig, handler)

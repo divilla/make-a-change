@@ -60,7 +60,7 @@ class APICoverageTest(unittest.TestCase):
             self.provenance = provenance.call_args.args[1]
             return output.getvalue()
 
-    def test_reports_real_counts_without_threshold_and_only_owns_server(self):
+    def test_reports_real_counts_with_threshold_and_only_owns_server(self):
         output = self.campaign()
         self.assertIn('APIHydra standard output\n\npackage covered/total percent', output)
         self.assertIn('TOTAL 1/10 10.0000%', output)
@@ -76,8 +76,17 @@ class APICoverageTest(unittest.TestCase):
         self.assertEqual(self.envs[0]['GOCOVERDIR'], str(self.root/'counters'))
         self.assertNotIn('test-secret', json.dumps(self.provenance))
         result = json.loads((self.root/'result.json').read_text())
-        self.assertFalse(result['threshold_enforced'])
+        self.assertTrue(result['threshold_enforced'])
+        self.assertFalse(result['passed'])
         self.assertEqual((result['covered'], result['total']), (1, 10))
+
+    def test_below_threshold_exits_failure_with_valid_report(self):
+        with patch.object(coverage, 'BACKEND', self.root), patch.object(api, 'campaign', return_value=False):
+            self.assertEqual(api.main(), 1)
+
+    def test_at_threshold_exits_success(self):
+        with patch.object(coverage, 'BACKEND', self.root), patch.object(api, 'campaign', return_value=True):
+            self.assertEqual(api.main(), 0)
 
     def test_apih_failures_preserve_codes_cleanup_and_do_not_report(self):
         for code in [101, 102, 103, 17]:

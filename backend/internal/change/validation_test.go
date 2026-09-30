@@ -21,6 +21,7 @@ func TestAPIValidationCauses(t *testing.T) {
 		{"update-epic", `{"id":-1,"scenario":"valid"}`, "id", "min", "epic"},
 		{"update-types", `{"id":-1,"scenario":"valid"}`, "id", "min", "types"},
 		{"update-title", `{"id":-1,"scenario":"valid"}`, "id", "min", "title"},
+		{"update-slug", `{"id":-1,"scenario":"valid"}`, "id", "min", "slug"},
 		{"update-pr-url", `{"id":-1,"scenario":"valid"}`, "id", "min", "pr url"},
 		{"update-phase", `{"id":-1,"scenario":"valid"}`, "id", "min", "phase"},
 		{"update-open", `{"id":-1,"scenario":"valid"}`, "id", "min", "open"},

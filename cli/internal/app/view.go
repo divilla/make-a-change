@@ -81,7 +81,7 @@ func (m Model) viewLines() ([]string, int) {
 		lines = append(lines, "")
 		lines = append(lines, projects.TableView(m.projectList, width))
 	}
-	if m.state == ChangesListState && !m.hasDropdown() {
+	if m.state == ChangesListState {
 		lines = append(lines, m.changeFiltersLine(""), "")
 		epicIndex = len(lines) - 1
 	}
@@ -117,13 +117,17 @@ func (m Model) viewLines() ([]string, int) {
 		lines = append(lines, "")
 		lines = append(lines, m.inputBand(width))
 	} else if m.hasDropdown() {
-		lines = append(lines, "")
+		if m.state != ChangesListState && m.state != ChangeDetailsState {
+			lines = append(lines, "")
+		}
 		lines = append(lines, m.dropdownView(width))
 
 	} else if m.state == BackendConfigFormState {
 		lines = append(lines, "", m.configurationInputBand(width))
 	} else {
-		lines = append(lines, "")
+		if m.state != ChangesListState && m.state != ChangeDetailsState {
+			lines = append(lines, "")
+		}
 		lines = append(lines, m.inputBand(width))
 	}
 	if m.err != "" {
@@ -132,7 +136,10 @@ func (m Model) viewLines() ([]string, int) {
 	if m.helpQuery != "" {
 		lines = append(lines, styles.Default.Success.Render("Highlight: "+m.helpQuery))
 	}
-	lines = append(lines, "", styles.Default.Footer.Width(width).Render(m.footerText()))
+	if m.state != ChangesListState && m.state != ChangeDetailsState {
+		lines = append(lines, "")
+	}
+	lines = append(lines, styles.Default.Footer.Width(width).Render(m.footerText()))
 	if m.quitting {
 		lines = append(lines, styles.Default.Success.Render("done"))
 	}
@@ -181,11 +188,14 @@ func (m Model) configurationInputBand(width int) string {
 	if row+1 < len(lines) {
 		after += "\n" + strings.Join(lines[row+1:], "\n")
 	}
-	return styles.Default.InputBand.Width(width).Render("> " + configurationCursorWindow(documents.SafeLine(before), documents.SafeLine(after), max(3, width-4)))
+	label := " " + strings.ReplaceAll(configurations.FieldNames[m.configurations.Field], "_", " ") + " > "
+	caption := styles.Default.InputBand.Foreground(styles.AccentPurple).Render(label)
+	entry := styles.Default.InputBand.Foreground(styles.AccentGreen).Render(configurationCursorWindow(documents.SafeLine(before), documents.SafeLine(after), max(3, width-lipgloss.Width(label))))
+	return styles.Default.InputBand.Width(width).Render(caption + entry)
 }
 
 func configurationCursorWindow(before, after string, width int) string {
-	afterRoom := min(ansi.StringWidth(after), width/3)
+	afterRoom := min(ansi.StringWidth(after), width/2)
 	start := max(0, ansi.StringWidth(before)-(width-2-afterRoom))
 	left := ""
 	if start > 0 {
@@ -197,10 +207,10 @@ func configurationCursorWindow(before, after string, width int) string {
 }
 
 func (m Model) changeFiltersLine(table string) string {
-	line := changeFilterLabel("/filter-phase ") + changeFilterValue(m.changeFilters().Phase.Label) +
-		"   " + changeFilterLabel("/filter-type ") + changeFilterValue(m.changeFilters().Type.Label) +
-		"   " + changeFilterLabel("/filter-epic ") + changeFilterValue(m.changeFilters().Epic.Label) +
-		"   " + changeFilterLabel("/filter-find ") + changeFilterValue(m.changeFilters().Find)
+	line := changeFilterLabel("/phase-filter ") + changeFilterValue(m.changesFilters.phase.Label) +
+		"   " + changeFilterLabel("/types-filter ") + changeFilterValue(m.changesFilters.typ.Label) +
+		"   " + changeFilterLabel("/epic-filter ") + changeFilterValue(m.changesFilters.epic.Label) +
+		"   " + changeFilterLabel("/find-filter ") + changeFilterValue(m.changesFilters.find)
 	tableWidth := firstLineWidth(table)
 	padding := tableWidth - lipgloss.Width(line)
 	if padding < 0 {
@@ -227,7 +237,10 @@ func (m Model) helpText() string {
 		if m.dropdown.kind == dropdownConfirm {
 			return "<return> select  |  <esc> or <ctrl+c> cancel"
 		}
-		return "<return> select  |  <esc> cancel"
+		return "<return> select  |  <esc> or <ctrl+c> cancel"
+	}
+	if m.state == ChangeDetailsState && m.detailEditField != "" {
+		return "<return> save  |  <esc> or <ctrl+c> cancel"
 	}
 	switch m.state {
 	case BriefState:
@@ -238,7 +251,7 @@ func (m Model) helpText() string {
 		}
 		return documents.Help(m.document)
 	case ChangesListState:
-		return "<ctrl+n> new change  |  <return> view  |  </> command"
+		return "Type to filter changes  |  <ctrl+n> new change  |  <return> view  |  </> command"
 	case ChangeDetailsState:
 		return "<ctrl+n> new testcase  |  <return> edit  |  <space> toggle  |  <del> delete  |  <ctrl+ins> copy  |  </> command"
 	case TestCaseCreateState:
@@ -275,16 +288,15 @@ func (m Model) helpText() string {
 }
 
 func (m Model) inputBand(width int) string {
-	return m.promptBand(width, styles.Default.InputBand, lipgloss.Color("0"))
+	return m.promptBand(width, styles.Default.InputBand, styles.Gray)
 }
 
 func (m Model) promptBand(width int, base lipgloss.Style, placeholderColor lipgloss.TerminalColor) string {
 	width = ui.NormalizeWidth(width)
 	content := m.promptLines(width, base, placeholderColor)
-	blank := strings.Repeat(" ", width)
-	lines := []string{base.Render(blank)}
+	lines := []string{styles.Default.PromptEdge.Render(strings.Repeat("▄", width))}
 	lines = append(lines, content...)
-	lines = append(lines, base.Render(blank))
+	lines = append(lines, styles.Default.PromptEdge.Render(strings.Repeat("▀", width)))
 	return strings.Join(lines, "\n")
 }
 
@@ -292,7 +304,7 @@ func (m Model) promptLines(width int, base lipgloss.Style, placeholderColor lipg
 	lines := promptValueLines(m.input.Value())
 	padded := make([]string, 0, len(lines))
 	for index, value := range lines {
-		showCursor := m.input.Focused() && m.input.Value() != "" && index == m.promptCursorRow
+		showCursor := m.input.Focused() && (m.input.Value() != "" || m.detailEditField != "") && index == m.promptCursorRow
 		line := m.renderPromptLineWithStyle(value, showCursor, base, placeholderColor)
 		if visible := lipgloss.Width(line); visible < width {
 			line += base.Render(strings.Repeat(" ", width-visible))
@@ -303,8 +315,19 @@ func (m Model) promptLines(width int, base lipgloss.Style, placeholderColor lipg
 }
 
 func (m Model) renderPromptLineWithStyle(value string, showCursor bool, base lipgloss.Style, placeholderColor lipgloss.TerminalColor) string {
-	prompt := base.Foreground(lipgloss.Color("183")).Render("> ")
+	label := m.promptLabel()
+	caption := " > "
+	if label != "" {
+		caption = " " + label + " > "
+	}
+	prompt := base.Foreground(styles.AccentPurple).Render(caption)
+	if m.detailEditField == detailEditSlug {
+		prompt += base.Foreground(styles.AccentPurple).Render(m.slugPrefix)
+	}
 	if m.input.Value() == "" {
+		if showCursor {
+			return prompt + promptCursorWithStyle(base)
+		}
 		placeholder := base.Foreground(placeholderColor).Render(m.input.Placeholder)
 		return prompt + placeholder
 	}
@@ -317,17 +340,57 @@ func (m Model) renderPromptLineWithStyle(value string, showCursor bool, base lip
 		if col > len(runes) {
 			col = len(runes)
 		}
-		before := base.Foreground(lipgloss.Color("15")).Render(string(runes[:col]))
-		after := base.Foreground(lipgloss.Color("15")).Render(string(runes[col:]))
+		before := base.Foreground(styles.AccentGreen).Render(string(runes[:col]))
+		after := base.Foreground(styles.AccentGreen).Render(string(runes[col:]))
 		return prompt + before + promptCursorWithStyle(base) + after
 	}
-	return prompt + base.Foreground(lipgloss.Color("15")).Render(value)
+	return prompt + base.Foreground(styles.AccentGreen).Render(value)
+}
+
+func (m Model) promptLabel() string {
+	switch m.detailEditField {
+	case detailEditPRUrl:
+		return "PR URL"
+	case detailCreateUUID:
+		return "UUID"
+	case detailCreateTitle:
+		return "Title"
+	case detailEditTestCase:
+		return "Scenario"
+	case detailEditAfterChange:
+		return "After Change"
+	}
+	if m.detailEditField != "" {
+		label := strings.ReplaceAll(string(m.detailEditField), "-", " ")
+		return strings.ToUpper(label[:1]) + label[1:]
+	}
+	switch m.state {
+	case ProjectCreateState, ProjectUpdateState, EpicCreateState, EpicUpdateState:
+		return "Name"
+	case TestCaseCreateState, TestCaseUpdateState:
+		return "Scenario"
+	case ChangeCreateState:
+		return "Brief"
+	case ChangeUpdateState:
+		return "Title"
+	case FindInputState:
+		return "Find"
+	case DocumentState:
+		if m.documentForm {
+			return "Document"
+		}
+	case BriefState:
+		if m.briefField != "" {
+			return strings.ToUpper(m.briefField[:1]) + m.briefField[1:]
+		}
+	}
+	return ""
 }
 
 func promptCursorWithStyle(base lipgloss.Style) string {
 	return base.
-		Background(lipgloss.Color("15")).
-		Foreground(lipgloss.Color("0")).
+		Background(styles.Foreground).
+		Foreground(styles.Background).
 		Render(" ")
 }
 

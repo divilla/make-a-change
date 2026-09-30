@@ -7,19 +7,20 @@ import (
 	"cli/internal/projects"
 	"cli/internal/styles"
 	"cli/internal/testcases"
+	"cli/internal/ui"
+	"fmt"
 	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func (m Model) handleDropdownKey(key string, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch key {
 	case "ctrl+c":
-		if m.dropdown.kind == dropdownConfirm {
-			return m.cancelDropdown()
-		}
-		return m, nil
+		return m.cancelDropdown()
 	case "esc":
 		return m.cancelDropdown()
 	case "up":
@@ -28,10 +29,13 @@ func (m Model) handleDropdownKey(key string, msg tea.KeyMsg) (tea.Model, tea.Cmd
 	case "down":
 		m.moveHighlight(1)
 		return m, nil
-	case "backspace":
+	case "backspace", "delete", "del":
 		if len(m.dropdown.filter) > 0 {
-			m.dropdown.filter = m.dropdown.filter[:len(m.dropdown.filter)-1]
+			filter := []rune(m.dropdown.filter)
+			m.dropdown.filter = string(filter[:len(filter)-1])
 			m.dropdown.highlighted = 0
+		} else if m.dropdown.kind == dropdownCommand {
+			return m.cancelDropdown()
 		}
 		return m, nil
 	case "enter":
@@ -40,6 +44,11 @@ func (m Model) handleDropdownKey(key string, msg tea.KeyMsg) (tea.Model, tea.Cmd
 		}
 		return m.confirmDropdown()
 	case " ", "space":
+		if m.dropdown.kind == dropdownCommand {
+			m.dropdown.filter += " "
+			m.dropdown.highlighted = 0
+			return m, nil
+		}
 		if m.dropdown.loading {
 			return m, nil
 		}
@@ -213,14 +222,17 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 		return m.beginChange(op, id, in)
 	}
 	if m.dropdown.filterField != "" {
-		if selected.ID == "/clear" {
-			m.clearChangesFilter(m.dropdown.filterField)
+		m.rememberSelectedChange()
+		if selected.ID == "@clear" {
+			m.setChangesFilter(m.dropdown.filterField, dto.Option{})
+			m.restoreSelectedChange()
 			m.state = m.dropdown.onSelect
 			m.status = "cleared " + string(m.dropdown.filterField) + " filter"
 			m.dropdown = dropdownModel{}
 			return m, nil
 		}
 		m.setChangesFilter(m.dropdown.filterField, selected)
+		m.restoreSelectedChange()
 	}
 	if m.state == SelectProjectDropDown {
 		m.currentProject = selected
@@ -238,7 +250,7 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 		m.catalogGeneration++
 		m.optionCatalog = optionCatalog{}
 		m.selectedConfigSlug = ""
-		m.changesFilters = changesFilters{}
+		m.changeSelectionID = ""
 		m.changeList = m.changeList.Scope(id)
 		m, save := m.persistCurrentProject()
 		return m, tea.Batch(save, optionCatalogCommand(m.ctx, m.client, id, m.catalogGeneration), currentProjectCommand(m.ctx, m.client, id, m.selectionGeneration))
@@ -257,51 +269,122 @@ func (m *Model) openConfirmation(state, previous, onYes State) {
 }
 
 func (m Model) dropdownView(width int) string {
+	width = ui.NormalizeWidth(width)
+	prompt := m.dropdown.filter
+	if m.dropdown.kind == dropdownCommand {
+		prompt = "/" + m.dropdown.filter
+	}
+	label := m.dropdown.label
+	if m.dropdown.kind == dropdownCommand {
+		label = ""
+	}
+	caption := " > "
+	if label != "" {
+		caption = " " + label + " > "
+	}
+	promptLine := styles.Default.MenuPromptIndicator.Render(caption) +
+		styles.Default.MenuPrompt.Render(ansi.Truncate(prompt, max(0, width-lipgloss.Width(caption)-1), "…")) +
+		promptCursorWithStyle(styles.Default.MenuPrompt)
+	if padding := width - lipgloss.Width(promptLine); padding > 0 {
+		promptLine += styles.Default.MenuPrompt.Render(strings.Repeat(" ", padding))
+	}
+	lines := []string{
+		styles.Default.PromptEdge.Render(strings.Repeat("▄", width)),
+		promptLine,
+		styles.Default.PromptEdge.Render(strings.Repeat("▀", width)),
+	}
 	if m.dropdown.loading {
-		return styles.Default.InputBand.Width(width).Render(m.dropdown.label + ": loading")
+		return strings.Join(append(lines, styles.Default.MenuItem.Render(m.dropdown.label+": loading")), "\n")
 	}
 	options := m.filteredOptions()
 	if len(options) == 0 {
-		return styles.Default.InputBand.Width(width).Render(m.dropdown.label + ": no options")
+		return strings.Join(append(lines, styles.Default.MenuItem.Render(m.dropdown.label+": no options")), "\n")
 	}
-	promptLines := make([]string, 0, len(options)+2)
-	promptLines = append(promptLines, m.dropdown.label+" "+m.dropdown.filter)
 	if m.dropdown.editField == detailEditTypes {
-		promptLines = append(promptLines, "press <space> to change")
+		lines = append(lines, styles.Default.MenuItem.Render("press <space> to change"))
 	}
-	for i, option := range options {
-		line := m.dropdownLine(option)
-		if i == m.dropdown.highlighted {
-			line = styles.Default.Selection.Render(line)
+	visibleRows := 8
+	if len(options) < 10 {
+		visibleRows = len(options)
+	}
+	selected := max(0, min(m.dropdown.highlighted, len(options)-1))
+	start := max(0, min(selected-visibleRows/2, len(options)-visibleRows))
+	end := min(len(options), start+visibleRows)
+	for i := start; i < end; i++ {
+		option := options[i]
+		line := m.dropdownLine(option, i == selected)
+		if m.dropdown.kind == dropdownCommand {
+			line += strings.Repeat(" ", max(2, 24-lipgloss.Width(line))) + commandDescriptions[option.ID]
 		}
-		promptLines = append(promptLines, line)
+		line = ansi.Truncate(line, width, "…")
+		if i == selected {
+			line = styles.Default.MenuSelected.Width(width).Render(line)
+		} else {
+			line = styles.Default.MenuItem.Render(line)
+		}
+		lines = append(lines, line)
 	}
-	rendered := styles.Default.InputBand.Width(width).Render(strings.Join(promptLines, "\n"))
-	if m.dropdown.kind == dropdownCommand {
-		rendered += "\n" + styles.Default.Background.Width(width).Render("")
+	if len(options) >= 10 {
+		lines = append(lines, styles.Default.MenuCounter.Render(fmt.Sprintf("(%d/%d)", selected+1, len(options))))
 	}
-	return rendered
+	return strings.Join(lines, "\n")
 }
 
-func (m Model) dropdownLine(option dto.Option) string {
+func (m Model) dropdownLine(option dto.Option, highlighted bool) string {
 	label := option.Label
-	if m.dropdown.editField == detailEditTypes {
-		prefix := "+"
-		if selectedChangeType(m.dropdown.pendingTypes, option) {
-			prefix = "-"
+	if m.dropdown.kind == dropdownCommand {
+		return "    " + strings.TrimPrefix(label, "/")
+	}
+	if m.dropdown.source == selectorEpics && option.ID != "@none" && option.ID != "@clear" && option.ID != "" {
+		label = label + " #" + strings.TrimPrefix(option.ID, "#")
+	}
+	marker := "[ ]"
+	if m.dropdown.editField == detailEditTypes && selectedChangeType(m.dropdown.pendingTypes, option) {
+		marker = "[✓]"
+		if !highlighted {
+			marker = "[" + lipgloss.NewStyle().Foreground(styles.AccentGreen).Render("✓") + "]"
 		}
-		return "    " + prefix + strings.TrimLeft(label, "+-")
+	} else if m.dropdownOptionChosen(option) {
+		marker = "[●]"
 	}
-	if m.dropdown.editField == detailEditPhase {
-		return "    -" + strings.TrimPrefix(label, "-")
+	return "    " + marker + " " + strings.TrimLeft(label, "+-")
+}
+
+func (m Model) dropdownOptionChosen(option dto.Option) bool {
+	if option.ID == "@clear" {
+		switch m.dropdown.filterField {
+		case filterPhase:
+			return m.changesFilters.phase.ID == ""
+		case filterEpic:
+			return m.changesFilters.epic.ID == ""
+		case filterTypes:
+			return m.changesFilters.typ.ID == ""
+		}
 	}
-	if option.ID == "/clear" {
-		return "    " + label
+	match := func(id, label string) bool {
+		return id != "" && id == option.ID || label != "" && label == option.Label
 	}
-	if m.dropdown.filterField != "" {
-		return "    -" + strings.TrimPrefix(label, "-")
+	switch m.dropdown.editField {
+	case detailEditPhase:
+		return match(m.changeList.Detail.ChangePhase, m.changeList.Detail.ChangePhase)
+	case detailEditEpic:
+		if m.changeList.Detail.EpicID == "" || m.changeList.Detail.EpicID == "null" {
+			return option.ID == "@none"
+		}
+		return match(m.changeList.Detail.EpicID, m.changeList.Detail.EpicName)
 	}
-	return "    " + label
+	switch m.dropdown.filterField {
+	case filterPhase:
+		return match(m.changesFilters.phase.ID, m.changesFilters.phase.Label)
+	case filterEpic:
+		return match(m.changesFilters.epic.ID, m.changesFilters.epic.Label)
+	case filterTypes:
+		return match(m.changesFilters.typ.ID, m.changesFilters.typ.Label)
+	}
+	if m.dropdown.state == SelectProjectDropDown {
+		return match(m.currentProject.ID, m.currentProject.Label)
+	}
+	return false
 }
 
 func (m Model) togglePendingChangeType() (tea.Model, tea.Cmd) {
@@ -377,7 +460,14 @@ func (m *Model) moveHighlight(delta int) {
 }
 
 func (m Model) filteredOptions() []dto.Option {
-	filter := strings.ToLower(strings.TrimSpace(m.dropdown.filter))
+	filter := strings.ToLower(m.dropdown.filter)
+	if m.dropdown.kind == dropdownCommand {
+		if strings.Contains(filter, "/") {
+			return nil
+		}
+	} else {
+		filter = strings.TrimSpace(filter)
+	}
 	if filter == "" {
 		return m.dropdown.options
 	}

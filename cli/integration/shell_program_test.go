@@ -90,6 +90,7 @@ func TestCLIProgramEditorSaveAndFailure(t *testing.T) {
 			s.send(t, "/editor\r")
 			if fail {
 				s.waitFor(t, "500 Internal Server Error")
+				s.navigate(t, "\x1b", "status prompt")
 				s.navigate(t, "\x1b", "ProjectsListScreen")
 			} else {
 				s.waitFor(t, "ProjectDetailsScreen")
@@ -345,7 +346,7 @@ func programProjectConfig() map[string]any {
 }
 
 func programChange(id int, title string) map[string]any {
-	return map[string]any{"id": id, "project_id": 7, "ref_uuid": "0198a86f-9b8a-7d89-ae5b-6f25b528b04c", "ref": nil, "slug": nil, "epic_id": nil, "epic_name": nil, "change_phase": "backlog", "change_types": []string{}, "title": title, "open": true, "done_tc": int64(2), "total_tc": int64(9), "completed": int64(73), "updated_at": "2026-09-28T11:00:00Z", "after_change_id": nil, "pr_url": "", "created_at": "2026-09-28T10:00:00Z"}
+	return map[string]any{"id": id, "project_id": 7, "ref_uuid": "0198a86f-9b8a-7d89-ae5b-6f25b528b04c", "ref_slug": nil, "epic_id": nil, "epic_name": nil, "change_phase": "backlog", "change_types": []string{}, "title": title, "open": true, "done_tc": int64(2), "total_tc": int64(9), "completed": int64(73), "updated_at": "2026-09-28T11:00:00Z", "after_change_id": nil, "after_change_name": nil, "pr_url": "", "created_at": "2026-09-28T10:00:00Z"}
 }
 
 func programDocument(kind, body string) map[string]any {

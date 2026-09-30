@@ -2,6 +2,7 @@ package changes
 
 import (
 	"cli/internal/dto"
+	"cli/internal/styles"
 	"fmt"
 	"regexp"
 	"strings"
@@ -13,6 +14,79 @@ import (
 )
 
 var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func TestNoMatchingChangesKeepBoxHeaderAndRedMessage(t *testing.T) {
+	red := lipgloss.NewStyle().Foreground(styles.AccentRed).Render("x")
+	redPrefix := strings.SplitN(red, "x", 2)[0]
+	for _, rows := range [][]dto.ChangeView{
+		{{Title: "Existing change"}},
+		{},
+	} {
+		view := TableView(Model{Rows: rows}, Filters{Find: "missing"}, 80, 3)
+		lines := strings.Split(stripANSI(view), "\n")
+		require.GreaterOrEqual(t, len(lines), 6)
+		assert.Contains(t, lines[0], "┌")
+		assert.Contains(t, lines[1], "#Ref")
+		assert.Contains(t, lines[1], "Title")
+		assert.Contains(t, lines[2], "No changes match filters.")
+		assert.Equal(t, strings.Index(lines[1], "Title"), strings.Index(lines[2], "No changes match filters."))
+		assert.Contains(t, view, redPrefix+"No changes match filters.")
+		assert.Contains(t, view, "Rows 0-0 of 0")
+		assert.Contains(t, lines[len(lines)-1], "┘")
+		for _, line := range strings.Split(view, "\n") {
+			assert.LessOrEqual(t, lipgloss.Width(line), 80)
+		}
+	}
+	assert.Contains(t, TableView(Model{}, Filters{}, 80, 3), "No changes.")
+}
+
+func TestFindHighlightsOverrideSelectedRowBackground(t *testing.T) {
+	assert.Equal(t, lipgloss.Color("#5F5F87"), styles.MutedPurple)
+	assert.Equal(t, lipgloss.Color("#875F5F"), styles.MutedRed)
+	assert.Equal(t, lipgloss.Color("#5F875F"), styles.MutedGreen)
+	assert.Equal(t, fmt.Sprint(styles.MutedPurple), fmt.Sprint(styles.Default.Selection.GetBackground()))
+
+	const typesWidth, epicWidth, titleWidth = 12, 14, 32
+	queryWords := normalizedFindWords("FEA")
+	matchStyle := lipgloss.NewStyle().Foreground(styles.Foreground).Background(styles.MutedGreen)
+	for _, selected := range []bool{false, true} {
+		line := changeTableRowLine("FEA-9", "Feature", "feature", "Feature Epic", "---===Feature===--- Feature", "1", "2", "50", "2026-09-29", typesWidth, epicWidth, titleWidth, selected, nil, queryWords)
+		assert.Equal(t, 1, strings.Count(line, matchStyle.Render("FEA")))
+		assert.Equal(t, 1, strings.Count(line, matchStyle.Render("fea")))
+		assert.Equal(t, 4, strings.Count(line, matchStyle.Render("Fea")))
+		assert.Equal(t, changeTableContentWidth(typesWidth, epicWidth, titleWidth), lipgloss.Width(line))
+		assert.Contains(t, stripANSI(line), "---===Feature===--- Feature")
+	}
+	view := TableView(Model{Rows: []dto.ChangeView{{Ref: "FEA-9", ChangePhase: "Feature", ChangeTypes: []string{"feature"}, EpicName: "Feature Epic", Title: "---===Feature===--- Feature"}}}, Filters{Find: "fea"}, 160, 1)
+	assert.Contains(t, view, matchStyle.Render("fea"))
+	assert.Contains(t, view, matchStyle.Render("Fea"))
+}
+
+func TestTypesAndCompletionUseRequestedColors(t *testing.T) {
+	const typesWidth, epicWidth, titleWidth = 12, 10, 20
+	header := changeTableHeaderLine(typesWidth, epicWidth, titleWidth)
+	assert.Contains(t, header, lipgloss.NewStyle().Foreground(styles.AccentPurple).Render("Types"))
+	assert.Contains(t, header, lipgloss.NewStyle().Foreground(styles.AccentBlue).Render("%"))
+	for _, selected := range []bool{false, true} {
+		line := changeTableRowLine("006", "backlog", "feature", "Epic", "Title", "1", "2", "50", "2026-09-29", typesWidth, epicWidth, titleWidth, selected, nil, nil)
+		typesStyle := lipgloss.NewStyle().Foreground(styles.AccentPurple)
+		completeStyle := lipgloss.NewStyle().Foreground(styles.AccentBlue)
+		if selected {
+			typesStyle = typesStyle.Background(styles.MutedPurple)
+			completeStyle = completeStyle.Background(styles.MutedPurple)
+		}
+		assert.Contains(t, line, typesStyle.Render(fmt.Sprintf("%-*s", typesWidth, "feature")))
+		assert.Contains(t, line, completeStyle.Render(" 50"))
+	}
+	for _, selected := range []bool{false, true} {
+		style := detailValueStyle
+		if selected {
+			style = detailSelectedStyle
+		}
+		assert.Equal(t, styles.AccentPurple, style(DetailRow{Label: "Types"}, nil).GetForeground())
+		assert.Equal(t, styles.AccentBlue, style(DetailRow{Label: "Complete"}, nil).GetForeground())
+	}
+}
 
 func TestDetailsViewSeparatesSpecAndTestCases(t *testing.T) {
 	model := Model{}.WithDetail(dto.ChangeView{
@@ -72,9 +146,75 @@ func TestDetailsViewRendersUnassignedRefAsBlank(t *testing.T) {
 
 	assert.Contains(t, view, "ID │ 201")
 	assert.Contains(t, view, "Ref UUID │")
-	assert.Contains(t, view, "Ref │")
+	assert.Contains(t, view, "Slug │")
 	assert.NotContains(t, view, "id:201")
-	assert.NotContains(t, view, "Ref │ ?")
+	assert.NotContains(t, view, "Ref │")
+}
+
+func TestDetailIdentityOrderColorsAndTitleDivider(t *testing.T) {
+	change := dto.ChangeView{ID: "12", RefUUID: "uuid", RefSlug: "006-some-slug", EpicName: "Epic", ChangePhase: "backlog", ChangeTypes: []string{"feature"}, AfterChangeName: "First change #2", Title: "Title"}
+	rows := DetailRows(change)
+	require.GreaterOrEqual(t, len(rows), 6)
+	labels := make([]string, 0, 6)
+	for _, row := range rows[:6] {
+		labels = append(labels, row.Label)
+	}
+	assert.Equal(t, []string{"Slug", "Epic", "Phase", "Types", "After Change", "Title"}, labels)
+	assert.False(t, rows[3].DividerAfter)
+	assert.True(t, rows[4].DividerAfter)
+	assert.Equal(t, styles.Default.AccentCyan.GetForeground(), detailValueStyle(rows[0], nil).GetForeground())
+	assert.Equal(t, styles.Default.AccentCyan.GetForeground(), detailSelectedStyle(rows[0], nil).GetForeground())
+	assert.Equal(t, styles.AccentPurple, detailValueStyle(rows[3], nil).GetForeground())
+	assert.Equal(t, styles.AccentPurple, detailSelectedStyle(rows[3], nil).GetForeground())
+	assert.Equal(t, styles.Foreground, detailValueStyle(rows[5], nil).GetForeground())
+	assert.Equal(t, styles.Foreground, detailSelectedStyle(rows[5], nil).GetForeground())
+	view := stripANSI(DetailsView(Model{Detail: change}, 120, 10))
+	for _, pair := range [][2]string{{"ID │ 12", "Ref UUID │ uuid"}, {"Ref UUID │ uuid", "Slug │ 006-some-slug"}, {"Slug │ 006-some-slug", "Epic │ Epic"}, {"Epic │ Epic", "Phase │ backlog"}, {"Phase │ backlog", "Types │ feature"}, {"Types │ feature", "After Change │ First change #2"}, {"After Change │ First change #2", "Title │ Title"}} {
+		assert.Less(t, strings.Index(view, pair[0]), strings.Index(view, pair[1]))
+	}
+	assert.Contains(t, view[strings.Index(view, "After Change │ First change #2"):strings.Index(view, "Title │ Title")], "───┼───")
+	assert.NotContains(t, view, "Ref │")
+	assert.NotContains(t, view, "AccentCyan")
+	assert.NotContains(t, view, "Foreground")
+}
+
+func TestNullableChangeFieldsRenderAsDashes(t *testing.T) {
+	change := dto.ChangeView{ID: "12", Ref: "null", RefSlug: "null", EpicID: "null", EpicName: "null", AfterChangeID: "null", Title: "Missing associations"}
+	list := stripANSI(TableView(Model{Rows: []dto.ChangeView{change}}, Filters{}, 120, 1))
+	assert.NotContains(t, list, "null")
+	assert.Contains(t, list, "Missing associations")
+	rows := DetailRows(change)
+	for _, label := range []string{"Slug", "Epic", "After Change"} {
+		found := false
+		for _, row := range rows {
+			if row.Label == label {
+				assert.Equal(t, "-", row.Text, label)
+				found = true
+			}
+		}
+		assert.True(t, found, label)
+	}
+	assert.NotContains(t, stripANSI(DetailsView(Model{Detail: change}, 120, 25)), "null")
+	assert.Equal(t, "#3", epicLabel(dto.ChangeView{EpicID: "3", EpicName: "null"}))
+	assert.Equal(t, "Planning", epicLabel(dto.ChangeView{EpicID: "3", EpicName: "Planning"}))
+	list = stripANSI(TableView(Model{Rows: []dto.ChangeView{{EpicID: "3", EpicName: "Planning", Title: "Example"}}}, Filters{}, 120, 2))
+	assert.Contains(t, list, "Planning")
+	assert.NotContains(t, list, "Planning #3")
+}
+
+func TestInProgressPhaseKeepsTypesAndFollowingColumnsAligned(t *testing.T) {
+	const typesWidth, epicWidth, titleWidth = 12, 10, 20
+	rows := []string{
+		stripANSI(changeTableRowLine("1", "todo", "feature", "Epic", "Title", "111", "222", "333", "2026-09-29", typesWidth, epicWidth, titleWidth, false, nil, nil)),
+		stripANSI(changeTableRowLine("2", "in-progress", "feature", "Epic", "Title", "111", "222", "333", "2026-09-29", typesWidth, epicWidth, titleWidth, false, nil, nil)),
+	}
+	header := stripANSI(changeTableLine("#Ref", "Phase", "Types", "Epic", "Title", "Don", "Tot", "%", "Modified", typesWidth, epicWidth, titleWidth))
+	for _, column := range []string{"feature", "Epic", "Title", "111", "222", "333", "2026-09-29"} {
+		assert.Equal(t, strings.Index(rows[0], column), strings.Index(rows[1], column), column)
+	}
+	assert.Equal(t, strings.Index(header, "Types"), strings.Index(rows[0], "feature"))
+	assert.Equal(t, strings.Index(header, "Types"), strings.Index(rows[1], "feature"))
+	assert.Equal(t, changeTableContentWidth(typesWidth, epicWidth, titleWidth), lipgloss.Width(rows[1]))
 }
 
 func TestDetailsViewCountsFixedRowsInsidePageSize(t *testing.T) {
@@ -100,7 +240,7 @@ func TestMoveDetailSelectionKeepsVisibleRowsAnchored(t *testing.T) {
 	model := Model{}.WithDetail(dto.ChangeView{
 		ID:          "12",
 		Ref:         "201",
-		Slug:        "201-change",
+		RefSlug:     "201-change",
 		ChangePhase: "backlog",
 		Title:       "Backend Change",
 		Spec:        "Spec text",
@@ -117,7 +257,7 @@ func TestMoveDetailSelectionScrollsOnlyEnoughToRevealBottom(t *testing.T) {
 	model := Model{}.WithDetail(dto.ChangeView{
 		ID:          "12",
 		Ref:         "201",
-		Slug:        "201-change",
+		RefSlug:     "201-change",
 		ChangePhase: "backlog",
 		EpicName:    "CLI",
 		Title:       "Backend Change",
@@ -168,7 +308,7 @@ func TestShortDetailsViewportScrollsIdentityAndBody(t *testing.T) {
 				seen.WriteString(stripANSI(view))
 				model = model.ScrollDetailViewport(page, page, width)
 			}
-			for _, value := range []string{"ID │ 12", "Ref UUID", original.Detail.RefUUID, "Ref │ 3", "first title line", "last title line", "https://example.test/pr", "Modified"} {
+			for _, value := range []string{"ID │ 12", "Ref UUID", original.Detail.RefUUID, "first title line", "last title line", "https://example.test/pr", "Modified"} {
 				require.Contains(t, seen.String(), value)
 			}
 			for i := 0; i < 100; i++ {

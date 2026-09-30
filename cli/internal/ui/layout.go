@@ -1,3 +1,4 @@
+// Package ui provides shared terminal layout helpers.
 package ui
 
 // NormalizeWidth returns a usable terminal width for rendering.

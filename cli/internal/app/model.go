@@ -53,13 +53,14 @@ type filterField string
 const (
 	filterPhase filterField = "phase"
 	filterEpic  filterField = "epic"
-	filterType  filterField = "type"
+	filterTypes filterField = "types"
 )
 
 type detailEditField string
 
 const (
 	detailEditTitle       detailEditField = "title"
+	detailEditSlug        detailEditField = "slug"
 	detailEditDocument    detailEditField = "document"
 	detailEditAfterChange detailEditField = "after-change"
 	detailCreateTitle     detailEditField = "create-title"
@@ -176,6 +177,7 @@ type Model struct {
 	promptCursorCol     int
 	pendingAltO         bool
 	changesFilters      changesFilters
+	changeSelectionID   string
 	optionCatalog       optionCatalog
 	selectedConfigSlug  string
 	configurations      configurations.Model
@@ -192,6 +194,7 @@ type Model struct {
 	configPath          string
 	dropdown            dropdownModel
 	detailEditField     detailEditField
+	slugPrefix          string
 	testCase            testcases.Model
 	document            documents.Model
 	documentReturn      State
@@ -230,13 +233,13 @@ func newModelWithConfig(client appClient, cfg appConfig) Model {
 	input.SetWidth(0)
 	input.SetHeight(1)
 	input.FocusedStyle.Base = styles.Default.InputBand
-	input.FocusedStyle.Prompt = styles.Default.InputBand.Foreground(lipgloss.Color("183"))
-	input.FocusedStyle.Text = styles.Default.InputBand.Foreground(lipgloss.Color("15"))
-	input.FocusedStyle.CursorLine = styles.Default.InputBand.Foreground(lipgloss.Color("15"))
-	input.FocusedStyle.Placeholder = styles.Default.InputBand.Foreground(lipgloss.Color("0"))
+	input.FocusedStyle.Prompt = styles.Default.InputBand.Foreground(styles.AccentPurple)
+	input.FocusedStyle.Text = styles.Default.InputBand.Foreground(styles.Foreground)
+	input.FocusedStyle.CursorLine = styles.Default.InputBand.Foreground(styles.Foreground)
+	input.FocusedStyle.Placeholder = styles.Default.InputBand.Foreground(styles.Gray)
 	input.FocusedStyle.EndOfBuffer = styles.Default.InputBand.Foreground(lipgloss.Color("240"))
 	input.BlurredStyle = input.FocusedStyle
-	input.Cursor.Style = styles.Default.InputBand.Foreground(lipgloss.Color("15"))
+	input.Cursor.Style = styles.Default.InputBand.Foreground(styles.Foreground)
 	input.Cursor.TextStyle = input.FocusedStyle.Text
 	input.Cursor.SetMode(cursor.CursorStatic)
 	input.Focus()

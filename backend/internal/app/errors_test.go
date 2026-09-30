@@ -50,14 +50,14 @@ func TestDatabaseMappingsAndCauses(t *testing.T) {
 		{"unknown", errors.New("unknown"), ErrChangeNotFound, ErrTestCaseNotFound, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := Database(tc.cause, tc.missing, tc.foreignKey)
+			got := DatabaseError(tc.cause, tc.missing, tc.foreignKey)
 			require.ErrorIs(t, got, tc.cause)
 			if tc.semantic != nil {
 				require.ErrorIs(t, got, tc.semantic)
 			} else {
 				require.Equal(t, tc.cause, got)
 			}
-			require.Equal(t, got, Database(got, tc.missing, tc.foreignKey), "no repeated mapping")
+			require.Equal(t, got, DatabaseError(got, tc.missing, tc.foreignKey), "no repeated mapping")
 			var pgErr *pgconn.PgError
 			if errors.As(tc.cause, &pgErr) {
 				var actual *pgconn.PgError
@@ -114,7 +114,7 @@ func TestHTTPContractsAndCauses(t *testing.T) {
 	require.Nil(t, HTTP(nil))
 	require.NotErrorIs(t, ErrProjectNotFound, ErrChangeNotFound)
 	external := &pgconn.PgError{Code: "23503"}
-	translated := HTTP(Database(Wrap(external, "insert"), nil, ErrTestCaseNotFound))
+	translated := HTTP(DatabaseError(Wrap(external, "insert"), nil, ErrTestCaseNotFound))
 	var actual *pgconn.PgError
 	require.ErrorAs(t, translated, &actual)
 	require.Same(t, external, actual)
@@ -159,7 +159,7 @@ func TestChangeDatabaseContracts(t *testing.T) {
 	}
 	require.NoError(t, ChangeCreate(nil))
 	cause := &pgconn.PgError{Code: "23503"}
-	err := Database(cause, nil, ErrChangeHasTestCases)
+	err := DatabaseError(cause, nil, ErrChangeHasTestCases)
 	require.ErrorIs(t, err, cause)
 	code, msg := Interpret(err)
 	require.Equal(t, 409, code)

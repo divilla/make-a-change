@@ -122,7 +122,7 @@ func TestP803RunnerCancellationProgressAndReaping(t *testing.T) {
 	}()
 	select {
 	case message := <-progress:
-		require.Contains(t, message, "started")
+		require.Regexp(t, `^(agent stdout: started|agent stderr: checking context)$`, message)
 	case <-time.After(3 * time.Second):
 		t.Fatal("no live agent progress")
 	}

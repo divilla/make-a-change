@@ -49,10 +49,11 @@ changes, removes, or defers it. The baseline is defined by the [CLI](../cli/),
   hyphen, trim surrounding hyphens, and use `change` if empty.
 - The database assigns `ref`, unique within the project, when a change first
   leaves `backlog`. It is permanent, including when returning to `backlog`.
-- All change views return
-  `to_char(c.ref, 'FM000000') || '-' || c.slug as ref_slug`.
-  Branches and directories use this returned value: `ref` of `6` and slug
-  `some-change` produce `000006-some-change`.
+- Both change views return `ref_slug`, formed by zero padding `ref` to three
+  digits when `ref <= 99`, leaving larger refs unchanged, then appending `-`
+  and the stored slug suffix. It is null
+  until `ref` is assigned. Branches and directories use this returned value:
+  `ref` of `6` and suffix `some-change` produce `006-some-change`.
 
 ## Phase and open state
 
@@ -136,8 +137,10 @@ both, or neither may exist. Saving either first checks out `change/<ref_slug>`
 and exports the saved document to its path above. Filenames are fixed;
 additional documents may be defined, but their names and behavior remain open.
 
-Editing the slug after export renames the branch and entire document directory
-using the updated `ref_slug`, preserving all contents, filenames, and `ref`.
+Editing the slug sends only its lowercase suffix. The view supplies the fixed
+reference prefix in the updated `ref_slug`; after export, the branch and entire
+document directory are renamed using that value, preserving all contents,
+filenames, and `ref`.
 
 ## PR drafting
 

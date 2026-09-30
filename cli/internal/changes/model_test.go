@@ -1,11 +1,38 @@
 package changes
 
 import (
+	"cli/internal/dto"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestFilteredRowsMatchesAllNormalizedWordPrefixesInVisibleFields(t *testing.T) {
+	rows := []dto.ChangeView{
+		{Ref: "AC-12", Title: "Add DB Migrations", ChangePhase: "in-progress", ChangeTypes: []string{"maintenance"}, EpicName: "Storage"},
+		{Ref: "AC-13", Title: "---===Feature===---", ChangePhase: "backlog"},
+		{Ref: "AC-14", Title: "Other", ChangePhase: "done", ChangeTypes: []string{"feature"}},
+		{Ref: "AC-15", Title: "Unrelated", ChangePhase: "done", Brief: "Add DB Migrations", Spec: "Feature", RefSlug: "015-feature"},
+	}
+	for _, tt := range []struct {
+		query string
+		want  []dto.ChangeView
+	}{
+		{query: "ad mig", want: rows[:1]},
+		{query: "AD mig", want: rows[:1]},
+		{query: "fea", want: rows[1:3]},
+		{query: "AC-12 stor", want: rows[:1]},
+		{query: "prog mai", want: []dto.ChangeView{}},
+		{query: "in-prog mai", want: rows[:1]},
+		{query: "igr", want: []dto.ChangeView{}},
+		{query: "", want: rows},
+	} {
+		t.Run(tt.query, func(t *testing.T) {
+			assert.Equal(t, tt.want, FilteredRows(rows, Filters{Find: tt.query}))
+		})
+	}
+}
 
 func TestParseSpecStructureTracksOptionalTypesMetadata(t *testing.T) {
 	tests := []struct {

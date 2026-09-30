@@ -26,6 +26,7 @@ const (
 	Create      Operation = "create"
 	Delete      Operation = "delete"
 	Title       Operation = "title"
+	Slug        Operation = "slug"
 	Phase       Operation = "phase"
 	Types       Operation = "types"
 	Epic        Operation = "epic"
@@ -143,6 +144,11 @@ func (m Model) Begin(ctx context.Context, api API, docs Documents, op Operation,
 		case Title:
 			r.Err = api.UpdateChangeTitle(ctx, id, in.Value)
 			r.Detail.Title = in.Value
+		case Slug:
+			r.Err = api.UpdateChangeSlug(ctx, id, in.Value)
+			if prefix, _, ok := strings.Cut(r.Detail.RefSlug, "-"); ok {
+				r.Detail.RefSlug = prefix + "-" + in.Value
+			}
 		case Phase:
 			r.Err = api.UpdateChangePhase(ctx, id, in.Value)
 			r.Detail.ChangePhase = in.Value
@@ -156,6 +162,7 @@ func (m Model) Begin(ctx context.Context, api API, docs Documents, op Operation,
 		case AfterChange:
 			r.Err = api.UpdateChangeAfterChange(ctx, id, in.Association)
 			r.Detail.AfterChangeID = optionalInt(in.Association)
+			r.Detail.AfterChangeName = "null"
 		case Open:
 			r.Err = api.UpdateChangeOpen(ctx, id, in.Open)
 			r.Detail.Open = in.Open
@@ -267,6 +274,10 @@ func validate(op Operation, project, id int, in Input, catalog dto.ProjectConfig
 		if strings.TrimSpace(in.Value) == "" {
 			return errors.New("change title is required")
 		}
+	case Slug:
+		if !regexp.MustCompile(`^[a-z0-9_-]+$`).MatchString(in.Value) {
+			return errors.New("change slug requires a lowercase suffix")
+		}
 	case Phase:
 		if !slices.Contains(catalog.ChangePhases, in.Value) {
 			return errors.New("phase is not configured for this project")
@@ -304,6 +315,9 @@ func unchanged(v dto.ChangeView, op Operation, in Input) bool {
 	switch op {
 	case Title:
 		return v.Title == in.Value
+	case Slug:
+		_, suffix, ok := strings.Cut(v.RefSlug, "-")
+		return ok && suffix == in.Value
 	case PRURL:
 		return v.PRUrl == in.Value
 	case AfterChange:
@@ -439,15 +453,18 @@ func readDetail(ctx context.Context, api API, docs Documents, project, id int) (
 
 // Present formats persisted identity and server completion without deriving either.
 func Present(c dto.Change) dto.ChangeView {
-	v := dto.ChangeView{ID: strconv.Itoa(c.ID), ProjectID: strconv.Itoa(c.ProjectID), RefUUID: c.RefUUID, Ref: "null", Slug: "null", EpicID: optionalInt(c.EpicID), EpicName: "null", AfterChangeID: optionalInt(c.AfterChangeID), Title: c.Title, ChangePhase: c.ChangePhase, ChangeTypes: append([]string(nil), c.ChangeTypes...), Open: c.Open, Done: c.DoneTC, Total: c.TotalTC, Completed: c.Completed, PRUrl: c.PRUrl, Created: c.CreatedAt.Format(time.RFC3339Nano), Modified: c.UpdatedAt.Format(time.RFC3339Nano)}
-	if c.Ref != nil {
-		v.Ref = strconv.FormatInt(int64(*c.Ref), 10)
-	}
-	if c.Slug != nil {
-		v.Slug = *c.Slug
+	v := dto.ChangeView{ID: strconv.Itoa(c.ID), ProjectID: strconv.Itoa(c.ProjectID), RefUUID: c.RefUUID, Ref: "null", RefSlug: "null", EpicID: optionalInt(c.EpicID), EpicName: "null", AfterChangeID: optionalInt(c.AfterChangeID), AfterChangeName: "null", Title: c.Title, ChangePhase: c.ChangePhase, ChangeTypes: append([]string(nil), c.ChangeTypes...), Open: c.Open, Done: c.DoneTC, Total: c.TotalTC, Completed: c.Completed, PRUrl: c.PRUrl, Created: c.CreatedAt.Format(time.RFC3339Nano), Modified: c.UpdatedAt.Format(time.RFC3339Nano)}
+	if c.RefSlug != nil {
+		v.RefSlug = *c.RefSlug
+		if ref, _, ok := strings.Cut(*c.RefSlug, "-"); ok {
+			v.Ref = ref
+		}
 	}
 	if c.EpicName != nil {
 		v.EpicName = *c.EpicName
+	}
+	if c.AfterChangeName != nil {
+		v.AfterChangeName = *c.AfterChangeName
 	}
 	return v
 }

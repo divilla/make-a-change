@@ -28,5 +28,5 @@ func NewRepo(pool *pgxpool.Pool) *Repo {
 
 // Ping executes Ping behavior.
 func (r *Repo) Ping(ctx context.Context) error {
-	return app.Database(r.pool.Ping(ctx), nil, nil)
+	return app.DatabaseError(r.pool.Ping(ctx), nil, nil)
 }

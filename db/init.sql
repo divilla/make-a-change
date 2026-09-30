@@ -225,13 +225,12 @@ ORDER BY e.project_id, e.name;
 create view public.vw_change_list as
 SELECT c.id,
        c.ref_uuid,
-       c.ref,
-       c.slug,
+       (case when c.ref > 99 then c.ref::text else lpad(c.ref::text, 3, '0') end) || '-' || c.slug as ref_slug,
        c.project_id,
        c.change_phase,
        c.change_types,
        c.epic_id,
-       e.name                                                                          AS epic_name,
+       e.name || ' (#' || c.epic_id || ')'                                         AS epic_name,
        c.title,
        c.open,
        (select count(*) from testcase tc where tc.change_id = c.id and tc.done = true) as done_tc,
@@ -244,16 +243,16 @@ ORDER BY c.project_id, c.updated_at DESC;
 create view public.vw_change_details as
 SELECT c.id,
        c.ref_uuid,
-       c.ref,
-       c.slug,
+       (case when c.ref > 99 then c.ref::text else lpad(c.ref::text, 3, '0') end) || '-' || c.slug as ref_slug,
        c.project_id,
        c.change_phase,
        c.change_types,
        c.epic_id,
-       e.name                                                                          AS epic_name,
+       e.name                                                                    AS epic_name,
        c.title,
        c.pr_url,
        c.after_change_id,
+       ca.title || ' (#' || c.after_change_id::text || ')' as after_change_name,
        c.open,
        (select count(*) from testcase tc where tc.change_id = c.id and tc.done = true) as done_tc,
        (select count(*) from testcase tc where tc.change_id = c.id)                    as total_tc,
@@ -263,6 +262,8 @@ SELECT c.id,
        c.updated_at
 FROM change c
          LEFT JOIN epic e ON c.epic_id = e.id
+         LEFT JOIN change ca ON c.after_change_id = ca.id
+
 ORDER BY c.project_id, c.updated_at DESC;
 
 create view public.vw_foreign_key as
@@ -329,6 +330,19 @@ $$
 begin
     update public.change
     set title=trim(regexp_replace(_title, '\s+', ' ', 'g')),
+        updated_at=now()
+    where id = _change_id;
+end;
+$$;
+
+drop procedure if exists public.sp_change_slug_update;
+create procedure public.sp_change_slug_update(_change_id bigint, _slug text)
+    language plpgsql
+as
+$$
+begin
+    update public.change
+    set slug=_slug,
         updated_at=now()
     where id = _change_id;
 end;

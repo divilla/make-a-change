@@ -93,27 +93,26 @@ func newBoundary(t *testing.T) *boundary {
 
 func TestRepositoryCurrentReads(t *testing.T) {
 	now := time.Now()
-	ref := int32(12)
-	slug := "slug"
+	refSlug := "012-slug"
 	epic := 4
 	name := "Epic"
+	afterName := "Previous change #4"
 	for _, op := range []string{"list", "details"} {
 		for _, scenario := range []string{"values", "nullable", "empty", "scan", "query", "iteration", "missing"} {
 			t.Run(op+"/"+scenario, func(t *testing.T) {
 				failure := errors.New("read failed")
 				p := newBoundary(t)
 				p.args = []any{7}
-				c := domain.ChangeListItem{ID: 7, RefUUID: "uuid", Ref: &ref, Slug: &slug, ProjectID: 9, ChangePhase: "backlog", ChangeTypes: []string{"fix"}, EpicID: &epic, EpicName: &name, Title: "Title", Open: true, DoneTC: 70000, TotalTC: 100000, UpdatedAt: now}
+				c := domain.ChangeListItem{ID: 7, RefUUID: "uuid", RefSlug: &refSlug, ProjectID: 9, ChangePhase: "backlog", ChangeTypes: []string{"fix"}, EpicID: &epic, EpicName: &name, Title: "Title", Open: true, DoneTC: 70000, TotalTC: 100000, UpdatedAt: now}
 				if scenario == "nullable" {
-					c.Ref = nil
-					c.Slug = nil
+					c.RefSlug = nil
 					c.EpicID = nil
 					c.EpicName = nil
 				}
-				values := []any{c.ID, c.RefUUID, c.Ref, c.Slug, c.ProjectID, c.ChangePhase, c.ChangeTypes, c.EpicID, c.EpicName, c.Title, c.Open, c.DoneTC, c.TotalTC, c.UpdatedAt}
+				values := []any{c.ID, c.RefUUID, c.RefSlug, c.ProjectID, c.ChangePhase, c.ChangeTypes, c.EpicID, c.EpicName, c.Title, c.Open, c.DoneTC, c.TotalTC, c.UpdatedAt}
 				switch op {
 				case "details":
-					values = append(values, "https://pr", now, &epic)
+					values = append(values, "https://pr", now, &epic, &afterName)
 				}
 				row := valueRow{t: t, values: values}
 				rows := &valueRows{}
@@ -155,7 +154,7 @@ func TestRepositoryCurrentReads(t *testing.T) {
 					var got domain.ChangeDetails
 					got, err = r.Details(p.ctx, domain.ChangeIDRequest{ID: 7})
 					if err == nil {
-						require.Equal(t, domain.ChangeDetails{ChangeListItem: c, PRUrl: "https://pr", CreatedAt: now, AfterChangeID: &epic}, got)
+						require.Equal(t, domain.ChangeDetails{ChangeListItem: c, PRUrl: "https://pr", CreatedAt: now, AfterChangeID: &epic, AfterChangeName: &afterName}, got)
 					}
 					require.Contains(t, p.sql, "from public.vw_change_details where id = $1")
 				}
@@ -249,6 +248,9 @@ func TestRepositorySingleStatementMutations(t *testing.T) {
 		{"title", "call public.sp_change_title_update($1,$2)", []any{7, "Title"}, func(r *Repo, c context.Context) error {
 			return r.UpdateTitle(c, domain.ChangeUpdateTitleRequest{ID: 7, Title: "Title"})
 		}, false, nil},
+		{"slug", "update public.change set slug = $2, updated_at = now() where id = $1", []any{7, "new-slug"}, func(r *Repo, c context.Context) error {
+			return r.UpdateSlug(c, domain.ChangeUpdateSlugRequest{ID: 7, Slug: "new-slug"})
+		}, true, nil},
 		{"phase", "call public.sp_change_phase_update($1,$2)", []any{7, "todo"}, func(r *Repo, c context.Context) error {
 			return r.UpdatePhase(c, domain.ChangeUpdatePhaseRequest{ID: 7, ChangePhase: "todo"})
 		}, false, nil},

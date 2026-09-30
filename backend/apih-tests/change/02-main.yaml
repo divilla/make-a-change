@@ -28,7 +28,7 @@ spec:
       body: '{"id":${change_id}}'
     response:
       expected_status: 200
-      expected_body: '{"id":${change_id},"project_id":${change_project},"title":"APIHydra  change","change_phase":"backlog","after_change_id":null,"epic_id":null,"open":true,"done_tc":0,"total_tc":0,"completed":0,"pr_url":""}'
+      expected_body: '{"id":${change_id},"project_id":${change_project},"title":"APIHydra  change","change_phase":"backlog","after_change_id":null,"after_change_name":null,"epic_id":null,"open":true,"done_tc":0,"total_tc":0,"completed":0,"pr_url":""}'
       expected_types:
         .created_at:
         - string
@@ -40,6 +40,25 @@ spec:
         - zero
       capture:
         change_uuid: .ref_uuid
+  - request:
+      method: POST
+      path: /api/v1/change/update-slug
+      body: '{"id":${change_id},"slug":"BAD-slug"}'
+    response:
+      expected_status: 400
+  - request:
+      method: POST
+      path: /api/v1/change/update-slug
+      body: '{"id":${change_id},"slug":"apih-slug"}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"ref_slug":null}'
   - request:
       method: POST
       path: /api/v1/change/create

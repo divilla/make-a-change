@@ -42,7 +42,7 @@ func (r *Repo) List(ctx context.Context) ([]domain.Project, error) {
  order by v.updated_at desc, v.id desc
 	`)
 	if err != nil {
-		return nil, app.Database(err, nil, nil)
+		return nil, app.DatabaseError(err, nil, nil)
 	}
 	defer rows.Close()
 	projects := make([]domain.Project, 0)
@@ -53,7 +53,7 @@ func (r *Repo) List(ctx context.Context) ([]domain.Project, error) {
 		}
 		projects = append(projects, project)
 	}
-	return projects, app.Database(rows.Err(), nil, nil)
+	return projects, app.DatabaseError(rows.Err(), nil, nil)
 }
 
 // Details executes Details behavior.
@@ -64,7 +64,7 @@ func (r *Repo) Details(ctx context.Context, req domain.ProjectIDRequest) (domain
 		where v.id = $1
 	`, req.ID))
 	if err != nil {
-		return domain.Project{}, app.Database(err, app.ErrProjectNotFound, nil)
+		return domain.Project{}, app.DatabaseError(err, app.ErrProjectNotFound, nil)
 	}
 	return project, nil
 }
@@ -73,14 +73,14 @@ func (r *Repo) Details(ctx context.Context, req domain.ProjectIDRequest) (domain
 func (r *Repo) Create(ctx context.Context, req domain.ProjectCreateRequest) (domain.ProjectIDRequest, error) {
 	var result domain.ProjectIDRequest
 	err := r.pool.QueryRow(ctx, "insert into public.project (name) values ($1) returning id", req.Name).Scan(&result.ID)
-	return result, app.Database(err, nil, nil)
+	return result, app.DatabaseError(err, nil, nil)
 }
 
 // Update changes the name and timestamp, including same-name updates.
 func (r *Repo) Update(ctx context.Context, req domain.ProjectUpdateRequest) error {
 	tag, err := r.pool.Exec(ctx, "update public.project set name = $2, updated_at = now() where id = $1", req.ID, req.Name)
 	if err != nil {
-		return app.Database(err, nil, nil)
+		return app.DatabaseError(err, nil, nil)
 	}
 	if tag.RowsAffected() == 0 {
 		return app.ErrProjectNotFound
@@ -92,7 +92,7 @@ func (r *Repo) Update(ctx context.Context, req domain.ProjectUpdateRequest) erro
 func (r *Repo) Delete(ctx context.Context, req domain.ProjectIDRequest) error {
 	tag, err := r.pool.Exec(ctx, "delete from public.project where id = $1", req.ID)
 	if err != nil {
-		return app.Database(err, nil, app.ErrProjectHasChanges)
+		return app.DatabaseError(err, nil, app.ErrProjectHasChanges)
 	}
 	if tag.RowsAffected() == 0 {
 		return app.ErrProjectNotFound
@@ -103,7 +103,7 @@ func (r *Repo) Delete(ctx context.Context, req domain.ProjectIDRequest) error {
 func scanProject(row pgx.Row) (domain.Project, error) {
 	var project domain.Project
 	err := row.Scan(&project.ID, &project.Name, &project.Config, &project.LastRef, &project.CreatedAt, &project.UpdatedAt, &project.ChangeCount)
-	return project, app.Database(err, nil, nil)
+	return project, app.DatabaseError(err, nil, nil)
 }
 
 type projectPool interface {
@@ -120,5 +120,5 @@ func (r *Repo) Config(ctx context.Context, req domain.ProjectIDRequest) (domain.
  from public.project p join public.config c on c.slug = p.config where p.id = $1`, req.ID).Scan(
 		&result.Slug, &result.ProjectDocs, &result.EpicDocs, &result.ChangeDocs,
 		&result.ChangePhases, &result.ChangeColors, &result.ChangeTypes)
-	return result, app.Database(err, app.ErrProjectConfigNotFound, nil)
+	return result, app.DatabaseError(err, app.ErrProjectConfigNotFound, nil)
 }

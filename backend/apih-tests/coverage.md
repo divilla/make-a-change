@@ -38,7 +38,8 @@ configuration.
 
 The Make target streams standard APIHydra output, gracefully stops only its own
 server to flush Go counters, then prints a blank line and actual statement
-coverage by package and in total. Coverage is diagnostic, with no minimum gate.
+coverage by package and in total. A complete campaign must cover at least 90%
+of backend production statements to pass.
 Test, build, shutdown and invalid-profile failures still fail the command and
 remove invalid success reports. Readiness checks use TCP, not extra HTTP calls;
 the measured counters include server startup, APIHydra traffic and shutdown.
@@ -139,7 +140,8 @@ missing records, reference conflicts, independent mutation reads, doc history,
 HTML sanitization and testcase completion counters are also exercised. Every
 request declares an explicit expected status. Nineteen YAML steps files pass.
 
-Fresh API **statement coverage is 943/1045 (90.2392%)**, with no threshold gate.
+The prior API **statement coverage was 943/1045 (90.2392%)**; it was recorded
+before the current 90% gate was enabled and is not a fresh measurement of this change.
 The previous 980/1045 result belongs to the removed SQL/outage campaign; it is
 not reused here. Operation coverage above is a separate metric.
 

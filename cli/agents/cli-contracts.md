@@ -79,6 +79,7 @@ replaces global option routes. No SQL or backend internals belong in CLI tests.
 | POST | `/api/v1/change/update-open` | Changes P4: update-open |
 | POST | `/api/v1/change/update-types` | Changes P4: update-types |
 | POST | `/api/v1/change/update-title` | Changes P4: update-title |
+| POST | `/api/v1/change/update-slug` | Change details slug editor sends only a nonempty `[a-z0-9_-]` suffix in `slug`; list/details return the full nullable `ref_slug` (`006-some-slug` or `1116-some-slug`), whose reference prefix is fixed by the view. |
 | POST | `/api/v1/change/update-pr-url` | Changes P4: update-pr-url |
 | POST | `/api/v1/change/delete` | Changes P4: delete |
 | POST | `/api/v1/test-case/list` | Testcases P5: list |
@@ -581,8 +582,13 @@ real PTY campaign remains unchanged and passed independently.
 [Specification](../../agent/specs/023-cli-change-management.md). Change transport
 now uses all eleven current POST routes, one cancellable operation per method.
 List/details decode required typed fields directly; create returns only its 201
-ID; writes and deletion accept empty 204 responses. Nullable ref/slug/epic and
-prerequisite distinguish explicit null from absent fields. Counts/completion are
+ID; writes and deletion accept empty 204 responses. Nullable `ref_slug`/epic and
+prerequisite (`after_change_id` and display-only `after_change_name`) distinguish
+explicit null from absent fields. The detail table begins ID, Ref UUID, Slug,
+Epic, Phase, Types, After Change, a separator, and Title; it has no separate Ref
+row. Epic uses the plain detail-view `epic_name`. The Slug prompt edits only the
+`ref_slug` suffix, and the After Change prompt uses the ID, with a blank input
+for null. Counts/completion are
 int64, timestamps are time.Time, and server identity/completion are never rebuilt
 from document titles or testcase ratios. `Change` is the wire/business value;
 `ChangeView` is a separate screen projection of change, document and testcase reads.
@@ -617,7 +623,7 @@ and are not evidence of current backend mutation compatibility.
 
 Field mapping: the P4-01 route test asserts IDs/project IDs, UUID omission/value,
 phase/types/title/open/PR URL, nullable epic/prerequisite and create brief payloads.
-The P4-02 test verifies returned ref/slug/epic identity and completion separately
+The P4-02 test verifies returned `ref_slug`/epic identity and completion separately
 from derived values; malformed-field cases cover **each** list/detail wire field,
 including required nullable presence, timestamp types and wide counts. The viewport
 test traverses multiline titles and all identity/count/timestamp/relationship fields.
@@ -805,3 +811,21 @@ also refuses an unowned scratch path in
 returns explicit arrays in its ready round. `TestShellNavigationEditorAndScrolling`
 pages through the live brief view, confirms editor redraw, and cancels a running
 fake agent in the real PTY; it checks child reaping and scratch cleanup.
+
+Changes list filters and selection (2026-09-30):
+`TestFindFilterAndSelectedChangeSurviveDetailAndMainNavigation` checks that the
+four saved filters survive both navigation paths, that the selected change is
+restored after list reloads, and that `/clear-filters` removes all saved
+filters. `TestChangesListPromptQueryDoesNotReplaceSavedFindFilter` separates
+temporary prompt filtering from the saved Find query.
+`TestFilterSelectorsReturnToChangesList` checks selector `@clear` choices;
+`TestSelectorClearBroadensOnlyItsOwnFilter` checks that each choice widens the
+visible rows while retaining the other filters.
+`TestChangesListCommandsAreExact` excludes `/retry`
+and `/brief-new`. `TestP205SelectionCatalogScopeAndPersistenceFailure` checks
+saved filters across project selection. `TestNullableChangeFieldsRenderAsDashes`
+checks the Epic list cell without an ID suffix; `TestTypesAndCompletionUseRequestedColors`
+checks list and detail styling. `TestCLIProgramChangeCRUDAndPartialSuccess`
+and `TestCLIProgramChangeMalformedReadRecovery` use Main to reload the list.
+`TestChangeDeleteRefreshFailureOffersListReloadPath` checks that a failed list
+refresh after deletion gives an available reload action in its status.

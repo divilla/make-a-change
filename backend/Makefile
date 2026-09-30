@@ -48,7 +48,7 @@ test: ## Run uncached unit tests without database or HTTP integration tests
 race: ## Run uncached unit tests with the race detector
 	$(GO) test -short -count=1 -race $(UNIT_PACKAGES)
 
-coverage: ## Measure fresh production unit statements and enforce strictly greater than 95%
+coverage: ## Measure fresh production unit statements and enforce at least 95%
 	python3 -B scripts/coverage.py
 
 coverage-html: ## Run unit coverage and generate HTML even for a valid below-threshold profile
@@ -69,7 +69,7 @@ import-db: ## Initialize and seed DATABASE_URL (destructive; explicit target onl
 	psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f ../db/seed.sql
 	psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f ../db/seed-demo.sql
 
-api-test: ## Run the HTTP-only suite on an instrumented server and report statement coverage (no DB setup)
+api-test: ## Run the HTTP-only suite and enforce 90% integration statements (no DB setup)
 	python3 -B scripts/api_coverage.py
 
 

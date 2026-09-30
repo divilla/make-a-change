@@ -94,12 +94,18 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 	}
 	send("/health\r", "HTTP 200")
 	send("/health-legacy\r", "HTTP 503")
-	send("/return\r", "MainScreen")
+	send("x", "x")
+	send("\x1b", "status prompt cleared")
+	send("\x03", "MainScreen")
 	send("/backend-configs\r", "BackendConfigListScreen")
 	send("\r", "Configuration: pty")
 	send("\x1b[6~", "change_types:")
 	send("/delete\r", "Delete configuration pty?")
 	send("\r", "No configurations loaded.")
+	send("/new-config\r", "BackendConfigFormScreen")
+	send("temporary", "temporary")
+	send("\x03", "status prompt cleared")
+	send("\x1b", "BackendConfigListScreen")
 	send("/return\r", "MainScreen")
 	send("/projects\r", "ProjectsListScreen")
 	send("/new-project\r", "ProjectCreateScreen")
@@ -108,10 +114,16 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 	send("\x1b[6~", "#80")
 	send("\x1b[5~", "#90")
 	send("/new-document\r", "Document draft:")
+	send("Temporary", "Temporary")
+	send("\x03", "status prompt cleared")
 	send("PTY document\r", "saved document #91")
-	send("/return\r", "ProjectDetailsScreen")
+	send("\x03", "ProjectDetailsScreen")
 	assert.Contains(t, capture.after(0), "\x1b[2J", "editor restoration redraws screen")
 	send("/return\r", "ProjectsListScreen")
+	send("/new-project\r", "ProjectCreateScreen")
+	send("Temporary", "Temporary")
+	send("\x03", "status prompt cleared")
+	send("\x1b", "ProjectsListScreen")
 	send("/return\r", "MainScreen")
 	send("/epics\r", "PTY Epic")
 	send("\r", "Completed: 63")
@@ -124,15 +136,50 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 	send("/new-epic\r", "EpicCreateScreen")
 	send("New PTY epic\r", "saved epic")
 	send("/return\r", "loaded epics")
+	send("/new-epic\r", "EpicCreateScreen")
+	send("Temporary", "Temporary")
+	send("\x1b", "status prompt cleared")
+	send("\x03", "EpicsListScreen")
 	send("/return\r", "MainScreen")
-	send("/changes\r", "Rows 1-7 of 30")
+	send("/changes\r", "Rows 1-9 of 30")
 	assert.Contains(t, capture.after(0), "\x1b[", "terminal output retains styles")
-	send("\x1b[6~", "Rows 2-8 of 30")
-	send("\x1b[5~", "Rows 1-7 of 30")
-	send("/", "Commands")
-	send("\x1b", "Type / for commands")
+	send("\x1b[6~", "Rows 2-10 of 30")
+	send("\x1b[5~", "Rows 1-9 of 30")
+	send("/", "Create a change")
+	assert.Contains(t, capture.after(0), "▄")
+	assert.Contains(t, capture.after(0), "▀")
+	send("/", "Commands: no options")
+	assert.Contains(t, capture.after(0), "//")
+	send("\x7f", "Create a change")
+	send("\x7f", "Type / for commands")
+	send("/", "Create a change")
+	send("\x1b[3~", "Type / for commands")
+	send("/", "Create a change")
+	send("\x03", "Type / for commands")
 	send("\r", "loaded change")
+	send("/phase\r", "Phase >")
+	send("\x1b", "status cancel")
+	send("/epic\r", "New PTY epic #3")
+	send("\x03", "status cancel")
+	send("/types\r", "Types >")
+	send("\x1b", "status cancel")
+	send("/title\r", "Title > ")
+	send("\x03", "status prompt cleared")
+	send("/pr-url\r", "PR URL >")
+	send("\x1b", "Type / for commands")
+	send("\x1b", "ChangesListScreen")
+	send("\r", "loaded change")
+	send(strings.Repeat("\x1b[B", 2)+"\r", "old-slug")
+	_, err = io.WriteString(stdin, "A [")
+	require.NoError(t, err)
+	send("\x1b", "status prompt cleared")
+	send("\x03", "ChangesListScreen")
+	send("\r", "loaded change")
+	send(strings.Repeat("\x1b[B", 2)+"\r", "old-slug")
+	send(strings.Repeat("\x7f", 8)+"new-slug\r", "saved slug")
 	send("/brief-clarify\r", "brief ready for editing")
+	send("Temporary", "Temporary")
+	send("\x03", "status prompt cleared")
 	send("\x1b[6~", "Backend current brief")
 	send("\x1b[5~", "Original user brief")
 	send("\x05", "Original user brief: # PTY Change")
@@ -145,11 +192,14 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 	require.NoError(t, err)
 	require.Eventually(t, func() bool { return syscall.Kill(pid, 0) == syscall.ESRCH }, 3*time.Second, 20*time.Millisecond, "canceled agent must be reaped")
 	send("/new-testcase\r", "TestCaseCreateScreen")
+	send("Temporary", "Temporary")
+	send("\x03", "status prompt cleared")
+	send("\x1b", "ChangeDetailsScreen")
+	send("/new-testcase\r", "TestCaseCreateScreen")
 	send("PTY case\r", "saved test case")
 	send("\x1b[6~", "Initial brief")
-	send("\x1b[6~", "Spec")
 	send("\x1b[6~", "Complete")
-	send("/title\r", "ChangeUpdateScreen")
+	send("/title\r", "Title > ")
 	send("\x05", "saved title")
 	send(strings.Repeat("\x1b[6~", 5), "Complete")
 	assert.Contains(t, capture.after(0), "73%")
@@ -178,6 +228,7 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 	var mu sync.Mutex
 	epicName := "PTY Epic"
 	changeTitle := "PTY Change"
+	changeSlug := "111-old-slug"
 	changeBrief := strings.Repeat("Precise workflow context and constraints. ", 12)
 	changeBriefID := 41
 	backendConfigExists := true
@@ -255,6 +306,9 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 			}
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 			value = terminalChange(body.ID, changeTitle)
+			if body.ID == 1 {
+				value.(map[string]any)["ref_slug"] = changeSlug
+			}
 		case "/api/v1/doc/current":
 			var request struct {
 				RefID    int    `json:"ref_id"`
@@ -354,6 +408,17 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 			changeTitle = body.Title
 			w.WriteHeader(204)
 			return
+		case "/api/v1/change/update-slug":
+			var body struct {
+				ID   int    `json:"id"`
+				Slug string `json:"slug"`
+			}
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			assert.Equal(t, 1, body.ID)
+			assert.Equal(t, "new-slug", body.Slug)
+			changeSlug = "111-" + body.Slug
+			w.WriteHeader(204)
+			return
 		default:
 			t.Errorf("unexpected path %s", r.URL.Path)
 			http.NotFound(w, r)
@@ -443,5 +508,5 @@ func terminalEpic(name string) map[string]any {
 }
 
 func terminalChange(id int, title string) map[string]any {
-	return map[string]any{"id": id, "project_id": 7, "ref_uuid": "0198a86f-9b8a-7d89-ae5b-6f25b528b04c", "ref": nil, "slug": nil, "epic_id": nil, "epic_name": nil, "change_phase": "backlog", "change_types": []string{}, "title": title, "open": true, "done_tc": 2, "total_tc": 9, "completed": 73, "updated_at": "2026-09-28T11:00:00Z", "after_change_id": nil, "pr_url": "", "created_at": "2026-09-28T10:00:00Z"}
+	return map[string]any{"id": id, "project_id": 7, "ref_uuid": "0198a86f-9b8a-7d89-ae5b-6f25b528b04c", "ref_slug": fmt.Sprintf("%03d-old-slug", id+110), "epic_id": nil, "epic_name": nil, "change_phase": "backlog", "change_types": []string{}, "title": title, "open": true, "done_tc": 2, "total_tc": 9, "completed": 73, "updated_at": "2026-09-28T11:00:00Z", "after_change_id": nil, "after_change_name": nil, "pr_url": "", "created_at": "2026-09-28T10:00:00Z"}
 }

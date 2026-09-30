@@ -108,6 +108,7 @@ statement counts, baseline lint debt and the factory/R2 handoff.
 | POST | /api/v1/change/update-open | 204; explicit bool; direct UPDATE open/updated_at; affected-row 404 | P3 aligned | pass (change/02-main.yaml) |
 | POST | /api/v1/change/update-types | 204; ordered trim/dedup/validation using selected config; direct UPDATE types/updated_at, including clears | P3 aligned | pass (change/02-main.yaml) |
 | POST | /api/v1/change/update-title | 204; existence preflight then sp_change_title_update; DB whitespace normalization; no config | P3 aligned | pass (change/02-main.yaml) |
+| POST | /api/v1/change/update-slug | 204; accepts only the nonempty lowercase `[a-z0-9_-]` suffix in `slug`; direct UPDATE; list/details expose nullable `ref_slug` as the ref padded to three digits for values 0–99, otherwise unchanged, followed by `-` and the suffix | detail editor | unit covered; APIHydra success/rejection assertions authored, live run pending designation (change/02-main.yaml) |
 | POST | /api/v1/change/update-pr-url | 204; nonblank http(s) URL; direct UPDATE pr_url/updated_at; affected-row 404; no config | P3 aligned | pass (change/02-main.yaml) |
 | POST | /api/v1/change/delete | 204; direct DELETE; actual testcase FK 409; missing 404; docs retained; no config | P3 aligned | pass (change/02-main.yaml) |
 | POST | /api/v1/test-case/list | 200 ordered six-column public.testcase array after live-parent check; [] for no cases; missing parent404 | P4 aligned | pass (testcase/02-main.yaml) |
@@ -387,5 +388,8 @@ Config deletion locks project writes while checking references and deleting.
 | POST | /api/v1/config/delete | 204; 409 referenced by project; 404 absent | current | config/02-main.yaml |
 | POST | /api/v1/change/update-after-change | 204 set nullable prerequisite; 400 invalid FK; 404 absent target | current | change/02-main.yaml |
 
-Change details includes nullable after_change_id. This stores the prerequisite
-reference; no run scheduler or prerequisite-completion enforcement is added.
+Change details includes nullable `after_change_id` and `after_change_name`, and
+the plain `epic_name` without an ID suffix. The prerequisite display name is
+the prerequisite change title followed by ` (#<id>)`; the ID remains the
+editable association value. No run scheduler or prerequisite-completion
+enforcement is added.

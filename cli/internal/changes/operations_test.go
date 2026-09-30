@@ -92,6 +92,12 @@ func (a *changeAPI) UpdateChangeTitle(ctx context.Context, _ int, v string) erro
 	return a.call(ctx, "title")
 }
 
+func (a *changeAPI) UpdateChangeSlug(ctx context.Context, _ int, v string) error {
+	refSlug := "123-" + v
+	a.value.RefSlug = &refSlug
+	return a.call(ctx, "slug")
+}
+
 func (a *changeAPI) UpdateChangePhase(ctx context.Context, _ int, v string) error {
 	a.value.ChangePhase = v
 	return a.call(ctx, "phase")
@@ -301,13 +307,11 @@ func TestP404StaleResultsCanceledWorkAndInvisibleRows(t *testing.T) {
 
 func TestP402EveryReturnedFieldAndLiteralNoOp(t *testing.T) {
 	m, a := changeSetup()
-	ref := int32(123)
-	slug := "server-identity"
+	refSlug := "123-server-identity"
 	epic := 3
 	name := "Epic"
 	after := 4
-	a.value.Ref = &ref
-	a.value.Slug = &slug
+	a.value.RefSlug = &refSlug
 	a.value.EpicID = &epic
 	a.value.EpicName = &name
 	a.value.AfterChangeID = &after
@@ -316,7 +320,7 @@ func TestP402EveryReturnedFieldAndLiteralNoOp(t *testing.T) {
 	a.value.Title = strings.Repeat("line\n", 40)
 	view := Present(a.value)
 	require.Equal(t, "123", view.Ref)
-	require.Equal(t, "server-identity", view.Slug)
+	require.Equal(t, "123-server-identity", view.RefSlug)
 	require.Equal(t, "3", view.EpicID)
 	require.Equal(t, "4", view.AfterChangeID)
 	require.Equal(t, int64(73), view.Completed)
@@ -324,7 +328,7 @@ func TestP402EveryReturnedFieldAndLiteralNoOp(t *testing.T) {
 	for _, row := range append(fixedDetailRows(view), DetailRows(view)...) {
 		labels[row.Label] = true
 	}
-	for _, label := range []string{"ID", "Project ID", "Ref UUID", "Ref", "Slug", "Epic", "Epic ID", "After change", "Phase", "Types", "Title", "Open", "Complete", "Created", "Modified", "PR URL"} {
+	for _, label := range []string{"ID", "Ref UUID", "Slug", "Epic", "After Change", "Phase", "Types", "Title", "Open", "Complete", "Created", "Modified", "PR URL"} {
 		require.True(t, labels[label], label)
 	}
 	for _, value := range []string{"/save", "/cancel", "/editor", "/return"} {
@@ -333,6 +337,16 @@ func TestP402EveryReturnedFieldAndLiteralNoOp(t *testing.T) {
 		require.Nil(t, cmd)
 		require.Equal(t, "unchanged", m.Status)
 	}
+}
+
+func TestPresentUsesPaddedRefSlugForReferenceAndSlugRow(t *testing.T) {
+	refSlug := "006-some-slug"
+	view := Present(dto.Change{ID: 12, RefSlug: &refSlug})
+	require.Equal(t, "006", view.Ref)
+	require.Equal(t, refSlug, view.RefSlug)
+	rows := DetailRows(view)
+	require.Equal(t, refSlug, rows[0].Text)
+	require.Equal(t, "-", rows[4].Text)
 }
 
 func TestP403NullableAssociationForm(t *testing.T) {

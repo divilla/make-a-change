@@ -32,6 +32,7 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 	a.g.POST("/update-open", a.updateOpen)
 	a.g.POST("/update-types", a.updateTypes)
 	a.g.POST("/update-title", a.updateTitle)
+	a.g.POST("/update-slug", a.updateSlug)
 	a.g.POST("/update-pr-url", a.updatePRUrl)
 	a.g.POST("/delete", a.delete)
 
@@ -120,6 +121,20 @@ func (a *API) updateTitle(c *echo.Context) error {
 		return app.HTTP(app.Validation(v.Errors, app.ErrChangeInvalidInput))
 	}
 	if err := a.s.UpdateTitle(c.Request().Context(), req); err != nil {
+		return app.HTTP(err)
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (a *API) updateSlug(c *echo.Context) error {
+	var req domain.ChangeUpdateSlugRequest
+	if err := c.Bind(&req); err != nil {
+		return app.InvalidPayload(err, "invalid change slug payload")
+	}
+	if v := validate.Struct(req); !v.Validate() {
+		return app.HTTP(app.Validation(v.Errors, app.ErrChangeInvalidInput))
+	}
+	if err := a.s.UpdateSlug(c.Request().Context(), req); err != nil {
 		return app.HTTP(err)
 	}
 	return c.NoContent(http.StatusNoContent)

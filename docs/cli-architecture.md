@@ -24,6 +24,20 @@ check backend health without launching an agent or creating Flow resources.
 “Available” means a discoverable CLI action with inputs, results, and errors, not
 merely an unused client method.
 
+### Changes list interaction
+
+The Changes list shows `/phase-filter`, `/types-filter`, `/epic-filter`, and
+`/find-filter` in its filter summary. These four filters persist while opening a
+change, returning to Main, reentering the list, and switching projects.
+`/clear-filters` clears all four; `@clear` in the Phase, Types, or Epic selector
+clears only that filter. A blank Find entry or canceled editor retains the
+saved query. Typing ordinary text in the list prompt applies an additional
+temporary word-prefix search until the prompt is cleared or the user leaves the
+list. The list restores the selected change when returning from its details
+screen. The list menu omits `/retry` and `/brief-new`; returning to Main and
+opening `/changes` reloads the list. Epic cells show the epic name without an
+ID suffix. Types uses AccentPurple, while `%` and Complete use AccentBlue.
+
 Use `brief` and `spec` consistently in commands, screens, data types, and prompts.
 Remove the legacy `def` terminology and its compatibility paths. Other configured
 document types remain accessible through ordinary document API actions; their
@@ -309,8 +323,8 @@ change.
 | Projects | `/project/list`, `/project/details`, `/project/create`, `/project/update`, `/project/delete`, `/project/config` | Browse, inspect, create, edit, delete, and inspect the project's resolved configuration. |
 | Epics | `/epic/list`, `/epic/details`, `/epic/create`, `/epic/update`, `/epic/delete` | Full epic management within a project, including details and completion data. |
 | Changes: reads and lifecycle | `/change/list`, `/change/details`, `/change/create`, `/change/delete` | Browse/filter, inspect, create from a brief, and delete independently of the agent workflow. |
-| Changes: associations | `/change/update-epic`, `/change/update-after-change` | Set or clear the epic and prerequisite change, preserving nullable values. |
-| Changes: fields | `/change/update-phase`, `/change/update-open`, `/change/update-types`, `/change/update-title`, `/change/update-pr-url` | Explicitly edit each supported field, including clearing values where the API permits it. |
+| Changes: associations | `/change/update-epic`, `/change/update-after-change` | Set or clear the epic and prerequisite change, preserving nullable values. Details show plain `epic_name` and `after_change_name`; the latter editor uses `after_change_id` and starts blank for null. |
+| Changes: fields | `/change/update-phase`, `/change/update-open`, `/change/update-types`, `/change/update-title`, `/change/update-slug`, `/change/update-pr-url` | Explicitly edit each supported field, including clearing values where the API permits it. Slug updates send only the lowercase suffix; list and details read the full `ref_slug`. |
 | Testcases | `/test-case/list`, `/test-case/create`, `/test-case/update`, `/test-case/update-done`, `/test-case/delete` | List, create, edit, mark done/undone, and delete testcases for a change. |
 | Documents | `/doc/list`, `/doc/current`, `/doc/details`, `/doc/insert` | Browse history, read current documents, inspect a version, and append a version for project, epic, or change owners and their configured document types. |
 | Configurations | `/config/list`, `/config/details`, `/config/insert`, `/config/update`, `/config/delete` | Manage configurations by slug and edit all six catalog arrays, including explicit empty arrays. |
@@ -375,8 +389,8 @@ an unrelated regular file at an expected directory path.
 ## Verification
 
 Follow the [repository test requirements](../AGENTS.md), including meaningful
-unit tests for each acceptance-criterion bullet and unit statement coverage above
-95%. Include every CLI production package when measuring coverage; terminal or
+unit tests for each acceptance-criterion bullet and unit statement coverage of at
+least 80%. Include every CLI production package when measuring coverage; terminal or
 agent integration results do not establish unit coverage. Record actual covered
 and total statements, package gaps, failures, and skipped scenarios.
 

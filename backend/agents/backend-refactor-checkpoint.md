@@ -1,5 +1,63 @@
 # Backend refactor checkpoint — 016 final failure integration
 
+## Change prerequisite display name (2026-09-30)
+
+Change details now return nullable `after_change_name` from
+`vw_change_details` alongside `after_change_id`. In that view, `epic_name` is
+the plain epic name without an ID suffix. The prerequisite display name is the
+prerequisite title followed by ` (#<id>)`; the association ID remains the edit
+value. Repository and API unit tests cover the additional field, and the
+APIHydra detail assertion expects null for an unassociated change.
+
+| Command | Exit and result |
+| --- | --- |
+| `make -C backend check` | 0; format, lint, vet, race, tooling, route inventory, and APIHydra suite validator pass. |
+| `make -C backend coverage` | 0; **1051/1065 (98.6854%)**, at least 95% gate passes. `cmd/server` is 79/93 (84.9462%); every other executable package is 100%. |
+| `make -C backend deps-audit` | 0; no vulnerabilities found. |
+| Focused isolated PostgreSQL details view tests | 0; nullable and associated `after_change_name` values and plain `epic_name` pass. |
+| `make -C backend api-test` | Not run; no development/test database designated in this session. |
+
+## Change `ref_slug` contract (2026-09-30)
+
+`public.change.slug` stores only the editable suffix. Both change views expose
+nullable `ref_slug`: `ref <= 99` is padded to three digits, larger refs are
+unchanged, and `-` plus the stored suffix follows the reference. The change
+list/details responses now expose this field instead of separate `ref` and
+`slug` fields. `/change/update-slug` accepts only the suffix. The demo seed
+also stores only the suffix.
+
+| Command | Exit and result |
+| --- | --- |
+| `make -C backend check` | 0; format, lint, vet, race, tooling, route inventory, and APIHydra suite validator pass. |
+| `make -C backend coverage` | 0; **1051/1065 (98.6854%)**, at least 95% gate passes. `cmd/server` is 79/93 (84.9462%); every other executable package is 100%. |
+| `make -C backend deps-audit` | 0; no vulnerabilities found. |
+| Focused isolated PostgreSQL `ref_slug` and demo seed tests | 0; both tests pass. |
+| Full `db/tests/test_foreign_keys.py` | 1; 13 tests run, with three assertion failures: one expects four foreign keys when the schema exposes five, and two treat project/epic documents as orphaned change documents. The same failures occur against a clean archive of committed `HEAD` (11 tests). |
+| `make -C backend api-test` | Not run; no development/test database has been designated in this session. API statement coverage remains unmeasured. |
+| `git diff --check` | 0. |
+
+## Historical change slug editor API (2026-09-29)
+
+Added `POST /api/v1/change/update-slug`. The service preserves the stored Ref
+prefix when present and uses the change ID until Ref is assigned; the suffix
+must be nonempty lowercase `[a-z0-9_-]`. The repository updates only the slug
+and timestamp. The standalone APIHydra change suite now has success, invalid
+prefix, and read-back assertions using its own API-created change. Unit tests
+cover route binding, service validation, and database statement outcomes.
+
+| Command | Exit and result |
+| --- | --- |
+| `make -C backend check` | 0; format, lint, vet, race, tooling, route inventory, and APIHydra suite validator pass. |
+| `make -C backend coverage` | 0; **1057/1071 (98.6928%)**, at least 95% gate passes. `cmd/server` is 79/93 (84.9462%); every other executable package is 100%. |
+| `make -C backend deps-audit` | 0; no vulnerabilities found. |
+| `make -C backend api-test` | Not run yet; no development/test database has been designated in this session. API statement coverage is unmeasured, so the at least 90% integration gate remains unverified. |
+| `git diff --check` | 0. |
+
+An initial `check` run exposed the new route missing from the route inventory;
+the next run exposed the standalone suite's success-case requirement. Both
+were corrected, and the final `check` run passed. No database was reset or
+existing record changed during this work.
+
 ## Final supervisor verification
 
 Final implementation is `21f9db5`, native recorder-cleanup repair `e9f4fbe`,
@@ -454,3 +512,20 @@ scan/iteration branches. Unit coverage's only gap remains 14 cmd/server statemen
 No failed, skipped or blocked scenario remains. Artifacts are under
 `.coverage/api/` and `.coverage/unit/`; no profiles were combined. AGENTS.md,
 Make, the suite guide and the refactor plan reflect the restored reporting.
+
+## 2026-09-29 — Coverage gate policy update
+
+The current user policy is at least 95% backend unit statements and 90% APIHydra
+integration statements. The fresh API runner now returns failure for a complete
+below-threshold profile while preserving its valid report and raw counters;
+failed or incomplete scenarios still invalidate success artifacts. The current
+suite uses an owned instrumented backend against the existing development
+database and does not manage database lifecycle.
+
+`make -C backend tooling-test` exits 0, including exact boundary and runner exit
+tests. `make -C backend coverage` exits 0 with **1031/1045 (98.6603%)** fresh unit
+statements. `make -C backend api-test` was not run for this tooling change because
+no user-designated development database was provided in this session. The prior
+**943/1045 (90.2392%)** API result predates this gate change and is historical
+evidence, not a fresh passing campaign for this checkout. No backend production
+Go source was changed.

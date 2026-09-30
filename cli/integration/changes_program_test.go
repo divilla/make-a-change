@@ -18,6 +18,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func changePromptLabel(command string) string {
+	switch command {
+	case "/title":
+		return "Title >"
+	case "/pr-url":
+		return "PR URL >"
+	case "/after-change":
+		return "After Change >"
+	default:
+		return command + " >"
+	}
+}
+
 func TestCLIProgramChangeCRUDAndPartialSuccess(t *testing.T) {
 	for _, partial := range []bool{false, true} {
 		t.Run(fmt.Sprint(partial), func(t *testing.T) {
@@ -117,7 +130,7 @@ func TestCLIProgramChangeCRUDAndPartialSuccess(t *testing.T) {
 			edit := func(command, value, marker string) {
 				t.Helper()
 				require.NoError(t, os.WriteFile(editor, []byte(value), 0o600))
-				s.navigate(t, command+"\r", "ChangeUpdateScreen")
+				s.navigate(t, command+"\r", changePromptLabel(command))
 				s.navigate(t, "\x05", marker)
 			}
 			recoverRead := func() {
@@ -129,8 +142,10 @@ func TestCLIProgramChangeCRUDAndPartialSuccess(t *testing.T) {
 			}
 			clearAndReplace := func(command, value, marker string) {
 				t.Helper()
-				s.navigate(t, command+"\r", "ChangeUpdateScreen")
+				s.navigate(t, command+"\r", changePromptLabel(command))
 				s.navigate(t, "\x03", "cleared")
+				s.navigate(t, command+"\r", changePromptLabel(command))
+				s.send(t, "\x01\x0b")
 				s.navigate(t, value+"\r", marker)
 			}
 			s.navigate(t, "/changes\r", "Rows 1-1 of 1")
@@ -150,7 +165,7 @@ func TestCLIProgramChangeCRUDAndPartialSuccess(t *testing.T) {
 			s.waitFor(t, "Explicit title")
 			edit("/title", "/save", "saved title")
 			recoverRead()
-			s.navigate(t, "/title\r", "ChangeUpdateScreen")
+			s.navigate(t, "/title\r", "Title >")
 			s.navigate(t, "\r", "unchanged")
 			s.navigate(t, "/phase\r", "review")
 			s.navigate(t, "\x1b[A\r", "saved phase")
@@ -175,13 +190,14 @@ func TestCLIProgramChangeCRUDAndPartialSuccess(t *testing.T) {
 			recoverRead()
 			clearAndReplace("/pr-url", "https://example.test/pr/1", "saved pr-url")
 			recoverRead()
-			s.navigate(t, strings.Repeat("\x1b[6~", 8), "Project ID")
+			s.navigate(t, strings.Repeat("\x1b[6~", 8), "Modified")
 			s.waitFor(t, "73%")
 			s.waitFor(t, "https://example.test/pr/1")
 			s.navigate(t, "/delete\r", "Are you sure?")
 			s.navigate(t, "\r", "status deleted change")
 			if partial {
-				s.navigate(t, "/retry\r", "no changes")
+				s.navigate(t, "/return\r", "MainScreen")
+				s.navigate(t, "/changes\r", "no changes")
 			}
 			s.waitFor(t, "No changes.")
 			s.finishFromChanges(t)
@@ -273,7 +289,11 @@ func TestCLIProgramChangeDelayedScopeAndShutdown(t *testing.T) {
 				require.NoError(t, s.waitDone(t))
 			} else {
 				if strings.HasPrefix(mode, "empty find") {
-					s.navigate(t, "/find\r", "FindInputScreen")
+					findCommand := "/find\r"
+					if mode == "empty find list" {
+						findCommand = "/find-filter\r"
+					}
+					s.navigate(t, findCommand, "FindInputScreen")
 					if mode == "empty find detail" {
 						s.navigate(t, "\r", "Current change")
 					} else {
@@ -402,7 +422,8 @@ func TestCLIProgramChangeMalformedReadRecovery(t *testing.T) {
 	writeProgramConfig(t, root, server.URL)
 	s := startProgram(t, root, "")
 	s.navigate(t, "/changes\r", "backend contract")
-	s.navigate(t, "/retry\r", "Recovered change")
+	s.navigate(t, "/return\r", "MainScreen")
+	s.navigate(t, "/changes\r", "Recovered change")
 	s.finishFromChanges(t)
 	require.Equal(t, 2, lists)
 }

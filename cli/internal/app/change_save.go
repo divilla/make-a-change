@@ -198,6 +198,9 @@ func (m Model) applyChangeResult(r changes.Result) (tea.Model, tea.Cmd) {
 	selected, offset := m.changeList.DetailSelected, m.changeList.DetailOffset
 	m.changeList = next
 	m.changeDetailLoaded = next.DetailLoaded
+	if r.Operation == changes.List && r.Err == nil {
+		m.restoreSelectedChange()
+	}
 	if r.Operation == changes.Details && next.DetailLoaded {
 		m.testCase.Rows = append([]dto.TestCase(nil), next.Detail.TestCases...)
 		m.testCase.Loaded = true
@@ -221,6 +224,9 @@ func (m Model) applyChangeResult(r changes.Result) (tea.Model, tea.Cmd) {
 		}
 		m.detailEditField = ""
 		m = m.setPromptValue("")
+	}
+	if m.state == ChangesListState {
+		m.status = strings.ReplaceAll(m.status, "/retry reads only", "return to Main and reopen /changes")
 	}
 	return m, nil
 }
@@ -253,6 +259,8 @@ func (m Model) saveChangeDetailTextValue(value string) (tea.Model, tea.Cmd) {
 	switch m.detailEditField {
 	case detailEditTitle:
 		op = changes.Title
+	case detailEditSlug:
+		op = changes.Slug
 	case detailEditPRUrl:
 		op = changes.PRURL
 	case detailEditAfterChange:
@@ -296,17 +304,27 @@ func (m Model) beginChangeField(field detailEditField) (tea.Model, tea.Cmd) {
 	}
 	m.changeList = m.changeList.Invalidate()
 	m.previousState = ChangeDetailsState
-	m.state = ChangeUpdateState
+	m.state = ChangeDetailsState
 	m.detailEditField = field
 	value := m.changeList.Detail.Title
 	switch field {
+	case detailEditSlug:
+		m.slugPrefix = ""
+		value = ""
+		if prefix, suffix, ok := strings.Cut(m.changeList.Detail.RefSlug, "-"); ok {
+			m.slugPrefix = prefix + "-"
+			value = suffix
+		}
 	case detailEditAfterChange:
 		value = m.changeList.Detail.AfterChangeID
+		if value == "null" {
+			value = ""
+		}
 	case detailEditPRUrl:
 		value = m.changeList.Detail.PRUrl
 	}
 	m = m.setPromptValue(value)
 	m.editorDraft = &value
-	m.input.Placeholder = "Enter value (Ctrl+C clears, Esc cancels)"
+	m.input.Placeholder = "Enter value (Ctrl+C/Esc cancel)"
 	return m, nil
 }

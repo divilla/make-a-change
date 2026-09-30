@@ -11,6 +11,7 @@ type API interface {
 	GetChange(context.Context, int) (dto.Change, error)
 	CreateChange(context.Context, dto.ChangeCreateInput) (int, error)
 	UpdateChangeTitle(context.Context, int, string) error
+	UpdateChangeSlug(context.Context, int, string) error
 	UpdateChangePRUrl(context.Context, int, string) error
 	UpdateChangeTypes(context.Context, int, []string) error
 	UpdateChangePhase(context.Context, int, string) error

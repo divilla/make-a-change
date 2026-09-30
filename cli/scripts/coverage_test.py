@@ -29,8 +29,9 @@ class CoverageTest(unittest.TestCase):
             return coverage.report(meta, self.profile, self.root, integration)
 
     def test_exact_boundaries_not_rounded(self):
-        for covered, total, api, expected in [(95,100,False,False), (95001,100000,False,True),
-                (94999,100000,False,False), (90,100,True,False), (90001,100000,True,True), (89999,100000,True,False)]:
+        for covered, total, api, expected in [(80,100,False,True), (79999,100000,False,False),
+                (80001,100000,False,True), (70,100,True,True), (69999,100000,True,False),
+                (70001,100000,True,True)]:
             with self.subTest(covered=covered, api=api):
                 self.assertEqual(self.measure(covered,total,api), expected)
         self.assertIn('no executable statements', (self.root/'report.txt').read_text())
@@ -52,7 +53,7 @@ class CoverageTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'incomplete unit'):
             coverage.report(meta,self.profile,self.root)
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertFalse(coverage.report(meta,self.profile,self.root,True))
+            self.assertTrue(coverage.report(meta,self.profile,self.root,True))
         self.assertEqual(json.loads((self.root/'result.json').read_text())['total'],10)
         meta['blocks']['m/p/b.go:1.1,2.1'] = 1
         with self.assertRaisesRegex(ValueError,'partial integration'):

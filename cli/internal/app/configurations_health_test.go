@@ -3,6 +3,7 @@ package app
 import (
 	"cli/internal/configurations"
 	"cli/internal/dto"
+	"cli/internal/styles"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -293,7 +294,7 @@ func TestP702CreateSlugAcceptsLeadingSlashAndKeepsCommands(t *testing.T) {
 	assert.Equal(t, "/team", row.Slug)
 	m, _ = sendKey(m, tea.KeyCtrlG)
 	assert.Equal(t, dropdownCommand, m.dropdown.kind)
-	assert.Contains(t, stripANSI(m.View()), "/save")
+	assert.Contains(t, stripANSI(m.View()), "    save")
 }
 
 func TestP703FailedWriteDraftAndBusyDeduplication(t *testing.T) {
@@ -702,6 +703,8 @@ func TestP702ConfigurationInputFollowsCursorInLongArray(t *testing.T) {
 	m, _ = sendKey(m, tea.KeyLeft)
 	m, _ = sendKey(m, tea.KeyLeft)
 	m, _ = sendRune(m, 'Z')
+	assert.Contains(t, m.configurationInputBand(m.width), styles.Default.InputBand.Foreground(styles.AccentPurple).Render(" project docs > "))
+	assert.Contains(t, m.configurationInputBand(m.width), styles.Default.InputBand.Foreground(styles.AccentGreen).Render("…aaaaaZ▏tail\"]"))
 	assert.Contains(t, stripANSI(m.configurationInputBand(m.width)), "Z▏tail")
 	assert.NotContains(t, stripANSI(m.configurationInputBand(m.width)), strings.Repeat("a", 30))
 	assert.Equal(t, `["`+strings.Repeat("a", 70)+`Ztail"]`, m.promptValue())

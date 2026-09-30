@@ -14,7 +14,7 @@ import (
 )
 
 func changeFixture() map[string]any {
-	return map[string]any{"id": 12, "project_id": 7, "ref_uuid": "uuid", "ref": int32(42), "slug": "stored-slug", "epic_id": nil, "epic_name": nil, "change_phase": "backlog", "change_types": []string{}, "title": "Title", "open": false, "done_tc": int64(1 << 34), "total_tc": int64(1 << 35), "completed": int64(73), "updated_at": "2026-09-28T11:00:00Z", "after_change_id": nil, "pr_url": "", "created_at": "2026-09-28T10:00:00Z"}
+	return map[string]any{"id": 12, "project_id": 7, "ref_uuid": "uuid", "ref_slug": "042-stored-slug", "epic_id": nil, "epic_name": nil, "change_phase": "backlog", "change_types": []string{}, "title": "Title", "open": false, "done_tc": int64(1 << 34), "total_tc": int64(1 << 35), "completed": int64(73), "updated_at": "2026-09-28T11:00:00Z", "after_change_id": nil, "after_change_name": nil, "pr_url": "", "created_at": "2026-09-28T10:00:00Z"}
 }
 
 func TestP401AllChangeOperationsExactTypedPayloadsAndOneRequest(t *testing.T) {
@@ -32,7 +32,7 @@ func TestP401AllChangeOperationsExactTypedPayloadsAndOneRequest(t *testing.T) {
 				require.Len(t, rows, 1)
 				require.Equal(t, int64(1<<34), rows[0].DoneTC)
 				require.Equal(t, int64(73), rows[0].Completed)
-				require.Equal(t, int32(42), *rows[0].Ref)
+				require.Equal(t, "042-stored-slug", *rows[0].RefSlug)
 				require.Nil(t, rows[0].EpicID)
 			}
 			return e
@@ -40,9 +40,10 @@ func TestP401AllChangeOperationsExactTypedPayloadsAndOneRequest(t *testing.T) {
 		{"details", `{"id":12}`, 200, func(c HTTPClient) error {
 			v, e := c.GetChange(ctx, 12)
 			if e == nil {
-				require.Equal(t, "stored-slug", *v.Slug)
+				require.Equal(t, "042-stored-slug", *v.RefSlug)
 				require.False(t, v.Open)
-				require.Nil(t, v.AfterChangeID)
+				require.Equal(t, 3, *v.AfterChangeID)
+				require.Equal(t, "First change #3", *v.AfterChangeName)
 				require.Equal(t, "", v.PRUrl)
 				require.False(t, v.CreatedAt.IsZero())
 			}
@@ -54,6 +55,7 @@ func TestP401AllChangeOperationsExactTypedPayloadsAndOneRequest(t *testing.T) {
 			return e
 		}},
 		{"update-title", `{"id":12,"title":"/save"}`, 204, func(c HTTPClient) error { return c.UpdateChangeTitle(ctx, 12, "/save") }},
+		{"update-slug", `{"id":12,"slug":"new-slug"}`, 204, func(c HTTPClient) error { return c.UpdateChangeSlug(ctx, 12, "new-slug") }},
 		{"update-types", `{"id":12,"change_types":[]}`, 204, func(c HTTPClient) error { return c.UpdateChangeTypes(ctx, 12, nil) }},
 		{"update-phase", `{"id":12,"change_phase":"review"}`, 204, func(c HTTPClient) error { return c.UpdateChangePhase(ctx, 12, "review") }},
 		{"update-open", `{"id":12,"open":false}`, 204, func(c HTTPClient) error { return c.UpdateChangeOpen(ctx, 12, false) }},
@@ -79,7 +81,10 @@ func TestP401AllChangeOperationsExactTypedPayloadsAndOneRequest(t *testing.T) {
 					if tt.name == "list" {
 						_ = json.NewEncoder(w).Encode([]any{changeFixture()})
 					} else {
-						_ = json.NewEncoder(w).Encode(changeFixture())
+						fixture := changeFixture()
+						fixture["after_change_id"] = 3
+						fixture["after_change_name"] = "First change #3"
+						_ = json.NewEncoder(w).Encode(fixture)
 					}
 				}
 				if tt.status == 201 {
@@ -106,7 +111,7 @@ func TestP401MalformedChangeFieldsAndStatusCauses(t *testing.T) {
 				case "null":
 					body[field] = nil
 				}
-				nullable := field == "ref" || field == "slug" || field == "epic_id" || field == "epic_name" || field == "after_change_id"
+				nullable := field == "ref_slug" || field == "epic_id" || field == "epic_name" || field == "after_change_id" || field == "after_change_name"
 				_ = value
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _ = json.NewEncoder(w).Encode(body) }))
 				defer server.Close()

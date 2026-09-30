@@ -55,7 +55,7 @@ begin
     returning last_ref into _ref;
 
     _slug := trim(both '-' from regexp_replace(lower(trim(_title)), '[^a-z0-9]+', '-', 'g'));
-    _slug := concat(lpad(_ref::text, 3, '0'), '-', coalesce(nullif(_slug, ''), 'change'));
+    _slug := coalesce(nullif(_slug, ''), 'change');
 
     update public.change
     set

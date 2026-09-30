@@ -26,7 +26,7 @@ const columns = `id, ref_id, ref_table, doc_type, body, agent_edit, current, cre
 func (r *Repo) List(ctx context.Context, req domain.DocListRequest) ([]domain.Doc, error) {
 	rows, err := r.pool.Query(ctx, `select `+columns+` from public.doc where ref_id = $1 and ref_table = $2 order by id desc`, req.RefID, req.RefTable)
 	if err != nil {
-		return nil, app.Database(err, nil, nil)
+		return nil, app.DatabaseError(err, nil, nil)
 	}
 	defer rows.Close()
 	result := make([]domain.Doc, 0)
@@ -37,14 +37,14 @@ func (r *Repo) List(ctx context.Context, req domain.DocListRequest) ([]domain.Do
 		}
 		result = append(result, d)
 	}
-	return result, app.Database(rows.Err(), nil, nil)
+	return result, app.DatabaseError(rows.Err(), nil, nil)
 }
 
 // Current reads current rows in deterministic descending ID order.
 func (r *Repo) Current(ctx context.Context, req domain.DocListRequest) ([]domain.Doc, error) {
 	rows, err := r.pool.Query(ctx, `select `+columns+` from public.doc where ref_id = $1 and ref_table = $2 and current = true order by id desc`, req.RefID, req.RefTable)
 	if err != nil {
-		return nil, app.Database(err, nil, nil)
+		return nil, app.DatabaseError(err, nil, nil)
 	}
 	defer rows.Close()
 	result := make([]domain.Doc, 0)
@@ -55,19 +55,19 @@ func (r *Repo) Current(ctx context.Context, req domain.DocListRequest) ([]domain
 		}
 		result = append(result, d)
 	}
-	return result, app.Database(rows.Err(), nil, nil)
+	return result, app.DatabaseError(rows.Err(), nil, nil)
 }
 
 func scanDoc(row pgx.Row) (domain.Doc, error) {
 	var d domain.Doc
 	err := row.Scan(&d.ID, &d.RefID, &d.RefTable, &d.DocType, &d.Body, &d.AgentEdit, &d.Current, &d.CreatedAt, &d.UpdatedAt)
-	return d, app.Database(err, nil, nil)
+	return d, app.DatabaseError(err, nil, nil)
 }
 
 // Details filters solely by the doc's primary key.
 func (r *Repo) Details(ctx context.Context, req domain.DocIDRequest) (domain.Doc, error) {
 	d, err := scanDoc(r.pool.QueryRow(ctx, `select `+columns+` from public.doc where id = $1`, req.ID))
-	return d, app.Database(err, app.ErrDocNotFound, nil)
+	return d, app.DatabaseError(err, app.ErrDocNotFound, nil)
 }
 
 // Project resolves only the project needed for insert validation.
@@ -76,7 +76,7 @@ func (r *Repo) Project(ctx context.Context, req domain.DocListRequest) (domain.P
 	err := r.pool.QueryRow(ctx, `select id from public.project where $2 = 'project' and id = $1
  union all select project_id from public.epic where $2 = 'epic' and id = $1
  union all select project_id from public.change where $2 = 'change' and id = $1`, req.RefID, req.RefTable).Scan(&result.ID)
-	return result, app.Database(err, app.ErrDocParentNotFound, nil)
+	return result, app.DatabaseError(err, app.ErrDocParentNotFound, nil)
 }
 
 // Insert returns the ID from the database's atomic append operation.
@@ -84,7 +84,7 @@ func (r *Repo) Insert(ctx context.Context, req domain.DocInsertRequest) (domain.
 	var id *int
 	err := r.pool.QueryRow(ctx, `select public.fn_doc_insert($1,$2,$3,$4,$5)`, req.RefID, req.RefTable, req.DocType, req.Body, req.AgentEdit).Scan(&id)
 	if err != nil {
-		return domain.DocIDRequest{}, app.Database(err, nil, nil)
+		return domain.DocIDRequest{}, app.DatabaseError(err, nil, nil)
 	}
 	if id == nil {
 		return domain.DocIDRequest{}, app.ErrDocParentNotFound

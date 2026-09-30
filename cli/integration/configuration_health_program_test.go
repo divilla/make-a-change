@@ -48,7 +48,7 @@ func TestCLIProgramHealthRoutesAndDegradedStatus(t *testing.T) {
 	s.waitFor(t, "HTTP 200")
 	s.navigate(t, "/retry\r", "Refresh failed: /api/v1/health: 500")
 	assert.Contains(t, s.output.String(), "HTTP 200")
-	s.navigate(t, "/", "Commands")
+	s.navigate(t, "/", "Check the v1 health route")
 	s.navigate(t, "\x1b[B\r", "HTTP 503")
 	s.waitFor(t, "database unavailable")
 	s.send(t, "/retry\r")
@@ -63,7 +63,7 @@ func TestCLIProgramHealthRoutesAndDegradedStatus(t *testing.T) {
 		}
 		return n == 2
 	}, 2*time.Second, 10*time.Millisecond)
-	s.navigate(t, "/", "Commands")
+	s.navigate(t, "/", "Check the v1 health route")
 	s.navigate(t, "\r", "HTTP 200")
 	s.navigate(t, "/return\r", "MainScreen")
 	s.send(t, "/quit\r")
@@ -157,7 +157,7 @@ func TestCLIProgramConfigurationCRUDAndCatalogRefresh(t *testing.T) {
 	s.navigate(t, "/new-config\r", "BackendConfigFormScreen")
 	s.send(t, "new\t\x15[\"guide\",\"readme\"]\t\t\x15[\"brief\",\"spec\"]\t\x15[\"todo\"]\t\t\x13")
 	s.waitFor(t, "created configuration new")
-	s.navigate(t, "/", "Commands")
+	s.navigate(t, "/", "Edit this item")
 	s.navigate(t, "\r", "BackendConfigFormScreen")
 	s.waitFor(t, "slug: new (fixed)")
 	// Backward navigation from the first editable field wraps to change_types,

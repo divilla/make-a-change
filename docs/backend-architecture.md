@@ -227,7 +227,8 @@ Do not add new dependencies without user approval.
 
 Follow the repository's unit-test and coverage requirements: cover every
 acceptance-criterion bullet, test production code, and maintain unit-test
-coverage above 95%. Additional tests must increase coverage or prove a specific
+coverage of at least 95%. API integration coverage must be at least 90%.
+Additional tests must increase coverage or prove a specific
 acceptance criterion.
 
 Run the applicable backend lint, vet, and race checks through `make check`.

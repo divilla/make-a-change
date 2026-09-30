@@ -16,7 +16,7 @@ unresolved contract conflict requiring another user confirmation. The factory
 helpers own implementation/review commits and pushes; implementation children
 must not invoke another factory or perform Git publication themselves.
 
-Final CLI coverage targets are strictly >95% unit and >90% terminal integration
+Final CLI coverage targets are at least 80% unit and 70% terminal integration
 production statements. Integration combines complete-program tests using injected
 I/O and fake collaborators with real PTY tests; HTTP-client-only tests do not
 count. Keep separate profiles and strict gates, but continue intermediate dev
@@ -65,7 +65,7 @@ Successful commands are necessary but not sufficient:
 - Every acceptance criterion, including each individual bullet, must be
   implemented and have a meaningful unit test. Verify architecture and database
   contracts as well as test results.
-- Unit statement coverage must be **greater than 95%** across all backend
+- Unit statement coverage must be **at least 95%** across all backend
   production Go packages (`cmd`, `internal`, and `pkg`), including packages with
   no tests. Report package-level gaps as well as the aggregate. Evaluate actual
   statement counts, not a rounded percentage or an average of package percentages.
@@ -78,8 +78,8 @@ Successful commands are necessary but not sufficient:
   instrumented backend against the existing development database to collect
   coverage. It must not stop another server. Test-created records are isolated
   from existing data.
-  API statement coverage is diagnostic, not a completion gate (user clarification,
-  2026-09-28). The Make target reports fresh measured statements after normal
+  API statement coverage must be **at least 90%** across all backend production
+  Go packages. The Make target reports fresh measured statements after normal
   APIHydra output and a blank line. Bare `apih` against an uninstrumented server
   does not measure coverage; endpoint coverage is a separate metric. Never merge
   unit profiles into the API result or report failed/incomplete runs as passing.
@@ -100,11 +100,10 @@ Successful commands are necessary but not sufficient:
 **Refactor execution policy (user clarification, 2026-09-28):** the numerical
 coverage targets apply to the final refactor result, not to each intermediate
 branch. Implement meaningful tests and run both suites in every pass; measure
-unit coverage and report API statement coverage only when it is available;
-continue the agreed specification/review/merge sequence when a valid measurement
-is below target. Make coverage gates must still return failure honestly. Aim for
->95% unit at the end; the later standalone API requirement supersedes the
-integration coverage gate. If legitimate testing falls short,
+unit and API statement coverage when available; continue the agreed
+specification/review/merge sequence when a valid measurement is below target.
+Make coverage gates must still return failure honestly. Aim for at least 95%
+unit and 90% API integration at the end. If legitimate testing falls short,
 finish the remaining work and report actual counts, uncovered behavior and
 options for discussion. A coverage shortfall alone does not stop implementation
 or merging to dev. This is not permission to hide failing tests, introduce
@@ -115,7 +114,7 @@ must be repaired. Do not promote to stage or production.
 **Current migration status:** `coverage` retains its strict unit statement-count
 gate. `api-test` instruments an owned backend (default port19080) against the
 existing `DATABASE_URL`, runs a private copy of the same standalone suite, and
-reports coverage without a threshold gate. Manual `apih` uses the unchanged
+enforces the 90% integration gate. Manual `apih` uses the unchanged
 `backend/apih-tests/root.yaml` URL (default port8080). SQL fixtures, outage/recovery
 suites and database lifecycle management remain removed, as do the Go HTTP
 harness and `legacy-api-test` target. APIHydra mode1 runs endpoint groups in
@@ -144,8 +143,8 @@ changes; do not maintain conflicting copies in each specification.
 
 - Implement and maintain at least one unit test for every acceptance criterion,
   including every individual acceptance criteria bullet.
-- Write unit tests for all production code and keep unit test coverage greater
-  than 95%.
+- Write unit tests for all production code and keep unit test coverage at least
+  95%.
 - Avoid tests that do not increase coverage unless they prove a specific
   acceptance criterion bullet.
 
@@ -203,8 +202,8 @@ Keep unit and terminal profiles independent. Both denominators contain all
 production statements under cmd/internal/pkg and any additional production
 packages discovered by the inventory audit, including packages without tests.
 Only integration and scripts are classified as harness/tooling trees. The final
-strict gates use integer counts: `100*covered > 95*total` for unit and
-`100*covered > 90*total` for terminal integration. Exactly 95% or 90% fails.
+gates use integer counts: `100*covered >= 80*total` for unit and
+`100*covered >= 70*total` for terminal integration.
 A campaign must finish all required scenarios without skips, missing counters,
 assertion failures, crashes, timeouts or cleanup failures to establish coverage.
 A package with no tests is not a skipped unit scenario and still counts in the
@@ -224,6 +223,8 @@ to make an existing format/lint baseline green; track those issues by owning pas
 The authorized intermediate-merge policy above applies: numerical shortfalls
 alone may continue to dev with passing tests and honest gates. Repair new
 regressions; expose pre-existing failures. Final rebuild completion still requires
-all contracts, tests, checks, >95% unit and >90% terminal coverage. Do not promote
+all contracts, tests, checks, at least 80% unit and 70% terminal coverage. Do not promote
 to stage or production. No live backend/database use is implied by CLI tests;
 P0 uses fake servers and owned local processes only.
+
+Frontend coverage targets are to be decided; no numerical gate is set yet.

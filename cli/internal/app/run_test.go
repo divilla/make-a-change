@@ -205,6 +205,14 @@ func (f *fakeClient) UpdateChangeTitle(_ context.Context, _ int, title string) e
 	return nil
 }
 
+func (f *fakeClient) UpdateChangeSlug(_ context.Context, _ int, slug string) error {
+	ref, _, ok := strings.Cut(f.gotChange.RefSlug, "-")
+	if ok {
+		f.gotChange.RefSlug = ref + "-" + slug
+	}
+	return nil
+}
+
 func (f *fakeClient) UpdateChangePRUrl(_ context.Context, _ int, prURL string) error {
 	f.changePRUrlUpdateCalls++
 	f.changePRUrlUpdates = append(f.changePRUrlUpdates, prURL)
@@ -502,30 +510,36 @@ func TestInputBandUsesCliProtoFullWidthBackground(t *testing.T) {
 	band := m.inputBand(40)
 	lines := strings.Split(band, "\n")
 	require.Len(t, lines, 3)
+	assert.Equal(t, lipgloss.Color("#454748"), styles.InputBackground)
+	assert.Equal(t, styles.InputBackground, styles.Default.InputBand.GetBackground())
+	assert.Equal(t, styles.Foreground, styles.Default.InputBand.GetForeground())
+	assert.Equal(t, strings.Repeat("▄", 40), stripANSI(lines[0]))
+	assert.Equal(t, strings.Repeat("▀", 40), stripANSI(lines[2]))
 	assert.Contains(t, band, "Type / for commands")
 	for i, line := range lines {
 		visible := stripANSI(line)
 		assert.Falsef(t, strings.TrimSpace(visible) == "" && len(visible) < 40, "blank input band line %d too short: %q", i, visible)
 	}
-	assert.True(t, strings.HasPrefix(stripANSI(lines[1]), "> Type / for commands"))
+	assert.True(t, strings.HasPrefix(stripANSI(lines[1]), " > Type / for commands"))
 
 	m = m.setPromptValue("typed text")
 	typedBand := m.inputBand(40)
 	assert.NotContains(t, typedBand, "48;5;0")
 	assert.NotContains(t, typedBand, "[40m")
 	typedLine := stripANSI(strings.Split(typedBand, "\n")[1])
-	assert.True(t, strings.HasPrefix(typedLine, "> typed text"))
-	assert.Equal(t, "15", fmt.Sprint(m.input.FocusedStyle.Text.GetForeground()))
-	assert.Equal(t, "15", fmt.Sprint(m.input.FocusedStyle.CursorLine.GetForeground()))
-	assert.Equal(t, "0", fmt.Sprint(m.input.FocusedStyle.Placeholder.GetForeground()))
+	assert.True(t, strings.HasPrefix(typedLine, " > typed text"))
+	assert.Equal(t, styles.AccentPurple, m.input.FocusedStyle.Prompt.GetForeground())
+	assert.Equal(t, styles.Foreground, m.input.FocusedStyle.Text.GetForeground())
+	assert.Equal(t, styles.Foreground, m.input.FocusedStyle.CursorLine.GetForeground())
+	assert.Equal(t, styles.Gray, m.input.FocusedStyle.Placeholder.GetForeground())
 	assert.Equal(t, cursor.CursorStatic, m.input.Cursor.Mode())
 
 	wideBand := m.inputBand(180)
 	wideLines := strings.Split(wideBand, "\n")
 	require.Len(t, wideLines, 3)
-	assert.Len(t, stripANSI(wideLines[0]), 180)
-	assert.Len(t, stripANSI(wideLines[1]), 180)
-	assert.Len(t, stripANSI(wideLines[2]), 180)
+	assert.Equal(t, 180, lipgloss.Width(wideLines[0]))
+	assert.Equal(t, 180, lipgloss.Width(wideLines[1]))
+	assert.Equal(t, 180, lipgloss.Width(wideLines[2]))
 }
 
 func TestPromptTextareaGrowsForExplicitNewlines(t *testing.T) {
@@ -536,9 +550,9 @@ func TestPromptTextareaGrowsForExplicitNewlines(t *testing.T) {
 	lines := strings.Split(band, "\n")
 
 	require.Len(t, lines, 5)
-	assert.True(t, strings.HasPrefix(lines[1], "> first line"))
-	assert.True(t, strings.HasPrefix(lines[2], "> second line"))
-	assert.True(t, strings.HasPrefix(lines[3], "> "))
+	assert.True(t, strings.HasPrefix(lines[1], " > first line"))
+	assert.True(t, strings.HasPrefix(lines[2], " > second line"))
+	assert.True(t, strings.HasPrefix(lines[3], " > "))
 }
 
 func TestPromptNewlineKeyAddsBlankPromptLine(t *testing.T) {
@@ -608,14 +622,14 @@ func TestViewAddsBlankLineBetweenPromptAndFooter(t *testing.T) {
 	lines := strings.Split(stripANSI(m.View()), "\n")
 	var promptLine int
 	for i, line := range lines {
-		if strings.HasPrefix(line, "> Type / for commands") {
+		if strings.HasPrefix(line, " > Type / for commands") {
 			promptLine = i
 			break
 		}
 	}
 	require.NotZero(t, promptLine)
 	require.Greater(t, len(lines), promptLine+3)
-	assert.Empty(t, strings.TrimSpace(lines[promptLine+1]))
+	assert.Equal(t, strings.Repeat("▀", 40), lines[promptLine+1])
 	assert.Empty(t, strings.TrimSpace(lines[promptLine+2]))
 	assert.Contains(t, lines[promptLine+3], "</> command")
 }
@@ -1221,6 +1235,7 @@ func TestProjectCancelDoesNotCallPersistence(t *testing.T) {
 	m.input.SetValue("Renamed Project")
 
 	got, _ = sendKey(m, tea.KeyEsc)
+	got, _ = sendKey(got, tea.KeyEsc)
 
 	assert.Equal(t, ProjectDetailsState, got.state)
 	assert.Zero(t, client.createCalls)
@@ -1233,7 +1248,7 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 			{
 				ID:          "11",
 				Ref:         "3",
-				Slug:        "change-three",
+				RefSlug:     "003-change-three",
 				Title:       "Backend Change",
 				ChangePhase: "backlog",
 				ChangeTypes: []string{"feature", "test"},
@@ -1250,7 +1265,7 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 			ID:          "11",
 			RefUUID:     "11111111-2222-4333-8444-555555555555",
 			Ref:         "3",
-			Slug:        "change-three",
+			RefSlug:     "003-change-three",
 			Title:       "Backend Change",
 			ChangePhase: "backlog",
 			ChangeTypes: []string{"feature", "test"},
@@ -1278,10 +1293,10 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 
 	assert.Equal(t, []string{"7"}, client.changeListProjectIDs)
 	view := stripANSI(got.View())
-	assert.Contains(t, view, "/filter-phase")
-	assert.Contains(t, view, "/filter-type")
-	assert.Contains(t, view, "/filter-epic")
-	assert.Contains(t, view, "/filter-find")
+	assert.Contains(t, view, "/phase-filter")
+	assert.Contains(t, view, "/types-filter")
+	assert.Contains(t, view, "/epic-filter")
+	assert.Contains(t, view, "/find-filter")
 	assert.Contains(t, view, "#Ref")
 	assert.Contains(t, view, "Phase")
 	assert.Contains(t, view, "Types")
@@ -1312,26 +1327,29 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 	assert.Contains(t, view, "ChangeDetailsScreen")
 	assert.Contains(t, view, "ID │ 11")
 	assert.Contains(t, view, "Ref UUID │ 11111111-2222-4333-8444-555555555555")
-	assert.Contains(t, view, "Ref │ 3")
-	assert.Contains(t, view, "Slug │ change-three")
+	assert.Contains(t, view, "Slug │ 003-change-three")
 	assert.Contains(t, view, "Phase │ backlog")
 	assert.Contains(t, view, "Epic │ Epic Five")
+	assert.NotContains(t, view, "Epic │ Epic Five #5")
+	assert.NotContains(t, view, "Project ID │")
+	assert.NotContains(t, view, "Epic ID │")
 	assert.Contains(t, view, "Types │ feature|test")
 	assert.Contains(t, view, "Title │ Backend Change")
 	assert.Contains(t, view, "───────────┼")
 	assert.NotContains(t, view, "Epic Five                                                                                              \n───────────┼")
 	assert.Less(t, strings.Index(view, "ID │ 11"), strings.Index(view, "Ref UUID │ 11111111-2222-4333-8444-555555555555"))
-	assert.Less(t, strings.Index(view, "Ref UUID │ 11111111-2222-4333-8444-555555555555"), strings.Index(view, "Ref │ 3"))
-	assert.Less(t, strings.Index(view, "Ref │ 3"), strings.Index(view, "Slug │ change-three"))
-	assert.Less(t, strings.Index(view, "Slug │ change-three"), strings.Index(view, "Phase │ backlog"))
-	assert.Less(t, strings.Index(view, "Phase │ backlog"), strings.Index(view, "Epic │ Epic Five"))
-	assert.Less(t, strings.Index(view, "Epic │ Epic Five"), strings.Index(view, "Types │ feature|test"))
-	assert.Less(t, strings.Index(view, "Types │ feature|test"), strings.Index(view, "Title │ Backend Change"))
+	assert.Less(t, strings.Index(view, "Ref UUID │ 11111111-2222-4333-8444-555555555555"), strings.Index(view, "Slug │ 003-change-three"))
+	assert.Less(t, strings.Index(view, "Slug │ 003-change-three"), strings.Index(view, "Epic │ Epic Five"))
+	assert.Less(t, strings.Index(view, "Epic │ Epic Five"), strings.Index(view, "Phase │ backlog"))
+	assert.Less(t, strings.Index(view, "Phase │ backlog"), strings.Index(view, "Types │ feature|test"))
+	assert.Less(t, strings.Index(view, "Types │ feature|test"), strings.Index(view, "After Change │ -"))
+	assert.Less(t, strings.Index(view, "After Change │ -"), strings.Index(view, "Title │ Backend Change"))
+	assert.NotContains(t, view, "Ref │")
 	assert.NotContains(t, view, "Rows 1-")
 	assert.Contains(t, rawView, lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Render("Backend Change"))
 
 	got, _ = sendKey(got, tea.KeyPgDown)
-	got.changeList.DetailOffset = max(0, got.changeList.DetailOffset-1)
+	got.changeList.DetailOffset = max(0, got.changeList.DetailOffset-4)
 	view = stripANSI(got.View())
 	assert.Contains(t, view, "Spec │ # Backend Change")
 	assert.Contains(t, view, "PR │ Pull request summary.")
@@ -1340,10 +1358,8 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 	got, _ = sendKey(got, tea.KeyPgDown)
 	view = stripANSI(got.View())
 	assert.Contains(t, view, "PR URL │ https://github.com/divilla/project-manager/pull/107")
-	assert.Contains(t, view, "After change │ null")
 	assert.Contains(t, view, "Complete │ 0/0 - 0%")
-	assert.Less(t, strings.Index(view, "PR URL │ https://github.com/divilla/project-manager/pull/107"), strings.Index(view, "After change │ null"))
-	assert.Less(t, strings.Index(view, "After change │ null"), strings.Index(view, "Complete │ 0/0 - 0%"))
+	assert.Less(t, strings.Index(view, "PR URL │ https://github.com/divilla/project-manager/pull/107"), strings.Index(view, "Complete │ 0/0 - 0%"))
 
 	got, _ = sendKey(got, tea.KeyPgDown)
 	view = stripANSI(got.View())
@@ -1387,7 +1403,7 @@ func TestChangesTableUsesNaturalWidthUntilTerminalIsSmaller(t *testing.T) {
 	require.NotEmpty(t, lines)
 
 	require.GreaterOrEqual(t, len(lines), 2)
-	assert.Equal(t, 181, lipgloss.Width(lines[1]))
+	assert.Equal(t, 182, lipgloss.Width(lines[1]))
 	assert.Contains(t, view, strings.Repeat("Y", 30))
 	assert.NotContains(t, view, strings.Repeat("Y", 31))
 
@@ -1477,7 +1493,7 @@ func TestChangesTableKeyboardSelectionMatchesProjects(t *testing.T) {
 func TestChangesTableIsBoxedAndScrollsSelectedRowIntoView(t *testing.T) {
 	m := NewModelWithClient(&fakeClient{})
 	m.state = ChangesListState
-	m.height = 16
+	m.height = 15
 	m.width = 120
 	m.changeList = m.changeList.WithRows([]dto.ChangeView{
 		{ID: "1", Ref: "1", Title: "Change One"},
@@ -1492,33 +1508,45 @@ func TestChangesTableIsBoxedAndScrollsSelectedRowIntoView(t *testing.T) {
 	assert.Contains(t, view, "└")
 	assert.Contains(t, view, "Change One")
 	assert.Contains(t, view, "Change Three")
-	assert.NotContains(t, view, "Change Four")
-	assert.Contains(t, view, "Rows 1-3 of 5")
+	assert.Contains(t, view, "Change Four")
+	assert.NotContains(t, view, "Change Five")
+	assert.Contains(t, view, "Rows 1-4 of 5")
+	lines := strings.Split(view, "\n")
+	foundPromptBottom := false
+	for index, line := range lines {
+		if strings.Contains(line, "▀▀▀") {
+			foundPromptBottom = true
+			require.Less(t, index+1, len(lines))
+			assert.Contains(t, lines[index+1], "Type to filter changes")
+			break
+		}
+	}
+	require.True(t, foundPromptBottom)
 
 	got, _ := sendKey(m, tea.KeyDown)
 	got, _ = sendKey(got, tea.KeyDown)
 	got, _ = sendKey(got, tea.KeyDown)
 
 	assert.Equal(t, 3, got.changeList.Selected)
-	assert.Equal(t, 1, got.changeList.Offset)
+	assert.Equal(t, 0, got.changeList.Offset)
 	view = stripANSI(got.View())
-	assert.NotContains(t, view, "Change One")
+	assert.Contains(t, view, "Change One")
 	assert.Contains(t, view, "Change Four")
-	assert.Contains(t, view, "Rows 2-4 of 5")
+	assert.Contains(t, view, "Rows 1-4 of 5")
 
 	got, _ = sendKey(got, tea.KeyPgDown)
 	assert.Equal(t, 4, got.changeList.Selected)
-	assert.Equal(t, 2, got.changeList.Offset)
-	view = stripANSI(got.View())
-	assert.Contains(t, view, "Change Five")
-	assert.Contains(t, view, "Rows 3-5 of 5")
-
-	got, _ = sendKey(got, tea.KeyPgUp)
-	assert.Equal(t, 1, got.changeList.Selected)
 	assert.Equal(t, 1, got.changeList.Offset)
 	view = stripANSI(got.View())
-	assert.Contains(t, view, "Change Two")
-	assert.Contains(t, view, "Rows 2-4 of 5")
+	assert.Contains(t, view, "Change Five")
+	assert.Contains(t, view, "Rows 2-5 of 5")
+
+	got, _ = sendKey(got, tea.KeyPgUp)
+	assert.Equal(t, 0, got.changeList.Selected)
+	assert.Equal(t, 0, got.changeList.Offset)
+	view = stripANSI(got.View())
+	assert.Contains(t, view, "Change One")
+	assert.Contains(t, view, "Rows 1-4 of 5")
 }
 
 func TestChangesEnterWithNoSelectableRowErrors(t *testing.T) {
@@ -2099,7 +2127,7 @@ func TestChangeDetailsTableSelectionMovesAcrossAllRows(t *testing.T) {
 		ID:          "11",
 		RefUUID:     "11111111-2222-4333-8444-555555555555",
 		Ref:         "3",
-		Slug:        "change-three",
+		RefSlug:     "003-change-three",
 		Title:       "Backend Change",
 		ChangePhase: "backlog",
 		ChangeTypes: []string{"feature", "test"},
@@ -2211,10 +2239,11 @@ func TestChangeDetailsPhaseSelectionSavesAndReloads(t *testing.T) {
 
 	got, cmd := sendKey(m, tea.KeyEnter)
 	require.NotNil(t, cmd)
-	assert.Equal(t, SelectPhaseDropDown, got.state)
+	assert.Equal(t, ChangeDetailsState, got.state)
 	got = applyMsg(got, cmd())
 	assert.Equal(t, 1, got.dropdown.highlighted)
-	assert.Contains(t, stripANSI(got.dropdownView(80)), "    -stage")
+	assert.Contains(t, stripANSI(got.dropdownView(80)), "    [ ] stage")
+	assert.Contains(t, stripANSI(got.dropdownView(80)), "    [●] backlog")
 
 	got, _ = sendKey(got, tea.KeyUp)
 	got, cmd = sendKey(got, tea.KeyEnter)
@@ -2276,14 +2305,15 @@ func TestChangeDetailsEpicNoneSelectionClearsEpic(t *testing.T) {
 		EpicID:   "5",
 		EpicName: "Epic Five",
 	})
-	m.changeList.DetailSelected = 3
+	m.changeList.DetailSelected = 1
 
 	got, cmd := sendKey(m, tea.KeyEnter)
 	require.NotNil(t, cmd)
-	assert.Equal(t, SelectEpicDropDown, got.state)
+	assert.Equal(t, ChangeDetailsState, got.state)
 	got = applyMsg(got, cmd())
 	assert.Equal(t, 1, got.dropdown.highlighted)
-	assert.Contains(t, stripANSI(got.dropdownView(80)), "    @none")
+	assert.Contains(t, stripANSI(got.dropdownView(80)), "    [ ] @none")
+	assert.Contains(t, stripANSI(got.dropdownView(80)), "    [●] Epic Five #5")
 
 	got, _ = sendKey(got, tea.KeyDown)
 	got, cmd = sendKey(got, tea.KeyEnter)
@@ -2295,7 +2325,7 @@ func TestChangeDetailsEpicNoneSelectionClearsEpic(t *testing.T) {
 	assert.Equal(t, []int{12}, client.changeGetIDs)
 	assert.Equal(t, "null", got.changeList.Detail.EpicID)
 	assert.Equal(t, ChangeDetailsState, got.state)
-	assert.Equal(t, 3, got.changeList.DetailSelected)
+	assert.Equal(t, 1, got.changeList.DetailSelected)
 }
 
 func TestChangeDetailsTitleSelectionOpensPromptAndSaves(t *testing.T) {
@@ -2317,11 +2347,12 @@ func TestChangeDetailsTitleSelectionOpensPromptAndSaves(t *testing.T) {
 
 	got, cmd := sendKey(m, tea.KeyEnter)
 	require.Nil(t, cmd)
-	assert.Equal(t, ChangeUpdateState, got.state)
+	assert.Equal(t, ChangeDetailsState, got.state)
 	assert.Equal(t, detailEditTitle, got.detailEditField)
 	assert.Equal(t, "Old Title", got.input.Value())
-	assert.Equal(t, "Enter value (Ctrl+C clears, Esc cancels)", got.input.Placeholder)
-	assert.Contains(t, got.View(), "ChangeUpdateScreen")
+	assert.Equal(t, "Enter value (Ctrl+C/Esc cancel)", got.input.Placeholder)
+	assert.Contains(t, got.View(), "ChangeDetailsScreen")
+	assert.Contains(t, stripANSI(got.View()), "Title > Old Title")
 
 	got = got.setPromptValue("New Title")
 	got, cmd = sendKey(got, tea.KeyEnter)
@@ -2350,19 +2381,18 @@ func TestChangeDetailsTitleCancelDoesNotSave(t *testing.T) {
 
 	got, cmd := sendKey(m, tea.KeyEnter)
 	require.Nil(t, cmd)
-	require.Equal(t, ChangeUpdateState, got.state)
+	require.Equal(t, ChangeDetailsState, got.state)
 	assert.Equal(t, detailEditTitle, got.detailEditField)
 
 	got = got.setPromptValue("/cancel")
 	got, cmd = sendKey(got, tea.KeyEnter)
 
-	require.NotNil(t, cmd)
-	got = applyMsg(got, cmd())
+	require.Nil(t, cmd)
 	assert.Equal(t, ChangeDetailsState, got.state)
 	assert.Empty(t, got.detailEditField)
 	assert.Empty(t, got.input.Value())
 	assert.Zero(t, client.changeTitleUpdateCalls)
-	assert.Equal(t, []int{12}, client.changeGetIDs)
+	assert.Empty(t, client.changeGetIDs)
 }
 
 func TestChangeDetailsRejectsInvalidArtifactSavesBeforeBackend(t *testing.T) {
@@ -2458,17 +2488,25 @@ func TestChangeDetailsTypesSelectionAddsUnselectedType(t *testing.T) {
 		Title:       "Backend Change",
 		ChangeTypes: []string{"feature"},
 	})
-	m.changeList.DetailSelected = 4
+	m.changeList.DetailSelected = 3
 
 	got, cmd := sendKey(m, tea.KeyEnter)
 	require.NotNil(t, cmd)
-	assert.Equal(t, SelectTypesDropDown, got.state)
+	assert.Equal(t, ChangeDetailsState, got.state)
 	got = applyMsg(got, cmd())
 	assert.Equal(t, 1, got.dropdown.highlighted)
 	view := stripANSI(got.dropdownView(80))
-	assert.Less(t, strings.Index(view, "    +docs"), strings.Index(view, "    -feature"))
-	assert.Less(t, strings.Index(view, "    -feature"), strings.Index(view, "    +test"))
+	assert.Less(t, strings.Index(view, "    [ ] docs"), strings.Index(view, "    [✓] feature"))
+	assert.Less(t, strings.Index(view, "    [✓] feature"), strings.Index(view, "    [ ] test"))
 	assert.Contains(t, view, "press <space> to change")
+	selectedLine := ""
+	for _, line := range strings.Split(got.dropdownView(80), "\n") {
+		if strings.Contains(stripANSI(line), "    [✓] feature") {
+			selectedLine = line
+			break
+		}
+	}
+	require.Equal(t, styles.Default.MenuSelected.Width(80).Render("    [✓] feature"), selectedLine)
 
 	got, _ = sendKey(got, tea.KeyUp)
 	got, cmd = sendKey(got, tea.KeySpace)
@@ -2481,7 +2519,7 @@ func TestChangeDetailsTypesSelectionAddsUnselectedType(t *testing.T) {
 	assert.Equal(t, []int{12}, client.changeGetIDs)
 	assert.Equal(t, []string{"docs", "feature"}, got.changeList.Detail.ChangeTypes)
 	assert.Equal(t, ChangeDetailsState, got.state)
-	assert.Equal(t, 4, got.changeList.DetailSelected)
+	assert.Equal(t, 3, got.changeList.DetailSelected)
 }
 
 func TestChangeDetailsTypesSelectionRemovesSelectedType(t *testing.T) {
@@ -2506,13 +2544,13 @@ func TestChangeDetailsTypesSelectionRemovesSelectedType(t *testing.T) {
 		Title:       "Backend Change",
 		ChangeTypes: []string{"feature", "test"},
 	})
-	m.changeList.DetailSelected = 4
+	m.changeList.DetailSelected = 3
 
 	got, cmd := sendKey(m, tea.KeyEnter)
 	require.NotNil(t, cmd)
 	got = applyMsg(got, cmd())
 	assert.Equal(t, 1, got.dropdown.highlighted)
-	assert.Contains(t, stripANSI(got.dropdownView(80)), "    -feature")
+	assert.Contains(t, stripANSI(got.dropdownView(80)), "    [✓] feature")
 
 	got, cmd = sendKey(got, tea.KeySpace)
 	require.Nil(t, cmd)
@@ -2524,7 +2562,7 @@ func TestChangeDetailsTypesSelectionRemovesSelectedType(t *testing.T) {
 	assert.Equal(t, []int{12}, client.changeGetIDs)
 	assert.Equal(t, []string{"test"}, got.changeList.Detail.ChangeTypes)
 	assert.Equal(t, ChangeDetailsState, got.state)
-	assert.Equal(t, 4, got.changeList.DetailSelected)
+	assert.Equal(t, 3, got.changeList.DetailSelected)
 }
 
 func TestChangeDetailsTypesSelectionEnterWithoutToggleReturnsWithoutSaving(t *testing.T) {
@@ -2542,7 +2580,7 @@ func TestChangeDetailsTypesSelectionEnterWithoutToggleReturnsWithoutSaving(t *te
 		Title:       "Backend Change",
 		ChangeTypes: []string{"feature"},
 	})
-	m.changeList.DetailSelected = 4
+	m.changeList.DetailSelected = 3
 
 	got, cmd := sendKey(m, tea.KeyEnter)
 	require.NotNil(t, cmd)
@@ -2575,7 +2613,7 @@ func TestChangeDetailsOpenSpaceTogglesAndReloads(t *testing.T) {
 		Title: "Backend Change",
 		Open:  true,
 	})
-	m.changeList.DetailSelected = 12
+	m.changeList.DetailSelected = 11
 
 	got, cmd := sendRune(m, ' ')
 	require.NotNil(t, cmd)
@@ -2586,7 +2624,7 @@ func TestChangeDetailsOpenSpaceTogglesAndReloads(t *testing.T) {
 	assert.Equal(t, []int{12}, client.changeGetIDs)
 	assert.False(t, got.changeList.Detail.Open)
 	assert.Equal(t, ChangeDetailsState, got.state)
-	assert.Equal(t, 12, got.changeList.DetailSelected)
+	assert.Equal(t, 11, got.changeList.DetailSelected)
 }
 
 func TestChangeDetailsTestCaseSpaceTogglesAndReloads(t *testing.T) {
@@ -2797,18 +2835,19 @@ func TestChangesListHeaderRendersFiltersAndTable(t *testing.T) {
 	require.GreaterOrEqual(t, len(lines), 7)
 	assert.Contains(t, lines[0], "Make a change v0.1")
 	assert.Contains(t, lines[0], "ChangesListScreen")
-	assert.Contains(t, lines[1], "/filter-phase")
+	assert.Contains(t, lines[1], "/phase-filter")
 	assert.Contains(t, lines[1], "backlog")
-	assert.Contains(t, lines[1], "/filter-type")
+	assert.Contains(t, lines[1], "/types-filter")
 	assert.Contains(t, lines[1], "feature")
-	assert.Contains(t, lines[1], "/filter-epic")
+	assert.Contains(t, lines[1], "/epic-filter")
 	assert.Contains(t, lines[1], "Epic Five")
-	assert.Contains(t, lines[1], "/filter-find")
+	assert.Contains(t, lines[1], "/find-filter")
 	assert.Contains(t, lines[1], "backend")
 	assert.Contains(t, lines[2], "┌")
 	assert.Equal(t, lipgloss.Width(lines[2]), lipgloss.Width(lines[1]))
-	assert.Contains(t, lines[len(lines)-1], "<ctrl+n> new change")
-	assert.Contains(t, lines[len(lines)-1], "</> command")
+	footer := strings.Join(lines[max(0, len(lines)-4):], "\n")
+	assert.Contains(t, footer, "<ctrl+n> new change")
+	assert.Contains(t, footer, "</> command")
 }
 
 func TestChangesListFiltersRenderValuesPureWhite(t *testing.T) {
@@ -2824,7 +2863,7 @@ func TestChangesListFiltersRenderValuesPureWhite(t *testing.T) {
 	m.changesFilters.typ = dto.Option{ID: "feature", Label: "feature"}
 
 	view := m.View()
-	assert.Contains(t, view, styles.Default.Muted.Render("/filter-type "))
+	assert.Contains(t, view, styles.Default.Muted.Render("/types-filter "))
 	assert.Contains(t, view, lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Render("feature"))
 }
 
@@ -2836,7 +2875,7 @@ func TestChangeDetailsTableTruncatesLongSpecAndPullRequestRows(t *testing.T) {
 	m.changeList = m.changeList.WithDetail(dto.ChangeView{
 		ID:          "11",
 		Ref:         "3",
-		Slug:        "change-three",
+		RefSlug:     "003-change-three",
 		Title:       "Backend Change",
 		ChangePhase: "backlog",
 		EpicName:    "Epic Five",
@@ -2846,7 +2885,7 @@ func TestChangeDetailsTableTruncatesLongSpecAndPullRequestRows(t *testing.T) {
 	})
 
 	firstView := stripANSI(m.View())
-	assert.Contains(t, firstView, "Ref │ 3")
+	assert.Contains(t, firstView, "Slug │ 003-change-three")
 	assert.Contains(t, firstView, "Spec │ spec content")
 	assert.Contains(t, firstView, "...")
 	assert.NotContains(t, firstView, "pull request end")
@@ -2860,7 +2899,7 @@ func TestChangeDetailsTableTruncatesLongSpecAndPullRequestRows(t *testing.T) {
 
 	got, _ = sendKey(got, tea.KeyPgUp)
 	backView := stripANSI(got.View())
-	assert.Contains(t, backView, "Ref │ 3")
+	assert.Contains(t, backView, "Slug │ 003-change-three")
 }
 
 func TestP302EpicActionsRequireRealSelection(t *testing.T) {
@@ -3013,16 +3052,14 @@ func TestChangeDetailsCommandsAreExact(t *testing.T) {
 
 func TestChangesListCommandsAreExact(t *testing.T) {
 	assert.Equal(t, []string{
-		"/find",
-		"/new-change", "/retry",
+		"/new-change",
 		"/phase-filter",
+		"/types-filter",
 		"/epic-filter",
-		"/type-filter",
 		"/find-filter",
 		"/clear-filters",
 		"/help",
 		"/return",
-		"/brief-new",
 	}, commandsByState[ChangesListState])
 }
 
@@ -3157,7 +3194,7 @@ func TestSelectorFailureAndEscapePreservePreviousState(t *testing.T) {
 
 	got, cmd := sendCommand(m, "/phase")
 	got = applyMsg(got, cmd())
-	assert.Equal(t, SelectPhaseDropDown, got.state)
+	assert.Equal(t, ChangeDetailsState, got.state)
 	assert.NotEmpty(t, got.err)
 
 	got, _ = sendKey(got, tea.KeyEsc)
@@ -3181,8 +3218,8 @@ func TestFilterSelectorsReturnToChangesList(t *testing.T) {
 	got = applyMsg(got, cmd())
 	phaseDropdown := strings.Split(got.dropdownView(80), "\n")
 	require.GreaterOrEqual(t, len(phaseDropdown), 3)
-	assert.True(t, strings.HasPrefix(stripANSI(phaseDropdown[1]), "    -done"))
-	assert.True(t, strings.HasPrefix(stripANSI(phaseDropdown[len(phaseDropdown)-1]), "    /clear"))
+	assert.True(t, strings.HasPrefix(stripANSI(phaseDropdown[3]), "    [ ] done"))
+	assert.Contains(t, stripANSI(got.dropdownView(80)), "[●] @clear")
 	got, _ = sendKey(got, tea.KeyEnter)
 	assert.Equal(t, ChangesListState, got.state)
 	assert.Equal(t, "done", got.changesFilters.phase.ID)
@@ -3193,27 +3230,21 @@ func TestFilterSelectorsReturnToChangesList(t *testing.T) {
 	assert.Equal(t, ChangesListState, got.state)
 	assert.Contains(t, got.View(), "ChangesListScreen")
 	got = applyMsg(got, cmd())
+	assert.Contains(t, stripANSI(got.dropdownView(80)), "[●] @clear")
+	assert.NotContains(t, stripANSI(got.dropdownView(80)), "@clear #")
 	got, _ = sendKey(got, tea.KeyEnter)
 	assert.Equal(t, ChangesListState, got.state)
 	assert.Equal(t, "1", got.changesFilters.epic.ID)
 
-	got, cmd = sendCommand(got, "/type-filter")
+	got, cmd = sendCommand(got, "/types-filter")
 	require.NotNil(t, cmd)
 	assert.Equal(t, ChangesListState, got.state)
 	assert.Contains(t, got.View(), "ChangesListScreen")
 	got = applyMsg(got, cmd())
+	assert.Contains(t, stripANSI(got.dropdownView(80)), "Types Filter >")
+	assert.Contains(t, stripANSI(got.dropdownView(80)), "[●] @clear")
 	got, _ = sendKey(got, tea.KeyEnter)
 	assert.Equal(t, ChangesListState, got.state)
-	assert.Equal(t, "test", got.changesFilters.typ.ID)
-
-	got, cmd = sendCommand(got, "/phase-filter")
-	require.NotNil(t, cmd)
-	got = applyMsg(got, cmd())
-	got.dropdown.filter = "/clear"
-	got, _ = sendKey(got, tea.KeyEnter)
-	assert.Equal(t, ChangesListState, got.state)
-	assert.Empty(t, got.changesFilters.phase.ID)
-	assert.Equal(t, "1", got.changesFilters.epic.ID)
 	assert.Equal(t, "test", got.changesFilters.typ.ID)
 
 	got, _ = sendCommand(got, "/find-filter")
@@ -3222,6 +3253,36 @@ func TestFilterSelectorsReturnToChangesList(t *testing.T) {
 	got, _ = sendKey(got, tea.KeyEnter)
 	assert.Equal(t, ChangesListState, got.state)
 	assert.Equal(t, "needle", got.changesFilters.find)
+
+	for _, tc := range []struct {
+		command string
+		field   filterField
+	}{
+		{command: "/phase-filter", field: filterPhase},
+		{command: "/types-filter", field: filterTypes},
+		{command: "/epic-filter", field: filterEpic},
+	} {
+		got, cmd = sendCommand(got, tc.command)
+		require.NotNil(t, cmd)
+		got = applyMsg(got, cmd())
+		assert.Contains(t, stripANSI(got.dropdownView(80)), "[ ] @clear")
+		got.dropdown.filter = "@clear"
+		got, _ = sendKey(got, tea.KeyEnter)
+		assert.Equal(t, ChangesListState, got.state)
+		assert.Contains(t, got.status, "cleared "+string(tc.field)+" filter")
+		assert.Equal(t, "needle", got.changesFilters.find)
+		switch tc.field {
+		case filterPhase:
+			assert.Empty(t, got.changesFilters.phase.ID)
+			assert.Equal(t, "test", got.changesFilters.typ.ID)
+			assert.Equal(t, "1", got.changesFilters.epic.ID)
+		case filterTypes:
+			assert.Empty(t, got.changesFilters.typ.ID)
+			assert.Equal(t, "1", got.changesFilters.epic.ID)
+		case filterEpic:
+			assert.Empty(t, got.changesFilters.epic.ID)
+		}
+	}
 
 	got, _ = sendKey(got, tea.KeyCtrlF)
 	assert.Equal(t, FindInputState, got.state)
@@ -3232,6 +3293,7 @@ func TestFilterSelectorsReturnToChangesList(t *testing.T) {
 	assert.Equal(t, "needle", got.changesFilters.find)
 
 	got, _ = sendCommand(got, "/clear-filters")
+	assert.Empty(t, got.changesFilters.phase.ID)
 	assert.Empty(t, got.changesFilters.epic.ID)
 	assert.Empty(t, got.changesFilters.typ.ID)
 	assert.Empty(t, got.changesFilters.find)
@@ -3312,6 +3374,23 @@ func TestChangeDeleteConfirmationDeletesAndReloadsList(t *testing.T) {
 	assert.Equal(t, "Remaining Change", got.changeList.Rows[0].Title)
 }
 
+func TestChangeDeleteRefreshFailureOffersListReloadPath(t *testing.T) {
+	m := newChangeTestModel(&fakeClient{})
+	m.state = ChangeDetailsState
+	m.changeList = m.changeList.WithDetail(dto.ChangeView{ID: "12", Title: "Backend Change"})
+	m.changeList.Operation = changes.Delete
+	m.changeList.EntityID = 12
+	m.changeList.ProjectID = 7
+	next, cmd := m.applyChangeResult(changes.Result{ProjectID: 7, ID: 12, Operation: changes.Delete, Steps: []string{"deleted change"}, RefreshErr: errors.New("list unavailable")})
+	require.Nil(t, cmd)
+	m = next.(Model)
+	require.Equal(t, ChangesListState, m.state)
+	require.Contains(t, m.status, "return to Main and reopen /changes")
+	require.NotContains(t, m.status, "/retry")
+	m, _ = sendCommand(m, "/retry")
+	require.Contains(t, m.err, "unknown command")
+}
+
 func TestChangeDeleteFailurePreservesDetail(t *testing.T) {
 	client := &fakeClient{changeDeleteErr: errors.New("delete failed")}
 	m := newChangeTestModel(client)
@@ -3342,9 +3421,10 @@ func TestCommandDropdownFiltersAndExecutesSelection(t *testing.T) {
 	dropdown := got.dropdownView(80)
 	lines := strings.Split(dropdown, "\n")
 	require.GreaterOrEqual(t, len(lines), 3)
-	assert.True(t, strings.HasPrefix(stripANSI(lines[1]), "    /changes"))
-	assert.Equal(t, "15", fmt.Sprint(styles.Default.Selection.GetForeground()))
-	assert.Empty(t, strings.TrimSpace(stripANSI(lines[len(lines)-1])))
+	assert.Equal(t, " > /"+strings.Repeat(" ", 76), stripANSI(lines[1]))
+	assert.True(t, strings.HasPrefix(stripANSI(lines[3]), "    changes"))
+	assert.Contains(t, stripANSI(lines[3]), "Browse changes")
+	assert.Equal(t, "(1/10)", stripANSI(lines[len(lines)-1]))
 	got, _ = sendRune(got, 'e')
 	got, _ = sendRune(got, 'p')
 	got, _ = sendKey(got, tea.KeyEnter)
@@ -3449,10 +3529,10 @@ func TestProjectsCommandMenuPreservesListTitle(t *testing.T) {
 	assert.Equal(t, dropdownCommand, got.dropdown.kind)
 	view := stripANSI(got.View())
 	assert.Contains(t, view, "ProjectsListScreen")
-	assert.Contains(t, view, "/new-project")
-	assert.Contains(t, view, "/help")
-	assert.Contains(t, view, "/find")
-	assert.Contains(t, view, "/return")
+	assert.Contains(t, view, "    new-project")
+	assert.Contains(t, view, "    help")
+	assert.Contains(t, view, "    find")
+	assert.Contains(t, view, "    return")
 }
 
 func TestCreateStatesUseContextSpecificNewCommandVocabulary(t *testing.T) {
@@ -3562,7 +3642,7 @@ func TestEveryDummyScreenTitleRendersExactly(t *testing.T) {
 
 			view := m.View()
 			if tt.state == ChangesListState {
-				assert.Contains(t, view, "/filter-phase")
+				assert.Contains(t, view, "/phase-filter")
 			} else {
 				assert.Contains(t, view, headerScreenName(tt.state))
 			}
@@ -3695,13 +3775,11 @@ func fakeWire(v dto.ChangeView) dto.Change {
 	w := dto.Change{ID: id, ProjectID: project, RefUUID: v.RefUUID, Title: v.Title, ChangePhase: v.ChangePhase, ChangeTypes: v.ChangeTypes, Open: v.Open, DoneTC: v.Done, TotalTC: v.Total, Completed: v.Completed, PRUrl: v.PRUrl}
 	w.CreatedAt, _ = time.Parse(time.RFC3339, v.Created)
 	w.UpdatedAt, _ = time.Parse(time.RFC3339, v.Modified)
-	if v.Ref != "" {
-		n, _ := strconv.Atoi(v.Ref)
-		r := int32(n)
-		w.Ref = &r
-	}
-	if v.Slug != "" {
-		w.Slug = &v.Slug
+	if v.RefSlug != "" {
+		w.RefSlug = &v.RefSlug
+	} else if v.Ref != "" && v.Ref != "null" {
+		refSlug := v.Ref + "-fixture"
+		w.RefSlug = &refSlug
 	}
 	if v.EpicID != "" {
 		n, _ := strconv.Atoi(v.EpicID)

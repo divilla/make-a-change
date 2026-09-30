@@ -254,6 +254,11 @@ func (m Model) briefKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if msg.Type == tea.KeyEsc || msg.Type == tea.KeyCtrlC {
+		if m.input.Value() != "" {
+			m = m.setPromptValue("")
+			m.status = "prompt cleared"
+			return m, nil
+		}
 		return m.briefCommand("/return")
 	}
 	if m.brief.Busy {

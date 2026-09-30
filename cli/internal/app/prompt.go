@@ -164,12 +164,33 @@ func (m Model) updatePromptInput(msg tea.KeyMsg) (Model, tea.Cmd) {
 	if !m.canEditPrompt() {
 		return m, nil
 	}
+	if m.detailEditField == detailEditSlug {
+		if msg.Type == tea.KeySpace {
+			return m, nil
+		}
+		if msg.Type == tea.KeyRunes {
+			allowed := make([]rune, 0, len(msg.Runes))
+			for _, r := range msg.Runes {
+				if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '_' {
+					allowed = append(allowed, r)
+				}
+			}
+			if len(allowed) == 0 {
+				return m, nil
+			}
+			msg.Runes = allowed
+		}
+	}
 	m.preparePromptInput()
 	m.mirrorPromptKey(msg)
+	previousValue := m.input.Value()
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
 	m.syncEditorDraft()
 	m.clampPromptCursor()
+	if m.state == ChangesListState && m.input.Value() != previousValue {
+		m.clampChangeListSelection()
+	}
 	return m, cmd
 }
 

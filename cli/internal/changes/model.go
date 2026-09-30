@@ -71,7 +71,10 @@ type ParsedBrief struct {
 	ChangeTypesPresent bool
 }
 
-var invalidArtifactTypeCharacters = regexp.MustCompile(`[^A-Za-z\-_]`)
+var (
+	invalidArtifactTypeCharacters = regexp.MustCompile(`[^A-Za-z\-_]`)
+	findWordSeparators            = regexp.MustCompile(`[^a-z0-9_-]+`)
+)
 
 // StartLoading returns a changes model in loading state.
 func StartLoading() Model {
@@ -240,11 +243,11 @@ func DetailRows(change dto.ChangeView) []DetailRow {
 		return nil
 	}
 	rows := []DetailRow{
-		{Label: "Ref", Text: displayRef(change), Selectable: true},
-		{Label: "Slug", Text: change.Slug, Selectable: true},
+		{Label: "Slug", Text: displayNullable(change.RefSlug), Selectable: true},
+		{Label: "Epic", Text: displayNullable(change.EpicName), Selectable: true},
 		{Label: "Phase", Text: change.ChangePhase, Selectable: true},
-		{Label: "Epic", Text: epicLabel(change), Selectable: true},
-		{Label: "Types", Text: strings.Join(change.ChangeTypes, "|"), Selectable: true, DividerAfter: true},
+		{Label: "Types", Text: strings.Join(change.ChangeTypes, "|"), Selectable: true},
+		{Label: "After Change", Text: displayNullable(change.AfterChangeName), Selectable: true, DividerAfter: true},
 		{Label: "Title", Text: change.Title, Selectable: true, DividerAfter: true},
 		{Label: "Brief", Text: change.Brief, Selectable: true, DividerAfter: true},
 		{Label: "Spec", Text: change.Spec, Selectable: true, DividerAfter: true},
@@ -272,13 +275,10 @@ func DetailRows(change dto.ChangeView) []DetailRow {
 	rows = append(rows,
 		DetailRow{Label: "PR", Text: change.PR, Selectable: true, DividerAfter: true},
 		DetailRow{Label: "PR URL", Text: change.PRUrl, Selectable: true},
-		DetailRow{Label: "After change", Text: change.AfterChangeID, Selectable: true},
 		DetailRow{Label: "Complete", Text: fmt.Sprintf("%d/%d - %d%%", change.Done, change.Total, change.Completed), Selectable: true},
 		DetailRow{Label: "Open", Text: testCaseDoneIcon(change.Open), Selectable: true},
 		DetailRow{Label: "Created", Text: formatListTimestamp(change.Created), Selectable: true},
 		DetailRow{Label: "Modified", Text: formatListTimestamp(change.Modified), Selectable: true},
-		DetailRow{Label: "Project ID", Text: change.ProjectID, Selectable: true},
-		DetailRow{Label: "Epic ID", Text: change.EpicID, Selectable: true},
 	)
 	return rows
 }
@@ -585,7 +585,7 @@ func abs(value int) int {
 // FilteredRows returns changes matching active filters.
 func FilteredRows(rows []dto.ChangeView, filters Filters) []dto.ChangeView {
 	filtered := make([]dto.ChangeView, 0, len(rows))
-	find := strings.ToLower(strings.TrimSpace(filters.Find))
+	findWords := normalizedFindWords(filters.Find)
 	for _, change := range rows {
 		if filters.Phase.ID != "" && change.ChangePhase != filters.Phase.ID && change.ChangePhase != filters.Phase.Label {
 			continue
@@ -596,7 +596,7 @@ func FilteredRows(rows []dto.ChangeView, filters Filters) []dto.ChangeView {
 		if filters.Epic.ID != "" && change.EpicID != filters.Epic.ID && change.EpicName != filters.Epic.Label {
 			continue
 		}
-		if find != "" && !matchesFind(change, find) {
+		if len(findWords) > 0 && !matchesFind(change, findWords) {
 			continue
 		}
 		filtered = append(filtered, change)
@@ -755,27 +755,31 @@ func hasChangeType(change dto.ChangeView, values ...string) bool {
 	return false
 }
 
-func matchesFind(change dto.ChangeView, query string) bool {
-	values := []string{
-		change.ID,
-		change.RefUUID,
-		change.Ref,
+func normalizedFindWords(value string) []string {
+	return strings.Fields(findWordSeparators.ReplaceAllString(strings.ToLower(value), " "))
+}
+
+func matchesFind(change dto.ChangeView, queryWords []string) bool {
+	rowWords := normalizedFindWords(strings.Join([]string{
 		displayRef(change),
-		change.Slug,
-		change.Title,
 		change.ChangePhase,
-		change.EpicID,
-		change.EpicName,
-		change.Brief,
-		change.Spec,
-	}
-	values = append(values, change.ChangeTypes...)
-	for _, value := range values {
-		if strings.Contains(strings.ToLower(value), query) {
-			return true
+		strings.Join(change.ChangeTypes, " "),
+		epicLabel(change),
+		change.Title,
+	}, " "))
+	for _, queryWord := range queryWords {
+		found := false
+		for _, rowWord := range rowWords {
+			if strings.HasPrefix(rowWord, queryWord) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 // SortedTypeOptions returns deterministic type options for tests and rendering.

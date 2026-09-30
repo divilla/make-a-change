@@ -250,7 +250,7 @@ Keep PRs understandable by a reviewer without this conversation: concrete proble
 
 The canonical backend completion commands and their current migration limits are in root `AGENTS.md`, under “Backend Definition of Done”. Keep verification tooling aligned with that policy; individual specifications must repeat the user clarification that coverage is a final-result goal and does not stop intermediate work.
 
-The final target is backend checks passing, a unit test for every acceptance bullet, unit statement coverage **>95%**, APIHydra-driven integration statement coverage **≥90%**, verified architecture/database alignment, and no implementation edits outside `backend/`. Report the two percentages independently and provide reproducible backend commands.
+The final target is backend checks passing, a unit test for every acceptance bullet, unit statement coverage **≥95%**, APIHydra-driven integration statement coverage **≥90%**, verified architecture/database alignment, and no implementation edits outside `backend/`. Report the two percentages independently and provide reproducible backend commands.
 
 If a numerical target remains unreachable through meaningful testing, finish the entire remaining safe, reviewable sequence and report a clear **target not met** result at the end; do not stop or request permission between specifications solely because of coverage. Do not keep rewriting code/tests merely to make a number green. Provide:
 

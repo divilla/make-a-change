@@ -1,5 +1,257 @@
 # CLI rebuild checkpoint
 
+## CLI check cleanup (2026-09-30)
+
+The CLI formatting and package-comment baseline is fixed. The formatter
+updated `cmd/mch/main.go` and `internal/app/clipboard.go`; package comments
+were added to `cmd/mch`, `internal/help`, `internal/styles`, and `internal/ui`.
+The changes do not alter runtime behavior. The current `make -C cli check`
+passes, including format-check, lint, vet, race, architecture, and tooling.
+
+| Command | Exit and result |
+| --- | --- |
+| `make -C cli format` | 0; formatted the two previously failing Go files. |
+| `make -C cli check` | 0; all constituent checks pass. |
+| `make -C cli coverage` | 0; **4987/5784 (86.2206%)**, at least 80% gate passes. |
+| `make -C cli deps-audit` | 0; no vulnerabilities found. |
+| `make -C cli integration-coverage` | 0; complete-program and real PTY campaign **4416/5784 (76.3485%)**, at least 70% gate passes. |
+| `git diff --check` | 0; no whitespace errors. |
+
+The user-modified `backend/config/dev.yaml` remains untouched. Earlier
+checkpoint entries record the prior static-check baseline at their timestamps.
+
+## Persistent Changes list filters, selection, and display (2026-09-30)
+
+The Changes list summary now names the four menu filters in their menu order.
+Phase, Types, Epic, and Find stay active through detail/Main navigation, list
+reloads, and project selection until explicitly cleared. `/clear-filters`
+clears all four; `@clear` in Phase, Types, or Epic clears just that filter.
+The selector caption and command use the plural Types name. A blank Find entry
+does not clear its saved query. Ordinary prompt typing adds a temporary word-prefix
+query without replacing the saved one. Returning from details restores the
+selected change by ID. The Changes list menu and help omit `/retry` and
+`/brief-new`; returning to Main and reopening `/changes` reloads the list.
+After a failed delete refresh, the list status gives this same reload path.
+List Epic cells show the epic name without an ID suffix. List and detail Types
+use AccentPurple; list `%` and detail Complete use AccentBlue. Unit tests cover
+each rule, and the complete-program recovery tests follow the new reload path.
+
+| Command | Exit and result |
+| --- | --- |
+| Focused `go test` on affected app/changes/integration cases | 0; filter, selection, display, and program recovery cases pass. |
+| `make -C cli check` | 2; vet, race, architecture, and tooling pass. The existing formatting failures in `cmd/mch/main.go` and `internal/app/clipboard.go` and package-comment lint failures in `internal/help/commands.go`, `internal/styles/styles.go`, and `internal/ui/layout.go` remain. |
+| `make -C cli coverage` | 0; **4987/5784 (86.2206%)**, at least 80% gate passes. |
+| `make -C cli deps-audit` | 0; no vulnerabilities found. |
+| `make -C cli integration-coverage` | 0; complete-program and real PTY campaign **4416/5784 (76.3485%)**, at least 70% gate passes. |
+| `git diff --check` | 0; no whitespace errors. |
+
+An initial terminal campaign failed two program scenarios that still invoked
+`/retry` from the Changes list. The scenarios now return to Main and reopen
+the list; the final complete campaign passes. Coverage profiles and package
+totals are under `cli/.coverage/{unit,integration}/`. The user-modified
+`backend/config/dev.yaml` was left untouched.
+
+## Change detail identity and association rows (2026-09-30)
+
+The detail table now begins ID, Ref UUID, Slug, Epic, Phase, Types, After Change,
+a separator, and Title. There is no separate Ref row. Slug shows the full
+`ref_slug` in AccentCyan and retains suffix-only editing. Types and Title use
+the Foreground color. Epic shows only the plain `vw_change_details.epic_name`.
+After Change shows the nullable `after_change_name` and opens its editor with
+the association ID; null opens a blank input. Unit tests cover row order,
+styling, display and prompt values; complete-program and PTY tests use the
+current row positions.
+
+| Command | Exit and result |
+| --- | --- |
+| `make -C cli check` | 2; vet, race, architecture, and tooling pass. The existing format failures in `cmd/mch/main.go` and `internal/app/clipboard.go`, and package-comment lint in `cmd/mch`, `internal/help`, `internal/styles`, and `internal/ui`, remain. The specific three lint findings vary by run. |
+| `make -C cli coverage` | 0; **4937/5738 (86.0404%)**, at least 80% gate passes. Earlier failing runs expected stdout before stderr in `TestP803RunnerCancellationProgressAndReaping`; that test now accepts either child stream first. |
+| `make -C cli deps-audit` | 0; no vulnerabilities found. |
+| `make -C cli integration-coverage` | 0; complete-program and real PTY campaign **4387/5738 (76.4552%)**, at least 70% gate passes. An initial run exposed stale row indices and label expectations; a later run was invalidated by a checkpoint edit during measurement. |
+
+## Checked selector row background (2026-09-30)
+
+The checked Types option now uses the selected row's foreground color when
+highlighted. Its marker and option text therefore share the menu background
+across the full row. Unhighlighted checked options keep the green check.
+The focused Types selector test compares the complete ANSI-rendered selected
+line to a single styled row.
+
+| Command | Exit and result |
+| --- | --- |
+| `make -C cli check` | 2; vet, race, architecture, and tooling pass. Only the recorded format and package-comment lint baseline remains. |
+| `make -C cli coverage` | 0; **4929/5730 (86.0209%)**, at least 80% gate passes. |
+| `make -C cli deps-audit` | 0; no vulnerabilities found. |
+| `make -C cli integration-coverage` | 0; complete program and real PTY campaign **4384/5730 (76.5096%)**, at least 70% gate passes. |
+| `git diff --check` | 0. |
+
+## Selected selector marker (2026-09-30)
+
+Selected single-choice options now use the larger centered dot `[●]` in the
+shared selector renderer. Focused Phase and Epic selector tests assert the
+marker; Types keeps its green check.
+
+| Command | Exit and result |
+| --- | --- |
+| `make -C cli check` | 2; vet, race, architecture, and tooling pass. Only the recorded format and package-comment lint baseline remains. |
+| `make -C cli coverage` | 0; **4927/5728 (86.0161%)**, at least 80% gate passes. |
+| `make -C cli deps-audit` | 0; no vulnerabilities found. |
+| `make -C cli integration-coverage` | 0; complete program and real PTY campaign **4380/5728 (76.4665%)**, at least 70% gate passes. |
+| `git diff --check` | 0. |
+
+## Change `ref_slug` contract (2026-09-30)
+
+Change list and details decode the nullable `ref_slug` field instead of separate
+`ref` and `slug` fields. The displayed reference is taken from its prefix. The
+Slug editor displays the full `ref_slug`, lets the user change only its suffix,
+and sends that suffix alone as `slug` to `/change/update-slug`. The demo seed
+stores only the suffix. The view builds `006-some-slug` for ref 6 and
+`1116-some-slug` for ref 1116. A change without an assigned ref has a null
+`ref_slug`, so its editor cannot prefill the stored suffix from the read API.
+
+| Command | Exit and result |
+| --- | --- |
+| `make -C cli check` | 2; vet, race, architecture, and tooling pass. The same existing format failures in `cmd/mch/main.go` and `internal/app/clipboard.go`, and package-comment lint in `internal/help`, `internal/styles`, and `internal/ui`, remain. |
+| `make -C cli coverage` | 0; **4927/5728 (86.0161%)**, at least 80% gate passes. |
+| `make -C cli deps-audit` | 0; no vulnerabilities found. |
+| `make -C cli integration-coverage` | 0; complete program and real PTY campaign **4383/5728 (76.5189%)**, at least 70% gate passes. |
+| Focused isolated PostgreSQL `ref_slug` and demo seed tests | 0; both tests pass. |
+| `git diff --check` | 0. |
+
+## Historical inline change detail prompts and cancellation (2026-09-29)
+
+Phase, Epic, and Types selectors now render on ChangeDetailsScreen. Title,
+PR URL, After change, and Slug use labeled inline prompts. Other text form
+prompts and the configuration editor use purple `Label >` captions and green
+input. Slug displays an
+immutable numeric prefix from Ref, or the change ID until Ref is assigned;
+only lowercase `[a-z0-9_-]` suffix characters enter the prompt. Selectors
+render `[·]` for the current single choice and a green check inside brackets
+for selected Types. At that stage, Epic was shown as `name #id` in the details
+row and chooser; the current detail row uses the plain view name.
+Project ID and Epic ID detail rows and the two extra spacers around the prompt
+were removed. Escape and Ctrl+C cancel active prompts in place; inactive
+prompts navigate to the previous screen. The PTY scenario checks these keys
+across health, configuration, project, epic, document, brief, change detail,
+and test case screens, including slug save and invalid input.
+
+| Command | Exit and result |
+| --- | --- |
+| `make -C cli check` | 2; vet, race, architecture, and tooling pass. Only the existing format failures in `cmd/mch/main.go` and `internal/app/clipboard.go`, and package-comment lint in `internal/help`, `internal/styles`, and `internal/ui`, remain. |
+| `make -C cli coverage` | 0; **4928/5729 (86.0185%)**, at least 80% gate passes. |
+| `make -C cli deps-audit` | 0; no vulnerabilities found. |
+| `make -C cli integration-coverage` | 0; complete program and real PTY campaign **4382/5729 (76.4880%)**, at least 70% gate passes. |
+| `git diff --check` | 0. |
+
+An earlier complete-program campaign failed old expectations for the removed
+ChangeUpdateScreen and old cancel behavior. Those assertions were updated and
+the full campaign passed. One later unit coverage run failed an unrelated
+agent-process timing assertion while running alongside backend coverage; its
+profile was incomplete and was discarded. The subsequent isolated campaign
+produced the passing unit measurement above. No live backend or database was
+used for CLI tests.
+
+## Changes list empty filtered results (2026-09-29)
+
+A prompt or selector filter with zero matching changes now keeps the boxed
+changes table and its column labels. An AccentRed `No changes match filters.`
+message starts at the Title column position, and the box ends with
+`Rows 0-0 of 0`. A truly empty unfiltered list retains `No changes.`. Unit
+tests cover the filtered prompt, both loaded and empty source lists, message
+color and alignment, box width, and the zero-row count. No live backend or
+database was used.
+
+| Command from repository root | Exit and result |
+| --- | --- |
+| Focused `go test ./internal/changes ./internal/app` (inside `cli/`) | 0; relevant view and prompt tests pass. |
+| `make -C cli check` | 2; vet, race unit tests, architecture, and tooling pass; only the previously recorded untouched format and package-comment lint baseline remains. |
+| `make -C cli coverage` | 0; complete unit campaign **4854/5626 (86.2780%)**, above strict >80%. |
+| `make -C cli deps-audit` | 0; no vulnerabilities found. |
+| `make -C cli integration-coverage` | 0; complete program plus real PTY campaign **4274/5626 (75.9687%)**, above strict >70%. |
+| `git diff --check` | 0; no whitespace errors. |
+
+The independent final profiles and package totals are under
+`cli/.coverage/{unit,integration}/`. The remaining static baseline is listed
+in the match-background checkpoint below.
+
+## Changes list prompt spacing (2026-09-29)
+
+The ChangesListScreen no longer inserts a blank row between the prompt and
+footer. Its measured table viewport gains that row, so the boxed list shows
+one additional data row or an interior blank row when fewer changes exist.
+The short-height unit layout test and real PTY scrolling scenario use the new
+row counts. Other screens retain their spacing. No live backend or database
+was used.
+
+| Command from repository root | Exit and result |
+| --- | --- |
+| Focused `go test` for `internal/app` layout and real PTY scrolling (inside `cli/`) | 0 each. |
+| `make -C cli check` | 2; vet, race unit tests, architecture, and tooling pass; only the previously recorded untouched format and package-comment lint baseline remains. |
+| `make -C cli coverage` | 0; complete unit campaign **4847/5619 (86.2609%)**, above strict >80%. |
+| `make -C cli deps-audit` | 0; no vulnerabilities found. |
+| `make -C cli integration-coverage` | 0; complete program plus real PTY campaign **4267/5619 (75.9388%)**, above strict >70%. |
+| `git diff --check` | 0; no whitespace errors. |
+
+The final independent profiles and package totals are under
+`cli/.coverage/{unit,integration}/`. The remaining static baseline is described
+in the next checkpoint entry.
+
+## Changes list match backgrounds (2026-09-29)
+
+The shared palette now defines `MutedPurple` (`#5F5F87`), `MutedRed`
+(`#875F5F`), and `MutedGreen` (`#5F875F`). The selected row keeps the purple
+background. Each visible query-word prefix in Ref, Phase, Types, Epic, and
+Title is rendered white on green, including on that selected row. Rendering is
+local to the changes list; no table component changes were needed. Focused
+tests verify all five fields on selected and unselected rows, punctuation in
+titles, preserved table width, and the final boxed view. No live backend or
+database was used.
+
+| Command from repository root | Exit and result |
+| --- | --- |
+| Focused `go test ./internal/changes ./internal/app` (inside `cli/`) | 0; rendering and prompt tests pass. |
+| `make -C cli check` | 2; vet, race unit tests, architecture, and tooling pass. The only failures are the previously recorded untouched format and package-comment lint files listed below. |
+| `make -C cli coverage` | 0; complete unit campaign **4845/5617 (86.2560%)**, above strict >80%. |
+| `make -C cli deps-audit` | 0; no vulnerabilities found. |
+| `make -C cli integration-coverage` | 0; complete program plus real PTY campaign **4262/5617 (75.8768%)**, above strict >70%. |
+| `git diff --check` | 0; no whitespace errors. |
+
+The static baseline remains `cmd/mch/main.go` and `internal/app/clipboard.go`
+for formatting, plus package comments in `internal/help/commands.go`,
+`internal/styles/styles.go`, and `internal/ui/layout.go`. Both final coverage
+campaigns are complete, with independent profiles and package totals under
+`cli/.coverage/{unit,integration}/`.
+
+## Changes list prompt finder (2026-09-29)
+
+On uncommitted HEAD `c188389`, the changes list menu no longer offers
+`/find`. Typing in the prompt now filters the visible rows immediately; each
+normalized query word must prefix a word in the displayed Ref, Phase, Types,
+Epic, or Title. Matching ignores case and excludes hidden brief/spec fields.
+Backspace updates the results, Ctrl+C clears the prompt filter, and Enter
+opens the selected matching change. The existing `/find-filter` command remains
+available. Unit tests cover normalization, multiword matching, menu contents,
+live editing, clearing, and selection; the complete-program and PTY campaigns
+pass. No live backend or database was used.
+
+| Command from repository root | Exit and result |
+| --- | --- |
+| Focused `go test` for affected packages and delayed program cases, plus focused real PTY test | 0 each; the corrected assertions pass. |
+| `make -C cli check` | 2; vet, race unit tests, architecture and tooling pass. Only the previously recorded untouched format failures in `cmd/mch/main.go` and `internal/app/clipboard.go` and package-comment lint findings in `internal/help/commands.go`, `internal/styles/styles.go`, and `internal/ui/layout.go` remain. |
+| `make -C cli coverage` | 0; complete unit campaign **4808/5580 (86.1649%)**, above the current strict >80% gate. |
+| `make -C cli deps-audit` | 0; no vulnerabilities found. |
+| `make -C cli integration-coverage` | 0; complete program plus real PTY campaign **4259/5580 (76.3262%)**, above the current strict >70% gate. |
+| `git diff --check` | 0; no whitespace errors. |
+
+The initial terminal campaign stopped at an obsolete PTY assertion naming the
+removed menu item; it passed after that assertion was updated. One later unit
+campaign was incomplete because the existing
+`TestP803RunnerCancellationProgressAndReaping` timing test missed its expected
+`started` stderr marker. A fresh rerun completed and produced the unit total
+above. Both final coverage profiles and package totals are under
+`cli/.coverage/{unit,integration}/`; neither total includes hits from the other
+campaign. The static baseline still prevents a passing `check` result.
+
 ## P8 review fixes 04: original brief and duplicate agent fields (2026-09-28)
 
 Both review findings were valid. Existing-change preflight still shows the
@@ -1512,3 +1764,95 @@ remain current. The caller owns commits, pushes and dev merging.
 At the user's request, the subsequent review pass 02 was interrupted after it
 began; no result from that pass is claimed. The strict coverage and recorded
 static-check shortfalls remain open for the final CLI rebuild.
+
+## Bottom menu visual pass (2026-09-29)
+
+Both the ordinary prompt and the command dropdown now use `InputBackground`
+`#454748`, with terminal half-block rows above and below their text row to
+approximate the screenshot's half-row padding. Both use `AccentPurple` for the
+leading `>`; ordinary typed text uses `Foreground` `#FFFFFF`, while open-menu
+prompt text uses `AccentGreen`. The closed prompt is indented one terminal cell,
+and its placeholder uses `Gray` `#AFAFAF`. Gray command names omit the leading
+slash and have aligned help. The selected row uses `AccentGreen` text and `MenuBackground`
+(`#47514A`, sampled from the screenshot); a DarkGray
+`(selected/total)` counter appears below the eight-row window when at least ten
+options match. Smaller menus show every option and omit the counter. No scroll
+arrows are rendered. Selector dropdowns share the new
+row and counter layout. All palette hex colors, including three gradient stops
+and the two calculated fallbacks, are named CLI constants. `scripts/colors.pl`
+was not modified. The retained PTY and program tests wait for visible command
+help before continuing menu interaction.
+
+| Command on this uncommitted source | Exit | Result |
+| --- | ---: | --- |
+| Focused app menu and selector tests | 0 | Layout, descriptions, color tokens, counter threshold, scrolling and selection pass. |
+| `make -C cli check` | 2 | Vet, race, architecture and tooling pass. Existing format failures remain in `cmd/mch/main.go` and `internal/app/clipboard.go`; existing package-comment lint remains in `cmd/mch/main.go`, `internal/help/commands.go`, `internal/styles/styles.go` and `internal/ui/layout.go`. |
+| `make -C cli coverage` | 2 | Complete unit campaign **4764/5547 (85.8843%)**; strict >95% gate fails. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-coverage` | 2 | All selected program and real PTY scenarios pass; complete terminal campaign **4212/5547 (75.9329%)**; strict >90% gate fails. |
+
+Both campaign status files report `complete: true`; fresh profiles and package
+totals are under `cli/.coverage/{unit,integration}`. The source is based on
+`7be8c1ec821f92733e5f3b93fc454ef8f522005c` with uncommitted visual changes.
+No commit, push or promotion was performed.
+
+## Changes list/menu behavior and coverage policy (2026-09-29)
+
+The changes list stays visible while its bottom command menu opens; its viewport
+uses the remaining terminal height, and the extra blank row before the prompt
+is removed. The Phase column fits `in-progress` without shifting later columns.
+Nullable Ref, Slug, Epic and after-change fields render `-` while their internal
+values retain their existing write semantics. Backspace/Delete can remove the
+command menu's `/`, and Ctrl+C closes any active dropdown. The PTY row-count
+assertion now reflects the extra visible table row.
+
+The current coverage policy is at least 80% CLI unit and 70% terminal integration
+production statements. Frontend coverage remains to be decided. Backend unit
+and API integration policy is at least 95% and 90%, respectively; backend tooling
+enforces the API gate only on a complete instrumented APIHydra campaign.
+
+| Command on current uncommitted source | Exit | Result |
+| --- | ---: | --- |
+| Focused `go test ./internal/app ./internal/changes` | 0 | Screen and menu tests pass. |
+| `make -C cli check` | 2 | Vet, race, architecture and tooling pass. Existing formatting failures in `cmd/mch/main.go` and `internal/app/clipboard.go`, and three package-comment lint findings, remain. |
+| `make -C cli coverage` | 0 | Complete unit profile **4779/5555 (86.0306%)**; 80% gate passes. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities found. |
+| `make -C cli integration-coverage` | 0 | Complete program and real PTY campaign **4223/5555 (76.0216%)**; 70% gate passes. An earlier run failed on the stale PTY row-count assertion; it was repaired and the full campaign rerun. The PTY now tests Backspace, Delete and Ctrl+C menu closure. |
+
+Both current campaign status files report `complete: true`. Independent raw
+profiles, source provenance, exact package totals and uncovered statements are
+under `cli/.coverage/{unit,integration}`. No live backend or database was used.
+
+## Literal command prompt input (2026-09-29)
+
+The first `/` opens the command menu and remains the visible prompt prefix.
+Later printable characters are shown literally: a second `/` displays `//` and
+has no matching commands; one Backspace restores `/` and the command list.
+Spaces are also displayed and filtered as typed. Unit tests cover the exact
+prompt/filter sequence and `/q` matching `/quit`; the real PTY test covers
+`//` and Backspace restoration.
+
+On this final uncommitted source, `make -C cli coverage` exits 0 with
+**4788/5563 (86.0687%)** and `make -C cli integration-coverage` exits 0 with
+**4237/5563 (76.1639%)**. Both campaigns completed without skips and pass the
+80%/70% gates. `make -C cli check` exits 2 only for the previously recorded
+formatting and package-comment lint findings; vet, race, architecture and tooling
+pass. The earlier dependency audit found no vulnerabilities; dependencies did not
+change. Current raw profiles and exact package totals are under
+`cli/.coverage/{unit,integration}`.
+
+## Visible cursor in active menus (2026-09-29)
+
+Every active dropdown now renders the ordinary prompt's white block cursor
+after its visible prompt text, including the first `/`, filtered command text,
+selector text and a long truncated prompt. Focused tests check the cursor's
+rendered ANSI style and the prompt width at a narrow terminal size.
+
+`make -C cli check` exits 2 only for the existing format and package-comment
+lint findings; vet, race, architecture and tooling pass. `make -C cli deps-audit`
+exits 0 with no vulnerabilities. The first `make -C cli coverage` run was
+incomplete because the unrelated brief-process cancellation timing test failed
+before producing a valid profile; the rerun exits 0 with **4788/5563 (86.0687%)**.
+`make -C cli integration-coverage` exits 0 with **4237/5563 (76.1639%)**.
+Both final campaigns report complete, independent profiles and pass the 80%/70%
+gates. No live backend or database was used.

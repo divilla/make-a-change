@@ -65,3 +65,33 @@
 +126 -13 code - +106 -6 tests --- review fixes 06
 +147 -31 code - +169 -33 tests --- review fixes 07
 +41 -2 code - +89 -0 tests --- review fixes 08
+
+2026-29-09 00:24 bottom-menu-visual
++177 -43 code - +104 -26 tests --- visual request and refinement
+
+2026-29-09 23:20 change-list-and-detail-prompts
++244 -63 code - +313 -50 tests --- inline selectors, slug and PR URL editing, cancellation, PTY coverage, and accumulated list visual refinements
+
+2026-30-09 01:48 change-ref-slug-contract
++25 -28 code - +57 -47 tests --- decode and display ref_slug, submit only slug suffix, and verify complete-program and PTY behavior
+
+2026-30-09 02:04 selected-selector-marker
++1 -1 code - +2 -1 tests --- use a larger centered dot for selected single-choice options
+
+2026-30-09 02:09 checked-selector-row-background
++6 -3 code - +8 -0 tests --- render highlighted checked Types option as one full-width styled row
+
+2026-30-09 02:24 change-detail-slug-and-after-change
++35 -16 code - +58 -20 tests --- move detail rows, decode and show after_change_name, keep suffix-only Slug editing, and blank the null association prompt
+
+2026-30-09 02:36 runner-progress-test-order
++0 -0 code - +1 -1 tests --- accept either stdout or stderr as the first live child progress message in the cancellation test
+
+2026-30-09 02:40 change-detail-row-order-and-epic
++9 -6 code - +30 -20 tests --- reorder detail rows, remove Ref, style Slug/Types/Title, and display the plain details-view epic name
+
+2026-30-09 22:42 persistent-change-list-filters-and-colors
++139 -69 code - +263 -36 tests --- keep change filters and selection across navigation, add per-filter @clear, use plural Types, remove list commands and Epic ID suffix, style Types and completion, update program recovery cases
+
+2026-30-09 22:54 cli-check-cleanup
++33 -31 code - +0 -0 tests --- format the remaining two Go files and add package comments so the full CLI check passes

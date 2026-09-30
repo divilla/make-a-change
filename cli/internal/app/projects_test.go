@@ -19,10 +19,18 @@ func TestP205SelectionCatalogScopeAndPersistenceFailure(t *testing.T) {
 	client := &fakeClient{projects: []dto.Option{{ID: "8", Label: "Eight"}}, phases: []dto.Option{{ID: "eight", Label: "eight"}}, types: []dto.Option{{ID: "fix", Label: "fix"}}}
 	m := newModelWithConfig(client, appConfig{ProjectID: 7, ConfigPath: t.TempDir() + "/missing/config.yaml"})
 	m.optionCatalog = optionCatalog{loaded: true, phases: []dto.Option{{ID: "seven", Label: "seven"}}}
+	m.changesFilters = changesFilters{
+		phase: dto.Option{ID: "backlog", Label: "backlog"},
+		typ:   dto.Option{ID: "feature", Label: "feature"},
+		epic:  dto.Option{ID: "5", Label: "Epic Five"},
+		find:  "migration",
+	}
+	savedFilters := m.changesFilters
 	m, cmd := sendCommand(m, "/select-project")
 	m = applyCommand(m, cmd)
 	m, cmd = sendKey(m, tea.KeyEnter)
 	require.Equal(t, "8", m.currentProject.ID)
+	assert.Equal(t, savedFilters, m.changesFilters)
 	assert.False(t, m.optionCatalog.loaded)
 	assert.Empty(t, m.optionCatalog.phases)
 	m = applyCommand(m, cmd)

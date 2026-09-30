@@ -6,6 +6,7 @@ import (
 	"mch_api/internal/app"
 	"mch_api/internal/domain"
 	"net/url"
+	"strconv"
 	"testing"
 
 	"github.com/gofrs/uuid/v5"
@@ -65,6 +66,10 @@ func (r *fakeChangeRepository) UpdateTitle(c context.Context, q domain.ChangeUpd
 	return r.record(c, "UpdateTitle", q)
 }
 
+func (r *fakeChangeRepository) UpdateSlug(c context.Context, q domain.ChangeUpdateSlugRequest) error {
+	return r.record(c, "UpdateSlug", q)
+}
+
 func (r *fakeChangeRepository) UpdatePhase(c context.Context, q domain.ChangeUpdatePhaseRequest) error {
 	return r.record(c, "UpdatePhase", q)
 }
@@ -107,6 +112,35 @@ func defaultConfig() *configFake {
 }
 func boolPtr(v bool) *bool { return &v }
 func intPtr(v int) *int    { return &v }
+
+func TestUpdateSlugValidatesEditableSuffix(t *testing.T) {
+	for _, tc := range []struct {
+		id, slug string
+		valid    bool
+	}{
+		{"7", "full-slug_2", true},
+		{"7", "Upper", false},
+		{"7", "has space", false},
+		{"7", "", false},
+		{"0", "valid", false},
+	} {
+		t.Run(tc.slug+"/"+tc.id, func(t *testing.T) {
+			r := &fakeChangeRepository{}
+			id, _ := strconv.Atoi(tc.id)
+			err := NewService(r, defaultConfig()).UpdateSlug(context.Background(), domain.ChangeUpdateSlugRequest{ID: id, Slug: tc.slug})
+			if tc.valid {
+				require.NoError(t, err)
+				require.Equal(t, []string{"UpdateSlug"}, r.calls)
+			} else {
+				require.ErrorIs(t, err, app.ErrChangeInvalidInput)
+				require.NotContains(t, r.calls, "UpdateSlug")
+			}
+		})
+	}
+	r := &fakeChangeRepository{}
+	require.NoError(t, NewService(r, defaultConfig()).UpdateSlug(context.Background(), domain.ChangeUpdateSlugRequest{ID: 7, Slug: "valid"}))
+	require.Equal(t, []string{"UpdateSlug"}, r.calls)
+}
 
 func TestServiceCreateIdentityDefaultsAndFailures(t *testing.T) {
 	ctx := context.Background()

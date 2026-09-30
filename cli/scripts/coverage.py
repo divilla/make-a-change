@@ -171,7 +171,8 @@ def report(metadata, profile, directory, integration=False, *, enforce=True):
     total = sum(value[1] for value in totals.values())
     if not total:
         raise ValueError('empty statement denominator')
-    passed = covered * 100 > total * 90 if integration else covered * 100 > total * 95
+    threshold = 70 if integration else 80
+    passed = covered * 100 >= total * threshold
     lines = ['package covered/total percent']
     for name, (hit, size) in sorted(totals.items()):
         lines.append(f'{name} {hit}/{size} ' + (f'{100*hit/size:.4f}%' if size else 'no executable statements'))

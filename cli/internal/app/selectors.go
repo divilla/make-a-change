@@ -13,10 +13,8 @@ import (
 )
 
 func filterOptions(options []dto.Option) []dto.Option {
-	filtered := make([]dto.Option, 0, len(options)+1)
-	filtered = append(filtered, options...)
-	filtered = append(filtered, dto.Option{ID: "/clear", Label: "/clear"})
-	return filtered
+	withClear := append([]dto.Option(nil), options...)
+	return append(withClear, dto.Option{ID: "@clear", Label: "@clear"})
 }
 
 func (m Model) dropdownCurrentValueIndex(options []dto.Option) int {
@@ -46,7 +44,7 @@ func (m Model) dropdownCurrentValueIndex(options []dto.Option) int {
 			return optionIndex(options, m.changesFilters.phase.ID, m.changesFilters.phase.Label)
 		case filterEpic:
 			return optionIndex(options, m.changesFilters.epic.ID, m.changesFilters.epic.Label)
-		case filterType:
+		case filterTypes:
 			return optionIndex(options, m.changesFilters.typ.ID, m.changesFilters.typ.Label)
 		}
 	}
@@ -89,20 +87,8 @@ func (m *Model) setChangesFilter(field filterField, option dto.Option) {
 		m.changesFilters.phase = option
 	case filterEpic:
 		m.changesFilters.epic = option
-	case filterType:
+	case filterTypes:
 		m.changesFilters.typ = option
-	}
-	m.clampChangeListSelection()
-}
-
-func (m *Model) clearChangesFilter(field filterField) {
-	switch field {
-	case filterPhase:
-		m.changesFilters.phase = dto.Option{}
-	case filterEpic:
-		m.changesFilters.epic = dto.Option{}
-	case filterType:
-		m.changesFilters.typ = dto.Option{}
 	}
 	m.clampChangeListSelection()
 }
@@ -111,12 +97,42 @@ func (m *Model) clampChangeListSelection() {
 	m.changeList = m.changeList.ClampSelection(m.changeFilters(), m.changeTableRows())
 }
 
+func (m *Model) rememberSelectedChange() {
+	rows := changes.FilteredRows(m.changeList.Rows, m.changeFilters())
+	if m.changeList.Selected >= 0 && m.changeList.Selected < len(rows) {
+		m.changeSelectionID = rows[m.changeList.Selected].ID
+	}
+}
+
+func (m *Model) restoreSelectedChange() {
+	rows := changes.FilteredRows(m.changeList.Rows, m.changeFilters())
+	for i, row := range rows {
+		if row.ID == m.changeSelectionID {
+			m.changeList.Selected = i
+			break
+		}
+	}
+	m.clampChangeListSelection()
+	if len(rows) == 0 {
+		m.changeSelectionID = ""
+	} else {
+		m.changeSelectionID = rows[m.changeList.Selected].ID
+	}
+}
+
 func (m Model) changeFilters() changes.Filters {
+	find := m.changesFilters.find
+	if m.state == ChangesListState && !m.hasDropdown() {
+		prompt := strings.TrimSpace(m.input.Value())
+		if prompt != "" && !strings.HasPrefix(prompt, "/") {
+			find = strings.TrimSpace(find + " " + prompt)
+		}
+	}
 	return changes.Filters{
 		Phase: m.changesFilters.phase,
 		Epic:  m.changesFilters.epic,
 		Type:  m.changesFilters.typ,
-		Find:  m.changesFilters.find,
+		Find:  find,
 	}
 }
 

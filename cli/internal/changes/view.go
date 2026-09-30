@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -31,25 +33,27 @@ func TableView(m Model, filters Filters, width int, pageSize int, phaseColors ..
 		return styles.Default.InputBand.Width(width).Render("Changes: loading")
 	}
 	rows := FilteredRows(m.Rows, filters)
-	if len(rows) == 0 {
-		if len(m.Rows) == 0 {
-			return styles.Default.Muted.Render("No changes.")
-		}
-		return styles.Default.Muted.Render("No changes match filters.")
+	queryWords := normalizedFindWords(filters.Find)
+	filtersActive := filters.Phase.ID != "" || filters.Type.ID != "" || filters.Epic.ID != "" || strings.TrimSpace(filters.Find) != ""
+	if len(rows) == 0 && len(m.Rows) == 0 && !filtersActive {
+		return styles.Default.Muted.Render("No changes.")
 	}
 	if pageSize < 1 {
 		pageSize = 1
 	}
-	selected := m.ClampSelection(filters, pageSize).Selected
-	offset := clampOffset(m.Offset, selected, len(rows), pageSize)
-	end := offset + pageSize
-	if end > len(rows) {
-		end = len(rows)
+	selected, offset, end := 0, 0, 0
+	if len(rows) > 0 {
+		selected = m.ClampSelection(filters, pageSize).Selected
+		offset = clampOffset(m.Offset, selected, len(rows), pageSize)
+		end = min(offset+pageSize, len(rows))
 	}
 	terminalTableWidth := innerTableWidth(width)
 	typesWidth, epicWidth, titleWidth := changeTableColumnWidths(terminalTableWidth)
 	tableWidth := changeTableContentWidth(typesWidth, epicWidth, titleWidth)
-	lines := []string{styles.Default.Muted.Render(changeTableLine("#Ref", "Phase", "Types", "Epic", "Title", "Don", "Tot", "%", "Modified", typesWidth, epicWidth, titleWidth))}
+	lines := []string{changeTableHeaderLine(typesWidth, epicWidth, titleWidth)}
+	if len(rows) == 0 {
+		lines = append(lines, changeTableEmptyLine("No changes match filters.", typesWidth, epicWidth, titleWidth))
+	}
 	for i, change := range rows[offset:end] {
 		rowIndex := offset + i
 		line := changeTableRowLine(
@@ -67,22 +71,48 @@ func TableView(m Model, filters Filters, width int, pageSize int, phaseColors ..
 			titleWidth,
 			rowIndex == selected,
 			colors,
+			queryWords,
 		)
 		lines = append(lines, line)
 	}
 	for len(lines) < pageSize+1 {
 		lines = append(lines, "")
 	}
-	lines = append(lines, styles.Default.Foreground.Render(fmt.Sprintf("Rows %d-%d of %d", offset+1, end, len(rows))))
+	first := 0
+	if len(rows) > 0 {
+		first = offset + 1
+	}
+	lines = append(lines, styles.Default.Foreground.Render(fmt.Sprintf("Rows %d-%d of %d", first, end, len(rows))))
 	content := ui.TruncateBlock(strings.Join(lines, "\n"), tableWidth)
 	return boxedTable(content, tableWidth)
 }
 
+func changeTableEmptyLine(message string, typesWidth, epicWidth, titleWidth int) string {
+	prefix := fmt.Sprintf("%6s %-11s %-*s %-*s ", "", "", typesWidth, "", epicWidth, "")
+	remaining := changeTableContentWidth(typesWidth, epicWidth, titleWidth) - lipgloss.Width(prefix)
+	return styles.Default.Muted.Render(prefix) +
+		lipgloss.NewStyle().Foreground(styles.AccentRed).Render(padRightDisplay(message, remaining))
+}
+
+func changeTableHeaderLine(typesWidth, epicWidth, titleWidth int) string {
+	line := changeTableLine("#Ref", "Phase", "Types", "Epic", "Title", "Don", "Tot", "%", "Modified", typesWidth, epicWidth, titleWidth)
+	types := strings.Index(line, "Types")
+	percent := strings.Index(line, "%")
+	if types < 0 || percent < 0 {
+		return styles.Default.Muted.Render(line)
+	}
+	return styles.Default.Muted.Render(line[:types]) +
+		lipgloss.NewStyle().Foreground(styles.AccentPurple).Render("Types") +
+		styles.Default.Muted.Render(line[types+len("Types"):percent]) +
+		lipgloss.NewStyle().Foreground(styles.AccentBlue).Render("%") +
+		styles.Default.Muted.Render(line[percent+1:])
+}
+
 func changeTableLine(ref, phase, types, epic, title, done, total, completed, modified string, typesWidth, epicWidth, titleWidth int) string {
 	return fmt.Sprintf(
-		"%6s %-10s %-*s %-*s %-*s %3s %3s %3s %-16s",
+		"%6s %-11s %-*s %-*s %-*s %3s %3s %3s %-16s",
 		tableText(ref, 6),
-		tableText(phase, 10),
+		tableText(phase, 11),
 		typesWidth,
 		tableText(types, typesWidth),
 		epicWidth,
@@ -96,16 +126,11 @@ func changeTableLine(ref, phase, types, epic, title, done, total, completed, mod
 	)
 }
 
-func changeTableRowLine(ref, phase, types, epic, title, done, total, completed, modified string, typesWidth, epicWidth, titleWidth int, selected bool, phaseColors PhaseColors) string {
+func changeTableRowLine(ref, phase, types, epic, title, done, total, completed, modified string, typesWidth, epicWidth, titleWidth int, selected bool, phaseColors PhaseColors, queryWords []string) string {
 	prefix := fmt.Sprintf("%6s ", tableText(ref, 6))
-	phaseValue := fmt.Sprintf("%-10s", tableText(phase, 10))
-	beforeTitle := fmt.Sprintf(
-		" %-*s %-*s ",
-		typesWidth,
-		tableText(types, typesWidth),
-		epicWidth,
-		tableText(epic, epicWidth),
-	)
+	phaseValue := fmt.Sprintf("%-11s", tableText(phase, 11))
+	typesValue := fmt.Sprintf("%-*s", typesWidth, tableText(types, typesWidth))
+	epicValue := fmt.Sprintf(" %-*s ", epicWidth, tableText(epic, epicWidth))
 	titleValue := fmt.Sprintf("%-*s", titleWidth, tableText(title, titleWidth))
 	beforeCompleted := fmt.Sprintf(
 		" %3s %3s ",
@@ -117,22 +142,78 @@ func changeTableRowLine(ref, phase, types, epic, title, done, total, completed, 
 
 	if selected {
 		base := styles.Default.Selection
-		return base.Render(prefix) +
-			phaseStyle(phase, phaseColors).Background(lipgloss.Color("60")).Render(phaseValue) +
-			base.Render(beforeTitle) +
-			base.Foreground(lipgloss.Color("15")).Render(titleValue) +
+		return renderFindHighlights(prefix, base, queryWords) +
+			renderFindHighlights(phaseValue, phaseStyle(phase, phaseColors).Background(styles.MutedPurple), queryWords) +
+			base.Render(" ") +
+			renderFindHighlights(typesValue, base.Foreground(styles.AccentPurple), queryWords) +
+			renderFindHighlights(epicValue, base, queryWords) +
+			renderFindHighlights(titleValue, base.Foreground(lipgloss.Color("15")), queryWords) +
 			base.Render(beforeCompleted) +
-			base.Foreground(lipgloss.Color("14")).Render(completedValue) +
+			base.Foreground(styles.AccentBlue).Render(completedValue) +
 			base.Render(afterCompleted)
 	}
 
-	return styles.Default.Muted.Render(prefix) +
-		phaseStyle(phase, phaseColors).Render(phaseValue) +
-		styles.Default.Muted.Render(beforeTitle) +
-		lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Render(titleValue) +
+	return renderFindHighlights(prefix, styles.Default.Muted, queryWords) +
+		renderFindHighlights(phaseValue, phaseStyle(phase, phaseColors), queryWords) +
+		styles.Default.Muted.Render(" ") +
+		renderFindHighlights(typesValue, lipgloss.NewStyle().Foreground(styles.AccentPurple), queryWords) +
+		renderFindHighlights(epicValue, styles.Default.Muted, queryWords) +
+		renderFindHighlights(titleValue, lipgloss.NewStyle().Foreground(lipgloss.Color("15")), queryWords) +
 		styles.Default.Muted.Render(beforeCompleted) +
-		lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Render(completedValue) +
+		lipgloss.NewStyle().Foreground(styles.AccentBlue).Render(completedValue) +
 		styles.Default.Muted.Render(afterCompleted)
+}
+
+func renderFindHighlights(value string, normal lipgloss.Style, queryWords []string) string {
+	if len(queryWords) == 0 {
+		return normal.Render(value)
+	}
+	matchStyle := lipgloss.NewStyle().Foreground(styles.Foreground).Background(styles.MutedGreen)
+	var rendered strings.Builder
+	plainStart := 0
+	for position := 0; position < len(value); {
+		first, size := utf8.DecodeRuneInString(value[position:])
+		if !findWordCharacter(first) {
+			position += size
+			continue
+		}
+		wordStart := position
+		wordOffsets := []int{wordStart}
+		var word strings.Builder
+		for position < len(value) {
+			letter, width := utf8.DecodeRuneInString(value[position:])
+			if !findWordCharacter(letter) {
+				break
+			}
+			word.WriteRune(unicode.ToLower(letter))
+			position += width
+			wordOffsets = append(wordOffsets, position)
+		}
+		matchLength := 0
+		lowerWord := word.String()
+		for _, queryWord := range queryWords {
+			if strings.HasPrefix(lowerWord, queryWord) && len(queryWord) > matchLength {
+				matchLength = len(queryWord)
+			}
+		}
+		if matchLength == 0 {
+			continue
+		}
+		if plainStart < wordStart {
+			rendered.WriteString(normal.Render(value[plainStart:wordStart]))
+		}
+		rendered.WriteString(matchStyle.Render(value[wordStart:wordOffsets[matchLength]]))
+		plainStart = wordOffsets[matchLength]
+	}
+	if plainStart < len(value) {
+		rendered.WriteString(normal.Render(value[plainStart:]))
+	}
+	return rendered.String()
+}
+
+func findWordCharacter(letter rune) bool {
+	letter = unicode.ToLower(letter)
+	return letter >= 'a' && letter <= 'z' || letter >= '0' && letter <= '9' || letter == '-' || letter == '_'
 }
 
 func phaseStyle(phase string, phaseColors PhaseColors) lipgloss.Style {
@@ -185,7 +266,7 @@ func changeTableColumnWidths(width int) (int, int, int) {
 	return typesWidth, epicWidth, titleWidth
 }
 
-const changeTableFixedWidth = 6 + 1 + 10 + 1 + 1 + 1 + 1 + 3 + 1 + 3 + 1 + 3 + 1 + 16
+const changeTableFixedWidth = 6 + 1 + 11 + 1 + 1 + 1 + 1 + 3 + 1 + 3 + 1 + 3 + 1 + 16
 
 func changeTableContentWidth(typesWidth, epicWidth, titleWidth int) int {
 	return changeTableFixedWidth + typesWidth + epicWidth + titleWidth
@@ -348,14 +429,18 @@ func detailBlankLine(labelWidth int, textWidth int) string {
 
 func detailValueStyle(row DetailRow, phaseColors PhaseColors) lipgloss.Style {
 	switch row.Label {
+	case "Slug":
+		return styles.Default.AccentCyan
 	case "Phase":
 		return phaseStyle(row.Text, phaseColors)
 	case "Title":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
+		return lipgloss.NewStyle().Foreground(styles.Foreground)
+	case "Types":
+		return lipgloss.NewStyle().Foreground(styles.AccentPurple)
 	case "Agent Edit":
 		return booleanIconStyle(row.Text)
 	case "Complete":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+		return lipgloss.NewStyle().Foreground(styles.AccentBlue)
 	default:
 		return styles.Default.Foreground
 	}
@@ -363,14 +448,18 @@ func detailValueStyle(row DetailRow, phaseColors PhaseColors) lipgloss.Style {
 
 func detailSelectedStyle(row DetailRow, phaseColors PhaseColors) lipgloss.Style {
 	switch row.Label {
+	case "Slug":
+		return styles.Default.AccentCyan.Background(styles.MutedPurple)
 	case "Phase":
-		return phaseStyle(row.Text, phaseColors).Background(lipgloss.Color("60"))
+		return phaseStyle(row.Text, phaseColors).Background(styles.MutedPurple)
 	case "Title":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("60"))
+		return lipgloss.NewStyle().Foreground(styles.Foreground).Background(styles.MutedPurple)
+	case "Types":
+		return lipgloss.NewStyle().Foreground(styles.AccentPurple).Background(styles.MutedPurple)
 	case "Agent Edit":
-		return booleanIconStyle(row.Text).Background(lipgloss.Color("60"))
+		return booleanIconStyle(row.Text).Background(styles.MutedPurple)
 	case "Complete":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Background(lipgloss.Color("60"))
+		return lipgloss.NewStyle().Foreground(styles.AccentBlue).Background(styles.MutedPurple)
 	default:
 		return styles.Default.Selection
 	}
@@ -409,14 +498,24 @@ func normalizeNewlines(value string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(value, "\r\n", "\n"), "\r", "\n")
 }
 
-func displayRef(change dto.ChangeView) string { return change.Ref }
+func displayRef(change dto.ChangeView) string { return displayNullable(change.Ref) }
+
+func displayNullable(value string) string {
+	if strings.TrimSpace(value) == "" || strings.EqualFold(strings.TrimSpace(value), "null") {
+		return "-"
+	}
+	return value
+}
 
 func epicLabel(change dto.ChangeView) string {
-	if strings.TrimSpace(change.EpicName) != "" {
-		return strings.TrimSpace(change.EpicName)
+	if name := strings.TrimSpace(change.EpicName); name != "" && !strings.EqualFold(name, "null") {
+		return name
 	}
-	if strings.TrimSpace(change.EpicID) != "" {
+	if id := strings.TrimSpace(change.EpicID); id != "" && !strings.EqualFold(id, "null") {
 		return "#" + strings.TrimPrefix(strings.TrimSpace(change.EpicID), "#")
+	}
+	if strings.EqualFold(strings.TrimSpace(change.EpicName), "null") || strings.EqualFold(strings.TrimSpace(change.EpicID), "null") {
+		return "-"
 	}
 	return ""
 }

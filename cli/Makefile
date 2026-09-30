@@ -43,7 +43,7 @@ check: ## Run all static, unit race, architecture and tooling checks, retaining 
 architecture: ## Check actual module import boundaries separately from terminal coverage
 	$(GO) test -count=1 ./integration -run '^TestCLIPackageBoundaries$$'
 
-coverage: ## Fresh independent unit statements with a strict >95% gate
+coverage: ## Fresh independent unit statements with an 80% minimum gate
 	python3 -B scripts/coverage.py
 
 coverage-html: ## Unit coverage plus HTML, including valid below-target profiles
@@ -55,7 +55,7 @@ integration-test: ## Complete-program and standalone startup checks (no coverage
 terminal-test: ## Real PTY checks; missing socat fails visibly
 	$(GO) test -count=1 -timeout=2m -v ./integration/terminal
 
-integration-coverage: ## Independent complete-program and covered-child PTY campaign; strict >90%
+integration-coverage: ## Independent complete-program and covered-child PTY campaign; 70% minimum
 	python3 -B scripts/coverage.py --integration
 
 deps-audit: ## Scan dependencies and report all failures

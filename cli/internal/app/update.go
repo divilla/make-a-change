@@ -87,11 +87,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.dropdown.options = nil
 			return m, nil
 		}
-		var options []dto.Option
+		options := msg.options
 		if m.dropdown.filterField != "" {
-			options = filterOptions(msg.options)
-		} else {
-			options = msg.options
+			options = filterOptions(options)
 		}
 		if m.dropdown.editField == detailEditEpic {
 			options = append(options, dto.Option{ID: "@none", Label: "@none"})
@@ -298,11 +296,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.quitRequested {
 		return m, nil
 	}
+	if m.hasDropdown() {
+		m.err = ""
+		return m.handleDropdownKey(msg.String(), msg)
+	}
 	if m.state == BriefState {
-		if m.hasDropdown() {
-			m.err = ""
-			return m.handleDropdownKey(msg.String(), msg)
-		}
 		return m.briefKey(msg)
 	}
 	if m.document.Busy && m.state == DocumentState {
@@ -340,6 +338,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if updated, cmd, ok := m.handleListNavigationKey(key, msg); ok {
 		return updated, cmd
 	}
+	if m.detailEditField == detailEditSlug && isPromptNewlineKey(msg) {
+		return m, nil
+	}
 
 	if isPromptNewlineKey(msg) {
 		return m.insertPromptNewline(), nil
@@ -373,9 +374,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c":
 		return m.handlePromptCancel()
 	case "ctrl+e":
+		if m.detailEditField == detailEditSlug {
+			return m, nil
+		}
 		return m.openPromptEditor(m.state)
 	case "esc":
-		if m.state == ChangeDetailsState && m.detailEditField != "" {
+		if m.detailEditField != "" || m.editorDraft != nil || m.input.Value() != "" {
 			return m.handlePromptCancel()
 		}
 		return m.handleEsc()
@@ -397,12 +401,14 @@ func (m Model) handleListNavigationKey(key string, msg tea.KeyMsg) (Model, tea.C
 	if next, cmd, ok := m.documentKey(key, msg); ok {
 		return next, cmd, true
 	}
-	if m.editorDraft != nil || m.input.Value() != "" {
+	if m.editorDraft != nil || m.detailEditField != "" || (m.input.Value() != "" && m.state != ChangesListState) {
 		return m, nil, false
 	}
 	switch m.state {
 	case ChangesListState:
 		switch {
+		case (key == "enter" || msg.Type == tea.KeyCtrlJ) && strings.HasPrefix(strings.TrimSpace(m.input.Value()), "/"):
+			return m, nil, false
 		case key == "up":
 			m.changeList = m.changeList.MoveSelection(-1, m.changeFilters(), m.changeTableRows())
 			return m, nil, true
@@ -521,7 +527,11 @@ func (m Model) handleFindKey(key string, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+e":
 		return m.openPromptEditor(m.state)
 	case "esc":
-		m = m.setPromptValue("")
+		if m.input.Value() != "" {
+			m = m.setPromptValue("")
+			m.status = "prompt cleared"
+			return m, nil
+		}
 		return m.arrive(m.previousState, "cancel")
 	case "enter":
 		return m.submitFindValue(m.input.Value())
@@ -538,6 +548,9 @@ func (m Model) submitPrompt() (tea.Model, tea.Cmd) {
 	value := m.promptValue()
 	if m.editorDraft != nil {
 		return m.submitPromptValue(value)
+	}
+	if m.detailEditField != "" && strings.TrimSpace(value) == "/cancel" {
+		return m.handlePromptCancel()
 	}
 	trimmed := strings.TrimSpace(value)
 	if m.state == DocumentState && m.documentForm {
@@ -603,17 +616,31 @@ func (m Model) submitPromptValue(value string) (tea.Model, tea.Cmd) {
 
 func (m Model) submitFindValue(value string) (tea.Model, tea.Cmd) {
 	query := strings.TrimSpace(value)
-	m = m.setPromptValue("")
 	if query == "" {
+		if m.previousState == ChangesListState {
+			if len(m.changeList.Rows) == 0 {
+				next, cmd := m.arrive(ChangesListState, "find filter")
+				m = next.(Model)
+				m.err = "find text is required"
+				return m, cmd
+			}
+			m = m.setPromptValue("")
+			m.state = ChangesListState
+			m.input.Placeholder = defaultInputPlaceholder
+			m.err = "find text is required"
+			return m, nil
+		}
 		next, cmd := m.arrive(m.previousState, m.status)
 		m = next.(Model)
 		m.err = "find text is required"
 		return m, cmd
 	}
 	if m.previousState == ChangesListState {
+		m.rememberSelectedChange()
+		m = m.setPromptValue("")
 		m.changesFilters.find = query
-		m.clampChangeListSelection()
 		m.state = ChangesListState
+		m.restoreSelectedChange()
 		m.input.Placeholder = defaultInputPlaceholder
 		m.status = "find filter"
 		if len(m.changeList.Rows) == 0 {
@@ -621,29 +648,27 @@ func (m Model) submitFindValue(value string) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	m = m.setPromptValue("")
 	m.helpQuery = query
 	return m.arrive(m.previousState, "highlight "+query)
 }
 
 func (m Model) handlePromptCancel() (tea.Model, tea.Cmd) {
-	if m.editorDraft != nil || m.input.Value() != "" || (m.detailEditField != "" && m.state != ChangeUpdateState) {
-		if m.state != ChangeUpdateState {
-			m.detailEditField = ""
-		}
+	if m.editorDraft != nil || m.input.Value() != "" || m.detailEditField != "" {
+		m.detailEditField = ""
+		m.editorDraft = nil
 		m = m.setPromptValue("")
+		m.input.Placeholder = defaultInputPlaceholder
+		if m.state == ChangeUpdateState {
+			m.state = ChangeDetailsState
+		}
+		if m.state == ChangesListState {
+			m.clampChangeListSelection()
+		}
 		m.status = "prompt cleared"
 		return m, nil
 	}
-	switch {
-	case commandAllowed(m.state, "/cancel"):
-		return m.executeCommandFrom(m.state, "/cancel")
-	case commandAllowed(m.state, "/return"):
-		return m.executeCommandFrom(m.state, "/return")
-	case commandAllowed(m.state, "/quit"):
-		return m.executeCommandFrom(m.state, "/quit")
-	default:
-		return m.handleEsc()
-	}
+	return m.handleEsc()
 }
 
 func (m Model) requestQuit() (tea.Model, tea.Cmd) {
@@ -713,6 +738,8 @@ func (m Model) handleListSelection() (tea.Model, tea.Cmd) {
 			m.err = "no changes selectable"
 			return m, nil
 		}
+		m = m.setPromptValue("")
+		m.changeSelectionID = selected.ID
 		m.state = ChangeDetailsState
 		m.changeDetailLoaded = false
 		m.status = "selected " + selected.Title
@@ -737,13 +764,15 @@ func (m Model) handleListSelection() (tea.Model, tea.Cmd) {
 			return m.beginTestCaseScenarioEdit(row)
 		}
 		switch row.Label {
+		case "Slug":
+			return m.beginChangeField(detailEditSlug)
 		case "Phase":
 			return m.beginDetailFieldSelector(detailEditPhase)
 		case "Epic":
 			return m.beginDetailFieldSelector(detailEditEpic)
 		case "Types":
 			return m.beginDetailFieldSelector(detailEditTypes)
-		case "After change":
+		case "After Change":
 			return m.beginChangeField(detailEditAfterChange)
 		case "Title":
 			return m.beginDetailTitleEdit()
@@ -754,7 +783,7 @@ func (m Model) handleListSelection() (tea.Model, tea.Cmd) {
 		case "Pull Request", "PR":
 			return m.beginDetailTextEditor(detailEditPullRequest)
 		case "PR URL":
-			return m.beginDetailTextEditor(detailEditPRUrl)
+			return m.beginChangeField(detailEditPRUrl)
 		}
 		m.status = "selected " + row.Label
 	case EpicsListState:
@@ -844,6 +873,7 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		return m.beginProject(projects.Config, m.projectList.Detail.ID, "")
 	case "/retry":
 		if source == ChangesListState {
+			m.rememberSelectedChange()
 			return m.beginChange(changes.List, 0, changes.Input{})
 		}
 		if source == ChangeDetailsState {
@@ -879,14 +909,16 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		m.state = FindInputState
 		m = m.setPromptValue("")
 	case "/find-filter":
+		m.rememberSelectedChange()
 		m.changeList = m.changeList.Invalidate()
 		m.previousState = ChangesListState
 		m.state = FindInputState
 		m = m.setPromptValue(m.changesFilters.find)
 		m.input.Placeholder = "Find changes"
 	case "/clear-filters":
+		m.rememberSelectedChange()
 		m.changesFilters = changesFilters{}
-		m.clampChangeListSelection()
+		m.restoreSelectedChange()
 		m.status = "filters cleared"
 	case "/return":
 		return m.arrive(navigation.ReturnTargets()[source], "return")
@@ -1047,8 +1079,8 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		return m.beginFilter("Phase Filter", selectorPhases, filterPhase)
 	case "/epic-filter":
 		return m.beginFilter("Epic Filter", selectorEpics, filterEpic)
-	case "/type-filter":
-		return m.beginFilter("Type Filter", selectorTypes, filterType)
+	case "/types-filter":
+		return m.beginFilter("Types Filter", selectorTypes, filterTypes)
 	}
 	if m.state == "" {
 		m.state = source
@@ -1058,6 +1090,18 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 }
 
 func (m Model) arrive(state State, status string) (tea.Model, tea.Cmd) {
+	if m.state == ChangesListState {
+		m.rememberSelectedChange()
+		if state != ChangesListState {
+			m = m.setPromptValue("")
+		}
+	}
+	if m.state == ChangeDetailsState && state == ChangesListState && m.changeList.Detail.ID != "" {
+		m.changeSelectionID = m.changeList.Detail.ID
+	}
+	if m.state == FindInputState && state != FindInputState {
+		m = m.setPromptValue("")
+	}
 	if m.state == BriefState && state != BriefState {
 		m.brief = m.brief.Invalidate()
 		m.briefOperation = nil
@@ -1215,6 +1259,7 @@ func (m Model) beginDetailFieldSelector(field detailEditField) (tea.Model, tea.C
 	if field == detailEditTypes {
 		m.dropdown.pendingTypes = normalizeTypeSet(m.changeList.Detail.ChangeTypes)
 	}
+	m.state = ChangeDetailsState
 	return m, m.selectorCommand(m.dropdown.source)
 }
 

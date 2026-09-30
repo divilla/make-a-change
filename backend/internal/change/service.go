@@ -5,6 +5,7 @@ import (
 	"mch_api/internal/app"
 	"mch_api/internal/domain"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -123,6 +124,19 @@ func (s *Service) UpdateTitle(ctx context.Context, req domain.ChangeUpdateTitleR
 		return err
 	}
 	return s.repo.UpdateTitle(ctx, req)
+}
+
+var slugPattern = regexp.MustCompile(`^[a-z0-9_-]+$`)
+
+// UpdateSlug validates the editable suffix; the view adds the reference prefix.
+func (s *Service) UpdateSlug(ctx context.Context, req domain.ChangeUpdateSlugRequest) error {
+	if req.ID <= 0 {
+		return app.ErrChangeInvalidInput
+	}
+	if !slugPattern.MatchString(req.Slug) {
+		return app.ErrChangeInvalidInput
+	}
+	return s.repo.UpdateSlug(ctx, req)
 }
 
 // UpdatePhase rejects phases absent from the selected project configuration.

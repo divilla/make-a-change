@@ -31,7 +31,7 @@ func (r *Repo) List(ctx context.Context, req domain.EpicListRequest) ([]domain.E
 		order by created_at, id
 	`, req.ProjectID)
 	if err != nil {
-		return nil, app.Database(err, nil, nil)
+		return nil, app.DatabaseError(err, nil, nil)
 	}
 	defer rows.Close()
 	epics := make([]domain.Epic, 0)
@@ -42,14 +42,14 @@ func (r *Repo) List(ctx context.Context, req domain.EpicListRequest) ([]domain.E
 		}
 		epics = append(epics, epic)
 	}
-	return epics, app.Database(rows.Err(), nil, nil)
+	return epics, app.DatabaseError(rows.Err(), nil, nil)
 }
 
 // Details executes Details behavior.
 func (r *Repo) Details(ctx context.Context, req domain.EpicIDRequest) (domain.Epic, error) {
 	epic, err := scanEpic(r.pool.QueryRow(ctx, "select "+epicColumns+" from public.vw_epic where id = $1", req.ID))
 	if err != nil {
-		return domain.Epic{}, app.Database(err, app.ErrEpicNotFound, nil)
+		return domain.Epic{}, app.DatabaseError(err, app.ErrEpicNotFound, nil)
 	}
 	return epic, nil
 }
@@ -58,14 +58,14 @@ func (r *Repo) Details(ctx context.Context, req domain.EpicIDRequest) (domain.Ep
 func (r *Repo) Create(ctx context.Context, req domain.EpicCreateRequest) (domain.EpicIDRequest, error) {
 	var result domain.EpicIDRequest
 	err := r.pool.QueryRow(ctx, "insert into public.epic (project_id, name) select id, $2 from public.project where id = $1 returning id", req.ProjectID, req.Name).Scan(&result.ID)
-	return result, app.Database(err, app.ErrEpicNotFound, app.ErrEpicNotFound)
+	return result, app.DatabaseError(err, app.ErrEpicNotFound, app.ErrEpicNotFound)
 }
 
 // Update changes the name and timestamp, including same-name updates.
 func (r *Repo) Update(ctx context.Context, req domain.EpicUpdateRequest) error {
 	tag, err := r.pool.Exec(ctx, "update public.epic set name = $2, updated_at = now() where id = $1", req.ID, req.Name)
 	if err != nil {
-		return app.Database(err, nil, nil)
+		return app.DatabaseError(err, nil, nil)
 	}
 	if tag.RowsAffected() == 0 {
 		return app.ErrEpicNotFound
@@ -77,7 +77,7 @@ func (r *Repo) Update(ctx context.Context, req domain.EpicUpdateRequest) error {
 func (r *Repo) Delete(ctx context.Context, req domain.EpicIDRequest) error {
 	tag, err := r.pool.Exec(ctx, "delete from public.epic where id = $1", req.ID)
 	if err != nil {
-		return app.Database(err, nil, app.ErrEpicHasChanges)
+		return app.DatabaseError(err, nil, app.ErrEpicHasChanges)
 	}
 	if tag.RowsAffected() == 0 {
 		return app.ErrEpicNotFound
@@ -91,7 +91,7 @@ func scanEpic(row pgx.Row) (domain.Epic, error) {
 		&epic.ID, &epic.ProjectID, &epic.Name, &epic.DoneTC,
 		&epic.TotalTC, &epic.ChangeCount, &epic.CreatedAt, &epic.UpdatedAt,
 	)
-	return epic, app.Database(err, nil, nil)
+	return epic, app.DatabaseError(err, nil, nil)
 }
 
 type epicPool interface {

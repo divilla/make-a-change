@@ -140,6 +140,45 @@ class ForeignKeyTests(DatabaseTestCase):
                 for table, previous in maxima.items():
                     self.assertGreater(int(self.sql(f"select min(id) from {table};")), previous)
 
+    def test_seed_demo_stores_suffix_and_view_builds_ref_slug(self):
+        self.run_file(self.db / "seed-demo.sql")
+        for view in ("vw_change_list", "vw_change_details"):
+            self.assertEqual(
+                self.sql(f"select ref_slug from {view} where title='Respect q=0 in gzip content negotiation';"),
+                "201-respect-q-0-in-gzip-content-negotiation")
+        self.assertEqual(
+            self.sql("select slug from change where title='Respect q=0 in gzip content negotiation';"),
+            "respect-q-0-in-gzip-content-negotiation")
+
+    def test_ref_slug_padding_and_suffix_in_both_views(self):
+        project = self.create_project()
+        for ref, expected in ((6, "006-some-slug"), (99, "099-some-slug"),
+                              (100, "100-some-slug"), (1116, "1116-some-slug")):
+            change = self.sql(f"select fn_change_insert({project},gen_random_uuid(),'title','brief');")
+            self.sql(f"update change set ref={ref},slug='some-slug' where id={change};")
+            for view in ("vw_change_list", "vw_change_details"):
+                self.assertEqual(self.sql(f"select ref_slug from {view} where id={change};"), expected)
+
+        missing_ref = self.sql(f"select fn_change_insert({project},gen_random_uuid(),'unassigned','brief');")
+        for view in ("vw_change_list", "vw_change_details"):
+            self.assertEqual(self.sql(f"select ref_slug is null from {view} where id={missing_ref};"), "t")
+
+    def test_after_change_name_in_details_view(self):
+        project = self.create_project()
+        prior = self.sql(f"select fn_change_insert({project},gen_random_uuid(),'First change','brief');")
+        current = self.sql(f"select fn_change_insert({project},gen_random_uuid(),'Current change','brief');")
+        self.assertEqual(self.sql(f"select after_change_name is null from vw_change_details where id={current};"), "t")
+        self.sql(f"update change set after_change_id={prior} where id={current};")
+        self.assertEqual(self.sql(f"select after_change_name from vw_change_details where id={current};"),
+                         f"First change (#{prior})")
+
+    def test_details_epic_name_is_only_the_name(self):
+        project = self.create_project()
+        epic = self.sql(f"insert into epic(project_id,name) values({project},'Roadmap') returning id;")
+        change = self.sql(f"select fn_change_insert({project},gen_random_uuid(),'Current change','brief');")
+        self.sql(f"update change set epic_id={epic} where id={change};")
+        self.assertEqual(self.sql(f"select epic_name from vw_change_details where id={change};"), "Roadmap")
+
     def test_change_creation_is_atomic_and_uuid_unique(self):
         project = self.create_project()
         change = self.sql(f"select fn_change_insert({project},gen_random_uuid(),'title','initial');")

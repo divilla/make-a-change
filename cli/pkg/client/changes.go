@@ -20,34 +20,34 @@ func (n *nullableWire[T]) UnmarshalJSON(data []byte) error {
 }
 
 type changeWire struct {
-	ID            *int                 `json:"id"`
-	ProjectID     *int                 `json:"project_id"`
-	RefUUID       *string              `json:"ref_uuid"`
-	ChangePhase   *string              `json:"change_phase"`
-	Title         *string              `json:"title"`
-	Open          *bool                `json:"open"`
-	DoneTC        *int64               `json:"done_tc"`
-	TotalTC       *int64               `json:"total_tc"`
-	Completed     *int64               `json:"completed"`
-	UpdatedAt     *time.Time           `json:"updated_at"`
-	Ref           nullableWire[int32]  `json:"ref"`
-	Slug          nullableWire[string] `json:"slug"`
-	EpicID        nullableWire[int]    `json:"epic_id"`
-	EpicName      nullableWire[string] `json:"epic_name"`
-	AfterChangeID nullableWire[int]    `json:"after_change_id"`
-	ChangeTypes   stringArray          `json:"change_types"`
-	PRUrl         *string              `json:"pr_url"`
-	CreatedAt     *time.Time           `json:"created_at"`
+	ID              *int                 `json:"id"`
+	ProjectID       *int                 `json:"project_id"`
+	RefUUID         *string              `json:"ref_uuid"`
+	ChangePhase     *string              `json:"change_phase"`
+	Title           *string              `json:"title"`
+	Open            *bool                `json:"open"`
+	DoneTC          *int64               `json:"done_tc"`
+	TotalTC         *int64               `json:"total_tc"`
+	Completed       *int64               `json:"completed"`
+	UpdatedAt       *time.Time           `json:"updated_at"`
+	RefSlug         nullableWire[string] `json:"ref_slug"`
+	EpicID          nullableWire[int]    `json:"epic_id"`
+	EpicName        nullableWire[string] `json:"epic_name"`
+	AfterChangeID   nullableWire[int]    `json:"after_change_id"`
+	AfterChangeName nullableWire[string] `json:"after_change_name"`
+	ChangeTypes     stringArray          `json:"change_types"`
+	PRUrl           *string              `json:"pr_url"`
+	CreatedAt       *time.Time           `json:"created_at"`
 }
 
 func (w changeWire) value(details bool) (dto.Change, error) {
-	if w.ID == nil || w.ProjectID == nil || w.RefUUID == nil || w.ChangePhase == nil || w.Title == nil || w.Open == nil || w.DoneTC == nil || w.TotalTC == nil || w.Completed == nil || w.UpdatedAt == nil || !w.Ref.Present || !w.Slug.Present || !w.EpicID.Present || !w.EpicName.Present || w.ChangeTypes == nil || *w.ID <= 0 || *w.ProjectID <= 0 {
+	if w.ID == nil || w.ProjectID == nil || w.RefUUID == nil || w.ChangePhase == nil || w.Title == nil || w.Open == nil || w.DoneTC == nil || w.TotalTC == nil || w.Completed == nil || w.UpdatedAt == nil || !w.RefSlug.Present || !w.EpicID.Present || !w.EpicName.Present || w.ChangeTypes == nil || *w.ID <= 0 || *w.ProjectID <= 0 {
 		return dto.Change{}, &ContractError{errors.New("missing or invalid change fields")}
 	}
-	if details && (!w.AfterChangeID.Present || w.PRUrl == nil || w.CreatedAt == nil) {
+	if details && (!w.AfterChangeID.Present || !w.AfterChangeName.Present || w.PRUrl == nil || w.CreatedAt == nil) {
 		return dto.Change{}, &ContractError{errors.New("missing change detail fields")}
 	}
-	c := dto.Change{ID: *w.ID, ProjectID: *w.ProjectID, RefUUID: *w.RefUUID, ChangePhase: *w.ChangePhase, Title: *w.Title, Open: *w.Open, DoneTC: *w.DoneTC, TotalTC: *w.TotalTC, Completed: *w.Completed, UpdatedAt: *w.UpdatedAt, Ref: w.Ref.Value, Slug: w.Slug.Value, EpicID: w.EpicID.Value, EpicName: w.EpicName.Value, ChangeTypes: w.ChangeTypes, AfterChangeID: w.AfterChangeID.Value}
+	c := dto.Change{ID: *w.ID, ProjectID: *w.ProjectID, RefUUID: *w.RefUUID, ChangePhase: *w.ChangePhase, Title: *w.Title, Open: *w.Open, DoneTC: *w.DoneTC, TotalTC: *w.TotalTC, Completed: *w.Completed, UpdatedAt: *w.UpdatedAt, RefSlug: w.RefSlug.Value, EpicID: w.EpicID.Value, EpicName: w.EpicName.Value, ChangeTypes: w.ChangeTypes, AfterChangeID: w.AfterChangeID.Value, AfterChangeName: w.AfterChangeName.Value}
 	if details {
 		c.PRUrl = *w.PRUrl
 		c.CreatedAt = *w.CreatedAt
@@ -124,6 +124,17 @@ func (c HTTPClient) UpdateChangeTitle(ctx context.Context, id int, value string)
 	return c.projectRequest(ctx, "/api/v1/change/update-title", struct {
 		ID    int    `json:"id"`
 		Value string `json:"title"`
+	}{id, value}, 204, nil)
+}
+
+// UpdateChangeSlug stores only the editable suffix.
+func (c HTTPClient) UpdateChangeSlug(ctx context.Context, id int, value string) error {
+	if id <= 0 {
+		return errors.New("change ID must be a valid positive number")
+	}
+	return c.projectRequest(ctx, "/api/v1/change/update-slug", struct {
+		ID   int    `json:"id"`
+		Slug string `json:"slug"`
 	}{id, value}, 204, nil)
 }
 

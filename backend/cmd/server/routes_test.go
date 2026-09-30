@@ -38,6 +38,7 @@ func TestAPIConstructorRouteInventory(t *testing.T) {
 		"POST /api/v1/change/update-open",
 		"POST /api/v1/change/update-types",
 		"POST /api/v1/change/update-title",
+		"POST /api/v1/change/update-slug",
 		"POST /api/v1/change/update-pr-url",
 		"POST /api/v1/change/delete",
 		"POST /api/v1/test-case/list",

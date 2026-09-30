@@ -205,13 +205,19 @@ func (m Model) configurationKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.state == BackendConfigFormState {
+		if key == "esc" || key == "ctrl+c" {
+			if m.input.Value() != "" || m.editorDraft != nil {
+				m = m.setPromptValue("")
+				m.status = "prompt cleared"
+				return m, nil
+			}
+			return m.configurationCommand(m.state, "/cancel")
+		}
 		if key == "ctrl+g" {
 			m.openCommandDropdown()
 			return m, nil
 		}
 		switch key {
-		case "esc":
-			return m.configurationCommand(m.state, "/cancel")
 		case "pgup", "pgdown":
 			step := max(1, m.height/2)
 			if key == "pgup" {
@@ -346,6 +352,11 @@ func (m Model) healthCommand(command string) (tea.Model, tea.Cmd) {
 func (m Model) healthKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 	if key == "esc" || key == "ctrl+c" {
+		if m.input.Value() != "" {
+			m = m.setPromptValue("")
+			m.status = "prompt cleared"
+			return m, nil
+		}
 		return m.healthCommand("/return")
 	}
 	if m.input.Value() == "" {

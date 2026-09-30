@@ -46,9 +46,9 @@ func Wrap(err error, context string) error {
 	return fmt.Errorf("%s: %w", context, err)
 }
 
-// Database maps only the caller's existing no-row and foreign-key contracts.
+// DatabaseError maps only the caller's existing no-row and foreign-key contracts.
 // A nil mapping leaves that database condition uninterpreted.
-func Database(err, missing, foreignKey error) error {
+func DatabaseError(err, missing, foreignKey error) error {
 	if err == nil {
 		return nil
 	}
@@ -165,7 +165,7 @@ func ChangeCreate(err error) error {
 			return fmt.Errorf("%w: %w", ErrProjectNotFound, err)
 		}
 	}
-	return Database(err, nil, ErrProjectNotFound)
+	return DatabaseError(err, nil, ErrProjectNotFound)
 }
 
 // ConfigInsert maps the config primary-key constraint without hiding other errors.
@@ -174,5 +174,5 @@ func ConfigInsert(err error) error {
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "config_pkey" {
 		return Validation(err, ErrConfigDuplicate)
 	}
-	return Database(err, nil, nil)
+	return DatabaseError(err, nil, nil)
 }
