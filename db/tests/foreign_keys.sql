@@ -1,4 +1,4 @@
--- Run with psql -v ON_ERROR_STOP=1 -f db/tests/foreign_keys.sql after init.sql.
+-- Run with psql -v ON_ERROR_STOP=1 -f db/tests/foreign_keys.sql after init.sql and seed.sql.
 begin;
 \ir fixtures.sql
 

@@ -55,7 +55,7 @@ class TestcaseLockTests(DatabaseTestCase):
                     self.command(second, "commit;")
                 self.assert_counts(change, 0, 2 if same_change else 1)
                 self.assert_counts(other, 0, 2 if same_change else 1)
-                self.assertEqual(self.sql(f"select total_tc from vw_epic where id={epic};"), "2")
+                self.assertEqual(self.sql(f"select total_tc from vw_epic_list where id={epic};"), "2")
 
     def test_missing_cases_are_noops(self):
         self.assertEqual(self.sql("update testcase set scenario='missing' where id=-1 returning id; "
@@ -111,10 +111,11 @@ class TestcaseLockTests(DatabaseTestCase):
     def test_schema_can_be_reinitialized(self):
         change, _ = self.create_change()
         self.create_case(change)
-        self.sql(f"call sp_change_doc_set({change},'brief','old',false);")
+        self.sql(f"select fn_doc_insert('change',{change}::bigint,'brief','old',false);")
         self.run_file(self.db / "init.sql")
         self.run_file(self.db / "seed.sql")
-        self.assertEqual(self.sql("select count(*) from doc; select count(*) from testcase;"), "0\n0")
+        self.assertEqual(self.sql("select count(*) from doc; select count(*) from doc_active; "
+                                  "select count(*) from testcase;"), "0\n0\n0")
         project = self.create_project()
         change = self.sql(f"select fn_change_insert({project},gen_random_uuid(),'new','new brief');")
         self.assertEqual(self.sql(f"select body from doc where ref_table='change' and ref_id={change};"), "new brief")

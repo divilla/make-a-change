@@ -2,13 +2,14 @@ begin;
 
 -- Replace demo data and its docs together; preserve identity sequences.
 truncate table
+    public.doc_active,
     public.doc,
     public.testcase,
     public.change,
     public.epic,
     public.project;
 
-insert into public.project (name, config)
+insert into public.project (name, config_slug)
 select demo.name, c.slug
 from public.config c
 cross join (values ('demo1'), ('demo2'), ('demo3')) as demo(name)
@@ -74,7 +75,7 @@ begin
           and p.name = 'demo1'
           and c.ref % 11 = 0
     ) then
-        call public.sp_change_doc_set(_id, 'spec', _spec, false);
+        perform public.fn_doc_insert('change', _id, 'spec', _spec, false);
     end if;
 
     return _id;
@@ -90,7 +91,7 @@ create or replace procedure pg_temp.sp_demo_change_pr_update(
 as
 $$
 begin
-    call public.sp_change_doc_set(_id, 'pr', _pr, false);
+    perform public.fn_doc_insert('change', _id, 'pr', _pr, false);
 
     update public.change
     set pr_url = _pr_url
@@ -4431,7 +4432,7 @@ begin
     select array_remove(c.change_phases, 'backlog')
     into _active_phases
     from public.project p
-    join public.config c on c.slug = p.config
+    join public.config c on c.slug = p.config_slug
     where p.name = 'demo1';
 
     -- Demo board distribution: 40% backlog, the remaining 60% spread across active phases.
@@ -4516,10 +4517,10 @@ do $$
 declare _parent record;
 begin
  for _parent in select id, name from public.project loop
-  perform public.fn_doc_insert(_parent.id, 'project', 'brief', '# ' || _parent.name, false);
+  perform public.fn_doc_insert('project', _parent.id, 'brief', '# ' || _parent.name, false);
  end loop;
  for _parent in select id, name from public.epic loop
-  perform public.fn_doc_insert(_parent.id, 'epic', 'brief', '# ' || _parent.name, false);
+  perform public.fn_doc_insert('epic', _parent.id, 'brief', '# ' || _parent.name, false);
  end loop;
 end;
 $$;
