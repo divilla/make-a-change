@@ -24,7 +24,7 @@ type application struct {
 func run(ctx context.Context, startup func() (application, error)) error {
 	server, err := startup()
 	if err != nil {
-		return app.Wrap(err, "startup")
+		return app.WrapError(err, "startup")
 	}
 	closeApp := sync.OnceFunc(server.close)
 	defer closeApp()
@@ -33,7 +33,7 @@ func run(ctx context.Context, startup func() (application, error)) error {
 	var serveErr error
 	select {
 	case serveErr = <-served:
-		return app.Wrap(serveErr, "serve")
+		return app.WrapError(serveErr, "serve")
 	case <-ctx.Done():
 	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -43,21 +43,21 @@ func run(ctx context.Context, startup func() (application, error)) error {
 	if shutdownErr != nil {
 		closeApp()
 		<-served
-		return app.Wrap(shutdownErr, "shutdown")
+		return app.WrapError(shutdownErr, "shutdown")
 	}
 	serveErr = <-served
-	return app.ServerShutdown(serveErr)
+	return app.ServerShutdownError(serveErr)
 }
 
 func start(ctx context.Context, cfg *config.Config) (application, error) {
 	pool, err := pgxpool.New(ctx, cfg.ConnectionString)
 	if err != nil {
-		return application{}, app.Wrap(err, "connect database")
+		return application{}, app.WrapError(err, "connect database")
 	}
 	listener, err := net.Listen("tcp", cfg.Addr())
 	if err != nil {
 		pool.Close()
-		return application{}, app.Wrap(err, "listen")
+		return application{}, app.WrapError(err, "listen")
 	}
 
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()

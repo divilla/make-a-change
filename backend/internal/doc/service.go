@@ -11,7 +11,11 @@ import (
 // Repository supplies stored docs and their owning project.
 type Repository interface {
 	List(context.Context, domain.DocListRequest) ([]domain.Doc, error)
-	Current(context.Context, domain.DocListRequest) ([]domain.Doc, error)
+	ListActive(context.Context, domain.DocListRequest) ([]domain.Doc, error)
+	CommentList(context.Context, domain.DocListRequest) ([]domain.Doc, error)
+	CommentInsert(context.Context, domain.DocCommentInsertRequest) (domain.DocIDRequest, error)
+	CommentUpdate(context.Context, domain.DocCommentUpdateRequest) error
+	Delete(context.Context, domain.DocIDRequest) error
 	Details(context.Context, domain.DocIDRequest) (domain.Doc, error)
 	Project(context.Context, domain.DocListRequest) (domain.ProjectIDRequest, error)
 	Insert(context.Context, domain.DocInsertRequest) (domain.DocIDRequest, error)
@@ -53,12 +57,12 @@ func (s *Service) List(ctx context.Context, req domain.DocListRequest) ([]domain
 	return docs, nil
 }
 
-// Current returns only current docs for the supplied reference.
-func (s *Service) Current(ctx context.Context, req domain.DocListRequest) ([]domain.Doc, error) {
+// ListActive returns only selected active docs for the supplied reference.
+func (s *Service) ListActive(ctx context.Context, req domain.DocListRequest) ([]domain.Doc, error) {
 	if !validRef(req) {
 		return nil, app.ErrDocInvalidInput
 	}
-	docs, err := s.repo.Current(ctx, req)
+	docs, err := s.repo.ListActive(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -104,8 +108,52 @@ func (s *Service) Insert(ctx context.Context, req domain.DocInsertRequest) (doma
 	case "epic":
 		kinds = config.EpicDocs
 	}
-	if !slices.Contains(kinds, req.DocType) {
+	if req.DocType == "comment" || !slices.Contains(kinds, req.DocType) {
 		return domain.DocIDRequest{}, app.ErrDocInvalidReference
 	}
 	return s.repo.Insert(ctx, req)
+}
+
+// CommentList returns rendered comments, including soft-deleted history.
+func (s *Service) CommentList(ctx context.Context, req domain.DocListRequest) ([]domain.Doc, error) {
+	if !validRef(req) {
+		return nil, app.ErrDocInvalidInput
+	}
+	docs, err := s.repo.CommentList(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	for i := range docs {
+		docs[i].HTML = s.renderer.Render(docs[i].Body)
+	}
+	return docs, nil
+}
+
+// CommentInsert validates the reference without applying configured document-type rules.
+func (s *Service) CommentInsert(ctx context.Context, req domain.DocCommentInsertRequest) (domain.DocIDRequest, error) {
+	ref := domain.DocListRequest{RefID: req.RefID, RefTable: req.RefTable}
+	req.Body = strings.TrimSpace(req.Body)
+	if !validRef(ref) || req.Body == "" || req.AgentEdit == nil {
+		return domain.DocIDRequest{}, app.ErrDocInvalidInput
+	}
+	if _, err := s.repo.Project(ctx, ref); err != nil {
+		return domain.DocIDRequest{}, err
+	}
+	return s.repo.CommentInsert(ctx, req)
+}
+
+// CommentUpdate allows an explicit empty body, matching the database comment contract.
+func (s *Service) CommentUpdate(ctx context.Context, req domain.DocCommentUpdateRequest) error {
+	if req.ID <= 0 || req.Body == nil {
+		return app.ErrDocInvalidInput
+	}
+	return s.repo.CommentUpdate(ctx, req)
+}
+
+// Delete retains document history and removes its active selection in the database.
+func (s *Service) Delete(ctx context.Context, req domain.DocIDRequest) error {
+	if req.ID <= 0 {
+		return app.ErrDocInvalidInput
+	}
+	return s.repo.Delete(ctx, req)
 }

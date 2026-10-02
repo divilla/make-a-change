@@ -12,7 +12,7 @@ import (
 )
 
 func TestAPIContracts(t *testing.T) {
-	for _, op := range []string{"list", "current", "details", "insert"} {
+	for _, op := range []string{"list", "list-active", "details", "insert"} {
 		body := `{"id":8,"ref_id":7,"ref_table":"change","doc_type":"spec","body":"raw","agent_edit":false}`
 		for _, scenario := range []string{"success", "malformed", "invalid", "failure", "missing", "conflict"} {
 			t.Run(op+scenario, func(t *testing.T) {

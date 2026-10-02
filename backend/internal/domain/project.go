@@ -7,7 +7,8 @@ type (
 	Project struct {
 		ID          int       `json:"id"`
 		Name        string    `json:"name"`
-		Config      string    `json:"config"`
+		Active      bool      `json:"active"`
+		ConfigSlug  string    `json:"config_slug"`
 		LastRef     int32     `json:"last_ref"`
 		CreatedAt   time.Time `json:"created_at"`
 		UpdatedAt   time.Time `json:"updated_at"`

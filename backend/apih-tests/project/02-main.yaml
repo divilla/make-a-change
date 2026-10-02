@@ -21,7 +21,7 @@ spec:
       body: '{"id":${project_id}}'
     response:
       expected_status: 200
-      expected_body: '{"id":${project_id},"name":"APIHydra project","config":"default","last_ref":0,"change_count":0}'
+      expected_body: '{"id":${project_id},"name":"APIHydra project","config_slug":"default","last_ref":0,"change_count":0}'
       expected_types:
         .created_at:
         - string
@@ -109,7 +109,29 @@ spec:
       path: /api/v1/project/delete
       body: '{"id":${project_id}}'
     response:
-      expected_status: 409
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/project/details
+      body: '{"id":${project_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"active":false}'
+  - request:
+      method: POST
+      path: /api/v1/project/list
+      body: '{}'
+    response:
+      expected_status: 200
+      expected_types:
+        if any(.[]; .name == "APIHydra renamed" and .active == false) then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/project/update
+      body: '{"id":${project_id},"name":"APIHydra renamed"}'
+    response:
+      expected_status: 204
   - request:
       method: POST
       path: /api/v1/epic/delete
@@ -132,7 +154,29 @@ spec:
       path: /api/v1/project/delete
       body: '{"id":${project_id}}'
     response:
-      expected_status: 409
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/project/details
+      body: '{"id":${project_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"active":false}'
+  - request:
+      method: POST
+      path: /api/v1/project/list
+      body: '{}'
+    response:
+      expected_status: 200
+      expected_types:
+        if any(.[]; .name == "APIHydra renamed" and .active == false) then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/project/update
+      body: '{"id":${project_id},"name":"APIHydra renamed"}'
+    response:
+      expected_status: 204
   - request:
       method: POST
       path: /api/v1/project/details
@@ -366,3 +410,363 @@ spec:
       expected_types:
         .message:
         - string
+
+  # Independent error cases: each malformed field has otherwise valid input.
+  # details: id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/details
+      body: '{"id":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project payload"}'
+  # details: id zero; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/details
+      body: '{"id":0}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project payload"}'
+  # details: id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/details
+      body: '{"id":-1.5}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project details payload"}'
+  # details: id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/details
+      body: '{"id":-9223372036854775809}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project details payload"}'
+  # details: array body
+  - request:
+      method: POST
+      path: /api/v1/project/details
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project details payload"}'
+  # details: string body
+  - request:
+      method: POST
+      path: /api/v1/project/details
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project details payload"}'
+  # details: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/project/details
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # config: id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/config
+      body: '{"id":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project payload"}'
+  # config: id zero; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/config
+      body: '{"id":0}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project payload"}'
+  # config: id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/config
+      body: '{"id":-1.5}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project config payload"}'
+  # config: id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/config
+      body: '{"id":-9223372036854775809}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project config payload"}'
+  # config: array body
+  - request:
+      method: POST
+      path: /api/v1/project/config
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project config payload"}'
+  # config: string body
+  - request:
+      method: POST
+      path: /api/v1/project/config
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project config payload"}'
+  # config: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/project/config
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # create: name null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/create
+      body: '{"name":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project payload"}'
+  # create: name empty; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/create
+      body: '{"name":""}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project payload"}'
+  # create: name number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/create
+      body: '{"name":1}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project create payload"}'
+  # create: array body
+  - request:
+      method: POST
+      path: /api/v1/project/create
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project create payload"}'
+  # create: string body
+  - request:
+      method: POST
+      path: /api/v1/project/create
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project create payload"}'
+  # create: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/project/create
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # update: id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/update
+      body: '{"name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project payload"}'
+  # update: id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/update
+      body: '{"id":null,"name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project payload"}'
+  # update: id zero; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/update
+      body: '{"id":0,"name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project payload"}'
+  # update: id negative; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/update
+      body: '{"id":-1,"name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project payload"}'
+  # update: id string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/update
+      body: '{"id":"bad","name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project update payload"}'
+  # update: id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/update
+      body: '{"id":-1.5,"name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project update payload"}'
+  # update: id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/update
+      body: '{"id":-9223372036854775809,"name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project update payload"}'
+  # update: name omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/update
+      body: '{"id":${project_id}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project payload"}'
+  # update: name null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/update
+      body: '{"id":${project_id},"name":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project payload"}'
+  # update: name empty; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/update
+      body: '{"id":${project_id},"name":""}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project payload"}'
+  # update: name number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/update
+      body: '{"id":${project_id},"name":1}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project update payload"}'
+  # update: array body
+  - request:
+      method: POST
+      path: /api/v1/project/update
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project update payload"}'
+  # update: string body
+  - request:
+      method: POST
+      path: /api/v1/project/update
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project update payload"}'
+  # update: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/project/update
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # delete: id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/delete
+      body: '{"id":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project payload"}'
+  # delete: id zero; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/delete
+      body: '{"id":0}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project payload"}'
+  # delete: id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/delete
+      body: '{"id":-1.5}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project delete payload"}'
+  # delete: id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/project/delete
+      body: '{"id":-9223372036854775809}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project delete payload"}'
+  # delete: array body
+  - request:
+      method: POST
+      path: /api/v1/project/delete
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project delete payload"}'
+  # delete: string body
+  - request:
+      method: POST
+      path: /api/v1/project/delete
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid project delete payload"}'
+  # delete: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/project/delete
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+
+  # Errors from PostgreSQL-rejected NUL text return a masked 500; owned IDs only.
+  - request:
+      method: POST
+      path: /api/v1/project/create
+      body: '{"name":"Invalid\u0000name"}'
+    response:
+      expected_status: 500
+      expected_body: '{"message":"Internal Server Error"}'
+      expected_types:
+        if keys == ["message"] then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/project/update
+      body: '{"id":${project_id},"name":"Invalid\u0000name"}'
+    response:
+      expected_status: 500
+      expected_body: '{"message":"Internal Server Error"}'
+      expected_types:
+        if keys == ["message"] then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/project/details
+      body: '{"id":${project_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"name":"APIHydra renamed","active":false}'
+  - request:
+      method: GET
+      path: /api/v1/project/list
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'

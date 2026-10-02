@@ -78,8 +78,8 @@ func (r *fakeChangeRepository) UpdateEpic(c context.Context, q domain.ChangeUpda
 	return r.record(c, "UpdateEpic", q)
 }
 
-func (r *fakeChangeRepository) UpdateOpen(c context.Context, q domain.ChangeUpdateOpenRequest) error {
-	return r.record(c, "UpdateOpen", q)
+func (r *fakeChangeRepository) UpdateActive(c context.Context, q domain.ChangeUpdateActiveRequest) error {
+	return r.record(c, "UpdateActive", q)
 }
 
 func (r *fakeChangeRepository) UpdateTypes(c context.Context, q domain.ChangeUpdateTypesRequest) error {
@@ -253,7 +253,7 @@ func TestServiceRejectsInvalidDirectInput(t *testing.T) {
 			s.UpdateTitle(ctx, domain.ChangeUpdateTitleRequest{ID: id, Title: "Title"}),
 			s.UpdatePhase(ctx, domain.ChangeUpdatePhaseRequest{ID: id, ChangePhase: "backlog"}),
 			s.UpdateEpic(ctx, domain.ChangeUpdateEpicRequest{ID: id}),
-			s.UpdateOpen(ctx, domain.ChangeUpdateOpenRequest{ID: id, Open: boolPtr(false)}),
+			s.UpdateActive(ctx, domain.ChangeUpdateActiveRequest{ID: id, Active: boolPtr(false)}),
 			s.UpdateTypes(ctx, domain.ChangeUpdateTypesRequest{ID: id}),
 			s.UpdatePRUrl(ctx, domain.ChangeUpdatePRUrlRequest{ID: id, PRUrl: "https://pr"}),
 			s.Delete(ctx, domain.ChangeIDRequest{ID: id}),
@@ -270,7 +270,7 @@ func TestServiceRejectsInvalidDirectInput(t *testing.T) {
 		s.UpdatePhase(ctx, domain.ChangeUpdatePhaseRequest{ID: 7, ChangePhase: " "}),
 		s.UpdateEpic(ctx, domain.ChangeUpdateEpicRequest{ID: 7, EpicID: intPtr(0)}),
 		s.UpdateEpic(ctx, domain.ChangeUpdateEpicRequest{ID: 7, EpicID: intPtr(-1)}),
-		s.UpdateOpen(ctx, domain.ChangeUpdateOpenRequest{ID: 7}),
+		s.UpdateActive(ctx, domain.ChangeUpdateActiveRequest{ID: 7}),
 	} {
 		require.ErrorIs(t, err, app.ErrChangeInvalidInput)
 	}
@@ -315,9 +315,9 @@ func TestServiceCollaboratorFailuresAndContext(t *testing.T) {
 			return s.UpdatePhase(ctx, domain.ChangeUpdatePhaseRequest{ID: 7, ChangePhase: " review "})
 		}, []string{"Project", "UpdatePhase"}, true},
 		{"types", func(s *Service) error { return s.UpdateTypes(ctx, domain.ChangeUpdateTypesRequest{ID: 7}) }, []string{"Project", "UpdateTypes"}, true},
-		{"open", func(s *Service) error {
-			return s.UpdateOpen(ctx, domain.ChangeUpdateOpenRequest{ID: 7, Open: boolPtr(false)})
-		}, []string{"UpdateOpen"}, false},
+		{"active", func(s *Service) error {
+			return s.UpdateActive(ctx, domain.ChangeUpdateActiveRequest{ID: 7, Active: boolPtr(false)})
+		}, []string{"UpdateActive"}, false},
 		{"url", func(s *Service) error {
 			return s.UpdatePRUrl(ctx, domain.ChangeUpdatePRUrlRequest{ID: 7, PRUrl: "https://pr"})
 		}, []string{"UpdatePRUrl"}, false},
@@ -453,4 +453,12 @@ func TestUpdateAfterChange(t *testing.T) {
 	}
 	failure := errors.New("failure")
 	require.ErrorIs(t, NewService(&fakeChangeRepository{err: failure}, nil).UpdateAfterChange(context.Background(), domain.ChangeUpdateAfterChangeRequest{ID: 7}), failure)
+}
+
+func (r *fakeChangeRepository) ListInactive(c context.Context, q domain.ChangeListRequest) ([]domain.ChangeListItem, error) {
+	v := r.list
+	if v == nil {
+		v = []domain.ChangeListItem{}
+	}
+	return v, r.record(c, "ListInactive", q)
 }

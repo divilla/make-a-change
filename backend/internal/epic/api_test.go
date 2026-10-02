@@ -14,9 +14,9 @@ import (
 
 func TestAPIRegisteredContracts(t *testing.T) {
 	now := time.Date(2026, 9, 28, 0, 0, 0, 0, time.UTC)
-	for _, op := range []string{"list", "details", "create", "update", "delete"} {
+	for _, op := range []string{"list", "list-inactive", "details", "create", "update", "delete"} {
 		t.Run(op, func(t *testing.T) {
-			r := &fakeEpicRepository{item: domain.Epic{ID: 7, Name: "Name", CreatedAt: now, UpdatedAt: now, ProjectID: 7, DoneTC: 1, TotalTC: 2, ChangeCount: 70000}}
+			r := &fakeEpicRepository{item: domain.Epic{ID: 7, Name: "Name", Active: true, CreatedAt: now, UpdatedAt: now, ProjectID: 7, DoneTC: 1, TotalTC: 2, ChangeCount: 70000}}
 
 			e := echo.New()
 			NewAPI(e, NewService(r))
@@ -41,8 +41,8 @@ func TestAPIRegisteredContracts(t *testing.T) {
 				}
 			default:
 				require.Equal(t, 200, rec.Code)
-				expected := `{"id":7,"project_id":7,"name":"Name","done_tc":1,"total_tc":2,"completed":50,"change_count":70000,"created_at":"2026-09-28T00:00:00Z","updated_at":"2026-09-28T00:00:00Z"}`
-				if op == "list" {
+				expected := `{"id":7,"project_id":7,"name":"Name","active":true,"done_tc":1,"total_tc":2,"completed":50,"change_count":70000,"created_at":"2026-09-28T00:00:00Z","updated_at":"2026-09-28T00:00:00Z"}`
+				if op == "list" || op == "list-inactive" {
 					expected = "[" + expected + "]"
 				}
 				require.JSONEq(t, expected, rec.Body.String())
@@ -52,10 +52,10 @@ func TestAPIRegisteredContracts(t *testing.T) {
 }
 
 func TestAPIRejectsMalformedAndInvalidRequests(t *testing.T) {
-	for _, op := range []string{"details", "create", "update", "delete", "list"} {
+	for _, op := range []string{"details", "create", "update", "delete", "list", "list-inactive"} {
 		bodies := []struct{ body, message string }{
-			{"{", "invalid epic " + op + " payload"},
-			{`{"id":"bad","project_id":"bad","name":3}`, "invalid epic " + op + " payload"},
+			{"{", "invalid epic " + strings.ReplaceAll(op, "list-inactive", "inactive list") + " payload"},
+			{`{"id":"bad","project_id":"bad","name":3}`, "invalid epic " + strings.ReplaceAll(op, "list-inactive", "inactive list") + " payload"},
 			{`{}`, "invalid epic payload"},
 			{`{"id":0,"project_id":0,"name":""}`, "invalid epic payload"},
 			{`{"id":-1,"project_id":-1,"name":""}`, "invalid epic payload"},

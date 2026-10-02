@@ -16,7 +16,7 @@ func TestAPIRegisteredContracts(t *testing.T) {
 	now := time.Date(2026, 9, 28, 0, 0, 0, 0, time.UTC)
 	for _, op := range []string{"list", "details", "create", "update", "delete", "config"} {
 		t.Run(op, func(t *testing.T) {
-			r := &fakeProjectRepository{item: domain.Project{ID: 7, Name: "Name", CreatedAt: now, UpdatedAt: now, Config: "custom", LastRef: 42, ChangeCount: 70000}}
+			r := &fakeProjectRepository{item: domain.Project{ID: 7, Name: "Name", Active: true, CreatedAt: now, UpdatedAt: now, ConfigSlug: "custom", LastRef: 42, ChangeCount: 70000}}
 			r.config = domain.Config{Slug: "custom", ProjectDocs: []string{"p2", "p1"}, EpicDocs: []string{"e"}, ChangeDocs: []string{"c"}, ChangePhases: []string{"phase"}, ChangeColors: []string{"blue"}, ChangeTypes: []string{"type"}}
 			e := echo.New()
 			NewAPI(e, NewService(r))
@@ -41,7 +41,7 @@ func TestAPIRegisteredContracts(t *testing.T) {
 				}
 			default:
 				require.Equal(t, 200, rec.Code)
-				expected := `{"id":7,"name":"Name","config":"custom","last_ref":42,"change_count":70000,"created_at":"2026-09-28T00:00:00Z","updated_at":"2026-09-28T00:00:00Z"}`
+				expected := `{"id":7,"name":"Name","active":true,"config_slug":"custom","last_ref":42,"change_count":70000,"created_at":"2026-09-28T00:00:00Z","updated_at":"2026-09-28T00:00:00Z"}`
 				if op == "config" {
 					expected = `{"slug":"custom","project_docs":["p2","p1"],"epic_docs":["e"],"change_docs":["c"],"change_phases":["phase"],"change_colors":["blue"],"change_types":["type"]}`
 				}

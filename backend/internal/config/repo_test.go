@@ -202,7 +202,7 @@ func TestConfigRepositoryMutations(t *testing.T) {
 				p.args = []any{q.Slug}
 				p.row = valueRow{t: t, values: []any{scenario != "missing"}, err: cause}
 				err = r.Delete(p.ctx, domain.ConfigSlugRequest{Slug: q.Slug})
-				require.Equal(t, "select public.fn_config_delete($1)", p.sql)
+				require.Equal(t, "delete from public.config where slug = $1", p.sql)
 				if scenario == "missing" {
 					require.ErrorIs(t, err, app.ErrConfigNotFound)
 				}

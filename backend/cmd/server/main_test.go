@@ -126,7 +126,7 @@ func TestInstalledJSONErrorContracts(t *testing.T) {
 		{"conflict", app.ErrEpicHasChanges, 409, `{"message":"epic has changes and cannot be deleted"}`},
 		{"unknown", errors.New("private database details"), 500, `{"message":"Internal Server Error"}`},
 		{"wrapped", fmt.Errorf("outer: %w", app.ErrTestCaseNotFound), 404, `{"message":"test case not found"}`},
-		{"bind", app.InvalidPayload(errors.New("decode"), "invalid project details payload"), 400, `{"message":"invalid project details payload"}`},
+		{"bind", app.PayloadError(errors.New("decode"), "invalid project details payload"), 400, `{"message":"invalid project details payload"}`},
 		{"echo internal", echo.NewHTTPError(500, "secret"), 500, `{"message":"Internal Server Error"}`},
 		{"wrapped echo", fmt.Errorf("outer: %w", echo.NewHTTPError(400, "safe message")), 400, `{"message":"safe message"}`},
 		{"router", echo.ErrNotFound, 404, `{"message":"Not Found"}`},

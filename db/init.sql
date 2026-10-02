@@ -242,6 +242,27 @@ FROM epic e
 where active=true
 ORDER BY e.project_id, e.name;
 
+create view public.vw_epic_inactive_list as
+SELECT e.id,
+       e.project_id,
+       e.name,
+       (select count(*)
+        from change c
+                 join testcase tc on tc.change_id = c.id and tc.done = true
+        where c.epic_id = e.id)                               as done_tc,
+       (select count(*)
+        from change c
+                 join testcase tc on tc.change_id = c.id
+        where c.epic_id = e.id)                               as total_tc,
+       (select count(*) from change c where c.epic_id = e.id) AS change_count,
+       e.created_by,
+       e.updated_by,
+       e.created_at,
+       e.updated_at
+FROM epic e
+where active=false
+ORDER BY e.project_id, e.name;
+
 create view public.vw_change_list as
 SELECT c.id,
        c.ref_uuid,
@@ -252,13 +273,30 @@ SELECT c.id,
        c.epic_id,
        e.name || ' (#' || c.epic_id || ')'                                                         AS epic_name,
        c.title,
-       c.active,
        (select count(*) from testcase tc where tc.change_id = c.id and tc.done = true)             as done_tc,
        (select count(*) from testcase tc where tc.change_id = c.id)                                as total_tc,
        c.updated_at
 FROM change c
          LEFT JOIN epic e ON c.epic_id = e.id
 where c.active=true
+ORDER BY c.project_id, c.updated_at DESC;
+
+create view public.vw_change_inactive_list as
+SELECT c.id,
+       c.ref_uuid,
+       (case when c.ref > 99 then c.ref::text else lpad(c.ref::text, 3, '0') end) || '-' || c.slug as ref_slug,
+       c.project_id,
+       c.change_phase,
+       c.change_types,
+       c.epic_id,
+       e.name || ' (#' || c.epic_id || ')'                                                         AS epic_name,
+       c.title,
+       (select count(*) from testcase tc where tc.change_id = c.id and tc.done = true)             as done_tc,
+       (select count(*) from testcase tc where tc.change_id = c.id)                                as total_tc,
+       c.updated_at
+FROM change c
+         LEFT JOIN epic e ON c.epic_id = e.id
+where c.active=false
 ORDER BY c.project_id, c.updated_at DESC;
 
 create view public.vw_change_details as

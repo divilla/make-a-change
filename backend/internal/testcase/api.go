@@ -35,14 +35,14 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 func (a *API) list(c *echo.Context) error {
 	var req domain.TestCaseListRequest
 	if err := c.Bind(&req); err != nil {
-		return app.InvalidPayload(err, "invalid test case list payload")
+		return app.PayloadError(err, "invalid test case list payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return app.HTTP(app.Validation(v.Errors, app.ErrTestCaseInvalidInput))
+		return app.HTTPError(app.ValidationError(v.Errors, app.ErrTestCaseInvalidInput))
 	}
 	res, err := a.s.List(c.Request().Context(), req)
 	if err != nil {
-		return app.HTTP(err)
+		return app.HTTPError(err)
 	}
 	return c.JSON(http.StatusOK, &res)
 }
@@ -50,14 +50,14 @@ func (a *API) list(c *echo.Context) error {
 func (a *API) create(c *echo.Context) error {
 	var req domain.TestCaseCreateRequest
 	if err := c.Bind(&req); err != nil {
-		return app.InvalidPayload(err, "invalid test case create payload")
+		return app.PayloadError(err, "invalid test case create payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return app.HTTP(app.Validation(v.Errors, app.ErrTestCaseInvalidInput))
+		return app.HTTPError(app.ValidationError(v.Errors, app.ErrTestCaseInvalidInput))
 	}
 	res, err := a.s.Create(c.Request().Context(), req)
 	if err != nil {
-		return app.HTTP(err)
+		return app.HTTPError(err)
 	}
 	return c.JSON(http.StatusCreated, &res)
 }
@@ -65,13 +65,13 @@ func (a *API) create(c *echo.Context) error {
 func (a *API) updateTestCase(c *echo.Context) error {
 	var req domain.TestCaseUpdateRequest
 	if err := c.Bind(&req); err != nil {
-		return app.InvalidPayload(err, "invalid test case update payload")
+		return app.PayloadError(err, "invalid test case update payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return app.HTTP(app.Validation(v.Errors, app.ErrTestCaseInvalidInput))
+		return app.HTTPError(app.ValidationError(v.Errors, app.ErrTestCaseInvalidInput))
 	}
 	if err := a.s.UpdateTestCase(c.Request().Context(), req); err != nil {
-		return app.HTTP(err)
+		return app.HTTPError(err)
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -79,13 +79,13 @@ func (a *API) updateTestCase(c *echo.Context) error {
 func (a *API) updateTestCaseDone(c *echo.Context) error {
 	var req domain.TestCaseUpdateDoneRequest
 	if err := c.Bind(&req); err != nil {
-		return app.InvalidPayload(err, "invalid test case done payload")
+		return app.PayloadError(err, "invalid test case done payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return app.HTTP(app.Validation(v.Errors, app.ErrTestCaseInvalidInput))
+		return app.HTTPError(app.ValidationError(v.Errors, app.ErrTestCaseInvalidInput))
 	}
 	if err := a.s.UpdateTestCaseDone(c.Request().Context(), req); err != nil {
-		return app.HTTP(err)
+		return app.HTTPError(err)
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -93,13 +93,13 @@ func (a *API) updateTestCaseDone(c *echo.Context) error {
 func (a *API) delete(c *echo.Context) error {
 	var req domain.TestCaseIDRequest
 	if err := c.Bind(&req); err != nil {
-		return app.InvalidPayload(err, "invalid test case delete payload")
+		return app.PayloadError(err, "invalid test case delete payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return app.HTTP(app.Validation(v.Errors, app.ErrTestCaseInvalidInput))
+		return app.HTTPError(app.ValidationError(v.Errors, app.ErrTestCaseInvalidInput))
 	}
 	if err := a.s.Delete(c.Request().Context(), req); err != nil {
-		return app.HTTP(err)
+		return app.HTTPError(err)
 	}
 	return c.NoContent(http.StatusNoContent)
 }

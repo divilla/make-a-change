@@ -8,6 +8,7 @@ type (
 		ID          int       `json:"id"`
 		ProjectID   int       `json:"project_id"`
 		Name        string    `json:"name"`
+		Active      bool      `json:"active"`
 		DoneTC      int64     `json:"done_tc"`
 		TotalTC     int64     `json:"total_tc"`
 		Completed   int64     `json:"completed"`

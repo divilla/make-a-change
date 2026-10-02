@@ -28,7 +28,7 @@ spec:
       body: '{"id":${change_id}}'
     response:
       expected_status: 200
-      expected_body: '{"id":${change_id},"project_id":${change_project},"title":"APIHydra  change","change_phase":"backlog","after_change_id":null,"after_change_name":null,"epic_id":null,"open":true,"done_tc":0,"total_tc":0,"completed":0,"pr_url":""}'
+      expected_body: '{"id":${change_id},"project_id":${change_project},"title":"APIHydra  change","change_phase":"backlog","after_change_id":null,"after_change_name":null,"epic_id":null,"active":true,"done_tc":0,"total_tc":0,"completed":0,"pr_url":""}'
       expected_types:
         .created_at:
         - string
@@ -288,8 +288,29 @@ spec:
       expected_body: '{"pr_url":"https://example.com/pull/123"}'
   - request:
       method: POST
-      path: /api/v1/change/update-open
-      body: '{"id":${change_id},"open":false}'
+      path: /api/v1/change/update-active
+      body: '{"id":${change_id},"active":false}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":${change_project}}'
+    response:
+      expected_status: 200
+      expected_types: {}
+      expected_body: '[{"id":${change_prerequisite}}]'
+  - request:
+      method: POST
+      path: /api/v1/change/list-inactive
+      body: '{"project_id":${change_project}}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${change_id}}]'
+  - request:
+      method: POST
+      path: /api/v1/change/update-title
+      body: '{"id":${change_id},"title":"Updated title"}'
     response:
       expected_status: 204
   - request:
@@ -298,20 +319,27 @@ spec:
       body: '{"id":${change_id}}'
     response:
       expected_status: 200
-      expected_body: '{"open":false}'
+      expected_body: '{"active":false}'
   - request:
       method: POST
-      path: /api/v1/change/update-open
-      body: '{"id":${change_id},"open":true}'
+      path: /api/v1/change/update-active
+      body: '{"id":${change_id},"active":true}'
     response:
       expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/list-inactive
+      body: '{"project_id":${change_project}}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
   - request:
       method: POST
       path: /api/v1/change/details
       body: '{"id":${change_id}}'
     response:
       expected_status: 200
-      expected_body: '{"open":true}'
+      expected_body: '{"active":true}'
   - request:
       method: POST
       path: /api/v1/change/details
@@ -360,7 +388,7 @@ spec:
       body: '{'
     response:
       expected_status: 400
-      expected_types:
+      expected_types: &id001
         .message:
         - string
   - request:
@@ -369,7 +397,7 @@ spec:
       body: '{"project_id":"bad"}'
     response:
       expected_status: 400
-      expected_types:
+      expected_types: &id002
         .message:
         - string
   - request:
@@ -378,7 +406,7 @@ spec:
       body: '{"project_id":0}'
     response:
       expected_status: 400
-      expected_types:
+      expected_types: &id003
         .message:
         - string
   - request:
@@ -387,7 +415,7 @@ spec:
       body: '{"project_id":-1}'
     response:
       expected_status: 400
-      expected_types:
+      expected_types: &id004
         .message:
         - string
   - request:
@@ -609,7 +637,7 @@ spec:
       expected_status: 404
   - request:
       method: POST
-      path: /api/v1/change/update-open
+      path: /api/v1/change/update-active
       body: '{'
     response:
       expected_status: 400
@@ -618,8 +646,8 @@ spec:
         - string
   - request:
       method: POST
-      path: /api/v1/change/update-open
-      body: '{"open":true,"id":"bad"}'
+      path: /api/v1/change/update-active
+      body: '{"active":true,"id":"bad"}'
     response:
       expected_status: 400
       expected_types:
@@ -627,8 +655,8 @@ spec:
         - string
   - request:
       method: POST
-      path: /api/v1/change/update-open
-      body: '{"open":true,"id":0}'
+      path: /api/v1/change/update-active
+      body: '{"active":true,"id":0}'
     response:
       expected_status: 400
       expected_types:
@@ -636,8 +664,8 @@ spec:
         - string
   - request:
       method: POST
-      path: /api/v1/change/update-open
-      body: '{"open":true,"id":-1}'
+      path: /api/v1/change/update-active
+      body: '{"active":true,"id":-1}'
     response:
       expected_status: 400
       expected_types:
@@ -645,8 +673,8 @@ spec:
         - string
   - request:
       method: POST
-      path: /api/v1/change/update-open
-      body: '{"open":true,"id":${change_missing}}'
+      path: /api/v1/change/update-active
+      body: '{"active":true,"id":${change_missing}}'
     response:
       expected_status: 404
   - request:
@@ -849,8 +877,8 @@ spec:
         - string
   - request:
       method: POST
-      path: /api/v1/change/update-open
-      body: '{"id":${change_id},"open":null}'
+      path: /api/v1/change/update-active
+      body: '{"id":${change_id},"active":null}'
     response:
       expected_status: 400
       expected_types:
@@ -858,8 +886,8 @@ spec:
         - string
   - request:
       method: POST
-      path: /api/v1/change/update-open
-      body: '{"id":${change_id},"open":"true"}'
+      path: /api/v1/change/update-active
+      body: '{"id":${change_id},"active":"true"}'
     response:
       expected_status: 400
       expected_types:
@@ -867,8 +895,8 @@ spec:
         - string
   - request:
       method: POST
-      path: /api/v1/change/update-open
-      body: '{"id":${change_id},"open":1}'
+      path: /api/v1/change/update-active
+      body: '{"id":${change_id},"active":1}'
     response:
       expected_status: 400
       expected_types:
@@ -876,8 +904,8 @@ spec:
         - string
   - request:
       method: POST
-      path: /api/v1/change/update-open
-      body: '{"id":${change_id},"open":[]}'
+      path: /api/v1/change/update-active
+      body: '{"id":${change_id},"active":[]}'
     response:
       expected_status: 400
       expected_types:
@@ -885,7 +913,7 @@ spec:
         - string
   - request:
       method: POST
-      path: /api/v1/change/update-open
+      path: /api/v1/change/update-active
       body: '{"id":${change_id}}'
     response:
       expected_status: 400
@@ -1033,4 +1061,1119 @@ spec:
       body: '{"id":${change_id}}'
     response:
       expected_status: 200
-      expected_body: '{"title":"Updated title","open":true,"after_change_id":null,"epic_id":null,"pr_url":"https://example.com/pull/123","change_types":[]}'
+      expected_body: '{"title":"Updated title","active":true,"after_change_id":null,"epic_id":null,"pr_url":"https://example.com/pull/123","change_types":[]}'
+  - request:
+      method: POST
+      path: /api/v1/change/list-inactive
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types: *id001
+  - request:
+      method: POST
+      path: /api/v1/change/list-inactive
+      body: '{"project_id":"bad"}'
+    response:
+      expected_status: 400
+      expected_types: *id002
+  - request:
+      method: POST
+      path: /api/v1/change/list-inactive
+      body: '{"project_id":0}'
+    response:
+      expected_status: 400
+      expected_types: *id003
+  - request:
+      method: POST
+      path: /api/v1/change/list-inactive
+      body: '{"project_id":-1}'
+    response:
+      expected_status: 400
+      expected_types: *id004
+  - request:
+      method: POST
+      path: /api/v1/change/list-inactive
+      body: '{"project_id":${change_missing_project}}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/change/update-slug
+      body: '{'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change slug payload"}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-slug
+      body: '{"id":"wrong","slug":"valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change slug payload"}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-slug
+      body: '{"id":0,"slug":"valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-slug
+      body: '{"id":${change_missing},"slug":"valid"}'
+    response:
+      expected_status: 404
+      expected_body: '{"message":"change not found"}'
+
+  # Independent error cases: each malformed field has otherwise valid input.
+  # list: project_id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # list: project_id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # list: project_id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":-1.5}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change list payload"}'
+  # list: project_id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":-9223372036854775809}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change list payload"}'
+  # list: array body
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change list payload"}'
+  # list: string body
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change list payload"}'
+  # list: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/change/list
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # list-inactive: project_id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/list-inactive
+      body: '{}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # list-inactive: project_id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/list-inactive
+      body: '{"project_id":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # list-inactive: project_id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/list-inactive
+      body: '{"project_id":-1.5}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change inactive list payload"}'
+  # list-inactive: project_id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/list-inactive
+      body: '{"project_id":-9223372036854775809}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change inactive list payload"}'
+  # list-inactive: array body
+  - request:
+      method: POST
+      path: /api/v1/change/list-inactive
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change inactive list payload"}'
+  # list-inactive: string body
+  - request:
+      method: POST
+      path: /api/v1/change/list-inactive
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change inactive list payload"}'
+  # list-inactive: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/change/list-inactive
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # details: id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # details: id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # details: id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":-1.5}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change details payload"}'
+  # details: id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":-9223372036854775809}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change details payload"}'
+  # details: array body
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change details payload"}'
+  # details: string body
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change details payload"}'
+  # details: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/change/details
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # delete: id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/delete
+      body: '{}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # delete: id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/delete
+      body: '{"id":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # delete: id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/delete
+      body: '{"id":-1.5}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change delete payload"}'
+  # delete: id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/delete
+      body: '{"id":-9223372036854775809}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change delete payload"}'
+  # delete: array body
+  - request:
+      method: POST
+      path: /api/v1/change/delete
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change delete payload"}'
+  # delete: string body
+  - request:
+      method: POST
+      path: /api/v1/change/delete
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change delete payload"}'
+  # delete: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/change/delete
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # create: project_id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"title":"Title","brief":"Brief"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # create: project_id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":null,"title":"Title","brief":"Brief"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # create: project_id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":-1.5,"title":"Title","brief":"Brief"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change create payload"}'
+  # create: project_id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":-9223372036854775809,"title":"Title","brief":"Brief"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change create payload"}'
+  # create: title omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${change_project},"brief":"Brief"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # create: title null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${change_project},"title":null,"brief":"Brief"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # create: title number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${change_project},"title":1,"brief":"Brief"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change create payload"}'
+  # create: brief omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${change_project},"title":"Title"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # create: brief null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${change_project},"title":"Title","brief":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # create: brief number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${change_project},"title":"Title","brief":1}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change create payload"}'
+  # create: ref_uuid number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${change_project},"title":"Title","brief":"Brief","ref_uuid":1}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change create payload"}'
+  # create: ref_uuid object; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${change_project},"title":"Title","brief":"Brief","ref_uuid":{}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change create payload"}'
+  # create: array body
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change create payload"}'
+  # create: string body
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change create payload"}'
+  # create: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/change/create
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # update-title: id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-title
+      body: '{"title":"Title"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-title: id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-title
+      body: '{"id":null,"title":"Title"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-title: id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-title
+      body: '{"id":-1.5,"title":"Title"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change title payload"}'
+  # update-title: id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-title
+      body: '{"id":-9223372036854775809,"title":"Title"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change title payload"}'
+  # update-title: title omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-title
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-title: title null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-title
+      body: '{"id":${change_id},"title":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-title: title number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-title
+      body: '{"id":${change_id},"title":1}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change title payload"}'
+  # update-title: array body
+  - request:
+      method: POST
+      path: /api/v1/change/update-title
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change title payload"}'
+  # update-title: string body
+  - request:
+      method: POST
+      path: /api/v1/change/update-title
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change title payload"}'
+  # update-title: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/change/update-title
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # update-phase: id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-phase
+      body: '{"change_phase":"backlog"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-phase: id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-phase
+      body: '{"id":null,"change_phase":"backlog"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-phase: id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-phase
+      body: '{"id":-1.5,"change_phase":"backlog"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change phase payload"}'
+  # update-phase: id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-phase
+      body: '{"id":-9223372036854775809,"change_phase":"backlog"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change phase payload"}'
+  # update-phase: change_phase omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-phase
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-phase: change_phase null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-phase
+      body: '{"id":${change_id},"change_phase":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-phase: change_phase number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-phase
+      body: '{"id":${change_id},"change_phase":1}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change phase payload"}'
+  # update-phase: array body
+  - request:
+      method: POST
+      path: /api/v1/change/update-phase
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change phase payload"}'
+  # update-phase: string body
+  - request:
+      method: POST
+      path: /api/v1/change/update-phase
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change phase payload"}'
+  # update-phase: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/change/update-phase
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # update-slug: id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-slug
+      body: '{"slug":"valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-slug: id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-slug
+      body: '{"id":null,"slug":"valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-slug: id negative; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-slug
+      body: '{"id":-1,"slug":"valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-slug: id string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-slug
+      body: '{"id":"bad","slug":"valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change slug payload"}'
+  # update-slug: id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-slug
+      body: '{"id":-1.5,"slug":"valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change slug payload"}'
+  # update-slug: id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-slug
+      body: '{"id":-9223372036854775809,"slug":"valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change slug payload"}'
+  # update-slug: slug omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-slug
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-slug: slug null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-slug
+      body: '{"id":${change_id},"slug":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-slug: slug empty; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-slug
+      body: '{"id":${change_id},"slug":""}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-slug: slug whitespace; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-slug
+      body: '{"id":${change_id},"slug":" \t "}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-slug: slug number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-slug
+      body: '{"id":${change_id},"slug":1}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change slug payload"}'
+  # update-slug: array body
+  - request:
+      method: POST
+      path: /api/v1/change/update-slug
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change slug payload"}'
+  # update-slug: string body
+  - request:
+      method: POST
+      path: /api/v1/change/update-slug
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change slug payload"}'
+  # update-slug: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/change/update-slug
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # update-pr-url: id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '{"pr_url":"https://example.com/pr"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-pr-url: id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '{"id":null,"pr_url":"https://example.com/pr"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-pr-url: id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '{"id":-1.5,"pr_url":"https://example.com/pr"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change pr url payload"}'
+  # update-pr-url: id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '{"id":-9223372036854775809,"pr_url":"https://example.com/pr"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change pr url payload"}'
+  # update-pr-url: pr_url omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-pr-url: pr_url null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '{"id":${change_id},"pr_url":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-pr-url: pr_url whitespace; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '{"id":${change_id},"pr_url":" \t "}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-pr-url: pr_url number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '{"id":${change_id},"pr_url":1}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change pr url payload"}'
+  # update-pr-url: array body
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change pr url payload"}'
+  # update-pr-url: string body
+  - request:
+      method: POST
+      path: /api/v1/change/update-pr-url
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change pr url payload"}'
+  # update-pr-url: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/change/update-pr-url
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # update-active: id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '{"active":true}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-active: id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '{"id":null,"active":true}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-active: id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '{"id":-1.5,"active":true}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change active payload"}'
+  # update-active: id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '{"id":-9223372036854775809,"active":true}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change active payload"}'
+  # update-active: active object; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '{"id":${change_id},"active":{}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change active payload"}'
+  # update-active: array body
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change active payload"}'
+  # update-active: string body
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change active payload"}'
+  # update-active: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/change/update-active
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # update-epic: id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"epic_id":${change_epic}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-epic: id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"id":null,"epic_id":${change_epic}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-epic: id zero; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"id":0,"epic_id":${change_epic}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-epic: id negative; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"id":-1,"epic_id":${change_epic}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-epic: id string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"id":"bad","epic_id":${change_epic}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change epic payload"}'
+  # update-epic: id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"id":-1.5,"epic_id":${change_epic}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change epic payload"}'
+  # update-epic: id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"id":-9223372036854775809,"epic_id":${change_epic}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change epic payload"}'
+  # update-epic: epic_id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"id":${change_id},"epic_id":-1.5}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change epic payload"}'
+  # update-epic: epic_id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"id":${change_id},"epic_id":-9223372036854775809}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change epic payload"}'
+  # update-epic: array body
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change epic payload"}'
+  # update-epic: string body
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change epic payload"}'
+  # update-epic: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/change/update-epic
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # update-after-change: id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{"after_change_id":${change_missing}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-after-change: id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{"id":null,"after_change_id":${change_missing}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-after-change: id zero; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{"id":0,"after_change_id":${change_missing}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-after-change: id negative; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{"id":-1,"after_change_id":${change_missing}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-after-change: id string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{"id":"bad","after_change_id":${change_missing}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change after change payload"}'
+  # update-after-change: id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{"id":-1.5,"after_change_id":${change_missing}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change after change payload"}'
+  # update-after-change: id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{"id":-9223372036854775809,"after_change_id":${change_missing}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change after change payload"}'
+  # update-after-change: after_change_id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{"id":${change_id},"after_change_id":-1.5}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change after change payload"}'
+  # update-after-change: after_change_id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '{"id":${change_id},"after_change_id":-9223372036854775809}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change after change payload"}'
+  # update-after-change: array body
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change after change payload"}'
+  # update-after-change: string body
+  - request:
+      method: POST
+      path: /api/v1/change/update-after-change
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change after change payload"}'
+  # update-after-change: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/change/update-after-change
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # update-types: id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-types
+      body: '{"change_types":[]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-types: id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-types
+      body: '{"id":null,"change_types":[]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  # update-types: id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-types
+      body: '{"id":-1.5,"change_types":[]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change types payload"}'
+  # update-types: id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-types
+      body: '{"id":-9223372036854775809,"change_types":[]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change types payload"}'
+  # update-types: change_types object; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/change/update-types
+      body: '{"id":${change_id},"change_types":{}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change types payload"}'
+  # update-types: array body
+  - request:
+      method: POST
+      path: /api/v1/change/update-types
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change types payload"}'
+  # update-types: string body
+  - request:
+      method: POST
+      path: /api/v1/change/update-types
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change types payload"}'
+  # update-types: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/change/update-types
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+
+  # Errors from PostgreSQL-rejected NUL text return a masked 500; owned IDs only.
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${change_project},"title":"Invalid\u0000title","brief":"Valid brief"}'
+    response:
+      expected_status: 500
+      expected_body: '{"message":"Internal Server Error"}'
+      expected_types:
+        if keys == ["message"] then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${change_project},"title":"Valid title","brief":"Invalid\u0000brief"}'
+    response:
+      expected_status: 500
+      expected_body: '{"message":"Internal Server Error"}'
+      expected_types:
+        if keys == ["message"] then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/change/update-title
+      body: '{"id":${change_id},"title":"Invalid\u0000title"}'
+    response:
+      expected_status: 500
+      expected_body: '{"message":"Internal Server Error"}'
+      expected_types:
+        if keys == ["message"] then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"title":"Updated title","active":true,"after_change_id":null,"epic_id":null,"pr_url":"https://example.com/pull/123","change_types":[]}'

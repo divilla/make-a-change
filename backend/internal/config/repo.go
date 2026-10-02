@@ -58,7 +58,7 @@ func (r *Repo) Details(ctx context.Context, req domain.ConfigSlugRequest) (domai
 func (r *Repo) Insert(ctx context.Context, req domain.ConfigWriteRequest) (domain.ConfigSlugRequest, error) {
 	var result domain.ConfigSlugRequest
 	err := r.pool.QueryRow(ctx, `insert into public.config (`+columns+`) values ($1,$2,$3,$4,$5,$6,$7) returning slug`, req.Slug, req.ProjectDocs, req.EpicDocs, req.ChangeDocs, req.ChangePhases, req.ChangeColors, req.ChangeTypes).Scan(&result.Slug)
-	return result, app.ConfigInsert(err)
+	return result, app.ConfigInsertError(err)
 }
 
 // Update replaces all mutable arrays without changing the slug or reloading.
@@ -75,12 +75,11 @@ func (r *Repo) Update(ctx context.Context, req domain.ConfigWriteRequest) error 
 
 // Delete atomically refuses deletion of a config referenced by any project.
 func (r *Repo) Delete(ctx context.Context, req domain.ConfigSlugRequest) error {
-	var deleted bool
-	err := r.pool.QueryRow(ctx, `select public.fn_config_delete($1)`, req.Slug).Scan(&deleted)
+	tag, err := r.pool.Exec(ctx, "delete from public.config where slug = $1", req.Slug)
 	if err != nil {
 		return app.DatabaseError(err, nil, app.ErrConfigInUse)
 	}
-	if !deleted {
+	if tag.RowsAffected() == 0 {
 		return app.ErrConfigNotFound
 	}
 	return nil

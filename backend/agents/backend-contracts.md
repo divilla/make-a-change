@@ -1,27 +1,69 @@
 # Backend route, schema and error ledger — validation-cause repair
 
 Authority: read-only `../../docs/backend-architecture.md`, `../../db/init.sql`
-and `../../db/seed.sql`. The current inventory is **38 registered method/path
-pairs**: 11 change, four doc, five config, 11 project/epic, five testcase and two
-health operations. APIHydra exercises all 38. The current shared doc/config
-contract is recorded at the end of this ledger; numbered P/R sections preserve
-historical refactor evidence and are superseded where they describe removed doc
-routes, get routes, old timestamp names, or silent change-type filtering.
+and `../../db/seed.sql`. The current inventory is **45 registered method/path
+pairs**: 13 change, eight doc, five config, 12 project/epic, five testcase and two
+health operations. APIHydra exercises all 45 with successful status and response
+assertions. The numbered P/R sections preserve historical refactor evidence;
+the current schema alignment below supersedes their older API/SQL contracts.
 No authentication middleware or session/token implementation is added.
 
-
-Current HTTP tests use only `backend/apih-tests/`, with seven endpoint groups
+Current HTTP tests use only `backend/apih-tests/`, with seven independent groups
 running concurrently in APIHydra mode1. Each group executes numbered init/main/post
 files serially. Setup and cleanup use API endpoints and captured response IDs only.
-Plain `apih` from the suite directory and `make -C backend api-test` run the same
-469 requests against the configured backend. SQL fixtures, forced outages and
-the database lifecycle runner have been removed. All 38 operations have passing
-success cases. The Make target now runs an owned instrumented backend against
-the existing database and reports 943/1045 (90.2392%) statements without a gate;
-manual `apih` still uses the configured running server.
-The legacy Go HTTP harness and runner have been removed. See
-[the current suite guide](../apih-tests/coverage.md) for the runnable layout and
-latest coverage; older P/R sections below retain historical evidence.
+Plain `apih` uses its configured running server; `make -C backend api-test` runs an
+owned instrumented server against the user-designated development database,
+without SQL setup or database lifecycle management. The 90% statement gate remains
+strict and independent of unit coverage. See [the suite guide](../apih-tests/coverage.md)
+and [the checkpoint](backend-refactor-checkpoint.md) for fresh measurements.
+
+## Schema alignment — 2026-10-02
+
+Project reads use `vw_project_list` plus base-table `config_slug`, `last_ref` and
+`active`. All projects remain listed, ordered active DESC, updated_at DESC, id DESC.
+Epic and change active/inactive lists use the corresponding separate views.
+Epic details combine both views in one UNION ALL statement and join the base
+`active` field; change details use the unfiltered details view. Inactive details,
+updates and child creation remain supported. Epic lists order by name,id,
+matching the current view's name ordering within each requested project.
+
+Project/epic DELETE first attempts physical deletion. Only the central mapped
+SQLSTATE23503 dependency error triggers a separate `active=false,updated_at=now()`
+UPDATE. Both physical deletion and successful deactivation return empty204.
+Missing rows remain404; other delete errors and failed deactivation remain errors.
+The two statements are independent, with no Go transaction or atomic-workflow claim.
+The fallback does not modify children or their activity. Unit tests cover wrapped
+FK semantics, absent rows, unchanged contexts/requests and both failure stages;
+APIHydra verifies actual FK fallbacks and subsequent details/list reads.
+
+`/change/update-active` replaces `/change/update-open`; it requires an explicit
+`active` boolean. Project JSON exposes `config_slug`. `/doc/list-active` replaces
+`/doc/current` and reads `vw_doc_active`, scanning `doc_id` as the domain ID.
+All document reads include nullable `deleted_at`; list/details retain soft-deleted
+history. `/doc/comment-list` filters only doc_type=comment, including deleted
+comments. Comment creation uses its distinct function without config-type checks
+or active selection; normal `/doc/insert` rejects comment even if configured.
+Comment updates accept an explicit empty string, reject missing/null body, and
+use the function that edits only comments; missing/non-comment IDs return404.
+`agent_edit` is required for inserts and is not editable through comment-update,
+matching the current function signature. Document deletion delegates to
+`fn_doc_delete`, retaining history and removing the active selection atomically.
+
+Document function calls explicitly cast parameters to their checked-in SQL types,
+selecting the authoritative signatures even when the live database retains older
+overloads. `fn_doc_insert` now always returns its inserted ID: the repository scans
+that ID directly, and parent validation remains in the service rather than relying
+on the obsolete function-null parent contract. Config deletion is a direct DELETE
+with FK409 and affected-row404; the removed `fn_config_delete` is no longer used.
+
+Tests in each affected module's `schema_alignment_test.go`, existing repository,
+service/API matrices, `TestAPIConstructorRouteInventory` and the ledger audit
+cover all changed contracts. New public operations have APIHydra happy/negative
+cases and independent reads. The error-suite refresh adds isolated field errors,
+wrong-method checks for every operation, removed-route checks, parent errors and
+real PostgreSQL-rejected NUL-text errors with masked500/state-retention assertions.
+List query/scan failures, outages and missing-document deletion remain meaningful
+unit-only cases; no outages or guessed mutation IDs are used for HTTP coverage. No DB, CLI or frontend file is edited by this task.
 
 ## 011 validation-cause repair
 
@@ -89,26 +131,28 @@ statement counts, baseline lint debt and the factory/R2 handoff.
 | --- | --- | --- | --- | --- |
 | GET | /api/v1/health | 200 health JSON after pool ping; 503 degraded JSON on ping error | Retain; exact body unit tested | pass |
 | GET | /api/health | Same health alias and database ping | Retain | pass |
-| POST | /api/v1/project/list | 200 array; current view columns; explicit deterministic ordering | P2 aligned | pass (project/02-main.yaml) |
-| POST | /api/v1/project/details | 200 database-backed details | P2 aligned | pass (project/02-main.yaml) |
+| POST | /api/v1/project/list | 200 all active/inactive projects; vw_project_list; active DESC,updated_at DESC,id DESC | P2 aligned | pass (project/02-main.yaml) |
+| POST | /api/v1/project/details | 200 database-backed active/inactive details, config_slug and active | P2 aligned | pass (project/02-main.yaml) |
 | POST | /api/v1/project/config | 200 selected config slug and all six ordered arrays; unavailable join 404 | P2 aligned, no fallback | pass (project/02-main.yaml) |
 | POST | /api/v1/project/create | 201 {id}; one INSERT returning ID | P2 aligned | pass (project/02-main.yaml) |
 | POST | /api/v1/project/update | 204 empty; one name/updated_at UPDATE, including same name | P2 aligned | pass (project/02-main.yaml) |
-| POST | /api/v1/project/delete | 204 empty; one DELETE, FK conflict 409, missing 404 | P2 aligned | pass (project/02-main.yaml) |
-| POST | /api/v1/epic/list | 200 array; current view columns; explicit deterministic ordering | P2 aligned | pass (epic/02-main.yaml) |
-| POST | /api/v1/epic/details | 200 database-backed details | P2 aligned | pass (epic/02-main.yaml) |
+| POST | /api/v1/project/delete | 204 empty; DELETE, FK-only deactivation fallback; missing404; fallback errors propagated | P2 aligned | pass (project/02-main.yaml) |
+| POST | /api/v1/epic/list | 200 active epics from vw_epic_list; name,id order | P2 aligned | pass (epic/02-main.yaml) |
+| POST | /api/v1/epic/list-inactive | 200 inactive epics from vw_epic_inactive_list; name,id order | current | pass (epic/02-main.yaml) |
+| POST | /api/v1/epic/details | 200 active/inactive details from both epic views and stored active | P2 aligned | pass (epic/02-main.yaml) |
 | POST | /api/v1/epic/create | 201 {id}; one INSERT returning ID | P2 aligned | pass (epic/02-main.yaml) |
 | POST | /api/v1/epic/update | 204 empty; one name/updated_at UPDATE, including same name | P2 aligned | pass (epic/02-main.yaml) |
-| POST | /api/v1/epic/delete | 204 empty; one DELETE, FK conflict 409, missing 404 | P2 aligned | pass (epic/02-main.yaml) |
+| POST | /api/v1/epic/delete | 204 empty; DELETE, FK-only deactivation fallback; missing404; fallback errors propagated | P2 aligned | pass (epic/02-main.yaml) |
 | POST | /api/v1/change/list | 200 current vw_change_list columns; service int64 completion; updated_at DESC,id; [] for absent project | P3 aligned | pass (change/02-main.yaml) |
+| POST | /api/v1/change/list-inactive | 200 inactive vw_change_inactive_list entries; same completion/ordering | current | pass (change/02-main.yaml) |
 | POST | /api/v1/change/details | 200 current vw_change_details; flat fields, nullable after_change_id and references, no inline docs/version/testcases; 404 missing | P3 aligned | pass (change/02-main.yaml) |
 | POST | /api/v1/change/create | 201 exact {id}; selected config must support backlog/brief; UUIDv7 default or preserved caller UUID; fn_change_insert only | P3 aligned | pass (change/02-main.yaml) |
 | POST | /api/v1/change/update-epic | 204; targeted parent/epic project preflight, sp_change_epic_update; nil detaches; no config | P3 aligned | pass (change/02-main.yaml) |
 | POST | /api/v1/change/update-phase | 204; selected-config phase validation then sp_change_phase_update | P3 aligned | pass (change/02-main.yaml) |
-| POST | /api/v1/change/update-open | 204; explicit bool; direct UPDATE open/updated_at; affected-row 404 | P3 aligned | pass (change/02-main.yaml) |
+| POST | /api/v1/change/update-active | 204; explicit bool; direct UPDATE active/updated_at; affected-row 404 | P3 aligned | pass (change/02-main.yaml) |
 | POST | /api/v1/change/update-types | 204; ordered trim/dedup/validation using selected config; direct UPDATE types/updated_at, including clears | P3 aligned | pass (change/02-main.yaml) |
 | POST | /api/v1/change/update-title | 204; existence preflight then sp_change_title_update; DB whitespace normalization; no config | P3 aligned | pass (change/02-main.yaml) |
-| POST | /api/v1/change/update-slug | 204; accepts only the nonempty lowercase `[a-z0-9_-]` suffix in `slug`; direct UPDATE; list/details expose nullable `ref_slug` as the ref padded to three digits for values 0–99, otherwise unchanged, followed by `-` and the suffix | detail editor | unit covered; APIHydra success/rejection assertions authored, live run pending designation (change/02-main.yaml) |
+| POST | /api/v1/change/update-slug | 204; accepts only the nonempty lowercase `[a-z0-9_-]` suffix in `slug`; direct UPDATE; list/details expose nullable `ref_slug` as the ref padded to three digits for values 0–99, otherwise unchanged, followed by `-` and the suffix | detail editor | pass (change/02-main.yaml) |
 | POST | /api/v1/change/update-pr-url | 204; nonblank http(s) URL; direct UPDATE pr_url/updated_at; affected-row 404; no config | P3 aligned | pass (change/02-main.yaml) |
 | POST | /api/v1/change/delete | 204; direct DELETE; actual testcase FK 409; missing 404; docs retained; no config | P3 aligned | pass (change/02-main.yaml) |
 | POST | /api/v1/test-case/list | 200 ordered six-column public.testcase array after live-parent check; [] for no cases; missing parent404 | P4 aligned | pass (testcase/02-main.yaml) |
@@ -377,10 +421,14 @@ Change types retain their established normalization but reject values outside
 change_types; phases reject values outside change_phases. Config update replaces all six arrays.
 Config deletion locks project writes while checking references and deleting.
 
-| POST | /api/v1/doc/list | 200 all docs filtered by ref_id/ref_table; id desc | current | doc/02-main.yaml |
-| POST | /api/v1/doc/current | 200 current docs filtered by ref_id/ref_table; id desc | current | doc/02-main.yaml |
+| POST | /api/v1/doc/list | 200 all history, including comments and soft-deleted docs; ref_id/ref_table; id DESC | current | doc/02-main.yaml |
+| POST | /api/v1/doc/list-active | 200 selected docs from vw_doc_active; doc_id DESC; nullable deleted_at | current | doc/02-main.yaml |
 | POST | /api/v1/doc/details | 200 one doc by id; 404 absent | current | doc/02-main.yaml |
-| POST | /api/v1/doc/insert | 201 ID only; append and retire prior current docs | current | doc/02-main.yaml |
+| POST | /api/v1/doc/insert | 201 ID only; append and select active document; fn_doc_insert(text,bigint,text,text,bool) | current | doc/02-main.yaml |
+| POST | /api/v1/doc/comment-list | 200 all comments for ref_table/ref_id, including soft-deleted history; id DESC | current | pass (doc/02-main.yaml) |
+| POST | /api/v1/doc/comment-insert | 201 ID only; validated live parent; fn_doc_comment_insert; no active selection | current | pass (doc/02-main.yaml) |
+| POST | /api/v1/doc/comment-update | 204 empty; explicit body, including empty string; fn_doc_comment_update; missing/non-comment404 | current | pass (doc/02-main.yaml) |
+| POST | /api/v1/doc/delete | 204 empty; fn_doc_delete retains history and removes active selection; missing404 | current | pass (doc/02-main.yaml); missing unit-tested |
 | POST | /api/v1/config/list | 200 configs ordered by slug | current | config/02-main.yaml |
 | POST | /api/v1/config/details | 200 config by slug; 404 absent | current | config/02-main.yaml |
 | POST | /api/v1/config/insert | 201 slug only; 409 duplicate | current | config/02-main.yaml |

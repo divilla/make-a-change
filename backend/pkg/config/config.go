@@ -24,11 +24,11 @@ func New() *Config {
 	loader := config.New("application", config.ParseEnv)
 	loader.AddDriver(yaml.Driver)
 	if err := loader.LoadFiles("config/dev.yaml"); err != nil {
-		panic(app.Wrap(err, "configuration"))
+		panic(app.WrapError(err, "configuration"))
 	}
 	var cfg Config
 	if err := loader.Decode(&cfg); err != nil {
-		panic(app.Wrap(err, "configuration"))
+		panic(app.WrapError(err, "configuration"))
 	}
 
 	cfg.applyDefaults()

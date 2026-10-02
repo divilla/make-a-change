@@ -96,10 +96,10 @@ func newBoundary(t *testing.T) *boundaryPool {
 func TestRepositoryReads(t *testing.T) {
 	now := time.Now()
 	failure := errors.New("read failed")
-	values := []any{7, 9, "Name", int64(70000), int64(100000), 80000, now, now}
-	for _, op := range []string{"details", "list"} {
+	values := []any{7, 9, "Name", int64(70000), int64(100000), 80000, now, now, false}
+	for _, op := range []string{"details", "list", "list-inactive"} {
 		scenarios := []string{"success", "scan", "missing", "wrapped missing"}
-		if op == "list" {
+		if op != "details" {
 			scenarios = []string{"success", "empty", "scan", "query", "iteration"}
 		}
 		for _, scenario := range scenarios {
@@ -123,7 +123,7 @@ func TestRepositoryReads(t *testing.T) {
 				case "missing":
 					row.err = pgx.ErrNoRows
 				case "wrapped missing":
-					row.err = app.Wrap(pgx.ErrNoRows, "query")
+					row.err = app.WrapError(pgx.ErrNoRows, "query")
 				}
 				p.row = row
 				p.rows = rows
@@ -139,10 +139,16 @@ func TestRepositoryReads(t *testing.T) {
 						require.NoError(t, err)
 						require.Equal(t, domain.Epic{ID: 7, ProjectID: 9, Name: "Name", DoneTC: 70000, TotalTC: 100000, ChangeCount: 80000, CreatedAt: now, UpdatedAt: now}, got)
 					}
-					require.Contains(t, p.sql, "where id = $1")
+					require.Contains(t, p.sql, "where v.id = $1")
 				} else {
 
-					got, err := r.List(p.ctx, domain.EpicListRequest{ProjectID: 7})
+					var got []domain.Epic
+					var err error
+					if op == "list-inactive" {
+						got, err = r.ListInactive(p.ctx, domain.EpicListRequest{ProjectID: 7})
+					} else {
+						got, err = r.List(p.ctx, domain.EpicListRequest{ProjectID: 7})
+					}
 					switch scenario {
 					case "scan", "query", "iteration":
 						require.ErrorIs(t, err, failure)
@@ -157,9 +163,19 @@ func TestRepositoryReads(t *testing.T) {
 						}
 					}
 					require.Equal(t, scenario != "query", rows.closed)
-					require.Contains(t, p.sql, "order by created_at, id")
+					require.Contains(t, p.sql, "order by v.name, v.id")
 				}
-				require.Contains(t, p.sql, "id, project_id, name, done_tc, total_tc, change_count, created_at, updated_at from public.vw_epic")
+				if op == "details" {
+					require.Contains(t, p.sql, "from public.vw_epic_list v join public.epic e on e.id = v.id where v.id = $1")
+					require.Contains(t, p.sql, "union all select "+epicColumns+" from public.vw_epic_inactive_list")
+					require.NotContains(t, p.sql, "e.active =")
+				} else {
+					view := "public.vw_epic_list"
+					if op == "list-inactive" {
+						view = "public.vw_epic_inactive_list"
+					}
+					require.Contains(t, p.sql, "from "+view+" v join public.epic e on e.id = v.id")
+				}
 			})
 		}
 	}
@@ -170,7 +186,7 @@ func TestRepositorySingleStatementMutations(t *testing.T) {
 	failure := errors.New("write failed")
 	fk := &pgconn.PgError{Code: "23503"}
 	for _, op := range []string{"create", "update", "delete"} {
-		for _, cause := range []error{nil, failure, pgx.ErrNoRows, app.Wrap(fk, "constraint")} {
+		for _, cause := range []error{nil, failure, pgx.ErrNoRows, app.WrapError(fk, "constraint")} {
 			affectedRows := []string{"1"}
 			if cause == nil && op != "create" {
 				affectedRows = []string{"0", "1"}

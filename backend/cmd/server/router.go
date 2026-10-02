@@ -46,7 +46,7 @@ func newRouter(pool *pgxpool.Pool, allowedOrigins []string, logger zerolog.Logge
 	e.Use(middleware.Recover())
 	cors, err := defaultCORSConfig.ToMiddleware()
 	if err != nil {
-		return nil, app.Wrap(err, "configure CORS")
+		return nil, app.WrapError(err, "configure CORS")
 	}
 	e.Use(cors)
 
@@ -85,13 +85,13 @@ type errorResponse struct {
 }
 
 func jsonErrorHandler(c *echo.Context, err error) {
-	code, message := app.Interpret(err)
+	code, message := app.InterpretError(err)
 
 	if code >= http.StatusInternalServerError {
 		log.Error().Err(err).Msg("request failed")
 	}
 
 	if writeErr := c.JSON(code, errorResponse{Message: message}); writeErr != nil {
-		log.Error().Err(app.Wrap(writeErr, "write error response")).Msg("failed to write error response")
+		log.Error().Err(app.WrapError(writeErr, "write error response")).Msg("failed to write error response")
 	}
 }

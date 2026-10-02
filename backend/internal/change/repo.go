@@ -16,6 +16,7 @@ type Repo struct{ pool changePool }
 // Repository is the service's database boundary.
 type Repository interface {
 	List(context.Context, domain.ChangeListRequest) ([]domain.ChangeListItem, error)
+	ListInactive(context.Context, domain.ChangeListRequest) ([]domain.ChangeListItem, error)
 	Details(context.Context, domain.ChangeIDRequest) (domain.ChangeDetails, error)
 	Exists(context.Context, domain.ChangeIDRequest) error
 	Project(context.Context, domain.ChangeIDRequest) (domain.ProjectIDRequest, error)
@@ -26,7 +27,7 @@ type Repository interface {
 	UpdatePhase(context.Context, domain.ChangeUpdatePhaseRequest) error
 	UpdateEpic(context.Context, domain.ChangeUpdateEpicRequest) error
 	UpdateAfterChange(context.Context, domain.ChangeUpdateAfterChangeRequest) error
-	UpdateOpen(context.Context, domain.ChangeUpdateOpenRequest) error
+	UpdateActive(context.Context, domain.ChangeUpdateActiveRequest) error
 	UpdateTypes(context.Context, domain.ChangeUpdateTypesRequest) error
 	UpdatePRUrl(context.Context, domain.ChangeUpdatePRUrlRequest) error
 	Delete(context.Context, domain.ChangeIDRequest) error
@@ -41,14 +42,23 @@ type changePool interface {
 var _ Repository = (*Repo)(nil)
 
 const changeListColumns = `id, ref_uuid, ref_slug, project_id, change_phase, change_types,
- epic_id, epic_name, title, open, done_tc, total_tc, updated_at`
+ epic_id, epic_name, title, done_tc, total_tc, updated_at`
 
 // NewRepo constructs the PostgreSQL repository.
 func NewRepo(pool *pgxpool.Pool) *Repo { return &Repo{pool: pool} }
 
 // List reads current view fields in modification order.
 func (r *Repo) List(ctx context.Context, req domain.ChangeListRequest) ([]domain.ChangeListItem, error) {
-	rows, err := r.pool.Query(ctx, `select `+changeListColumns+` from public.vw_change_list where project_id = $1 order by updated_at desc, id`, req.ProjectID)
+	return r.list(ctx, req, "public.vw_change_list")
+}
+
+// ListInactive reads the separately filtered inactive view.
+func (r *Repo) ListInactive(ctx context.Context, req domain.ChangeListRequest) ([]domain.ChangeListItem, error) {
+	return r.list(ctx, req, "public.vw_change_inactive_list")
+}
+
+func (r *Repo) list(ctx context.Context, req domain.ChangeListRequest, view string) ([]domain.ChangeListItem, error) {
+	rows, err := r.pool.Query(ctx, `select `+changeListColumns+` from `+view+` where project_id = $1 order by updated_at desc, id`, req.ProjectID)
 	if err != nil {
 		return nil, app.DatabaseError(err, nil, nil)
 	}
@@ -56,7 +66,7 @@ func (r *Repo) List(ctx context.Context, req domain.ChangeListRequest) ([]domain
 	result := make([]domain.ChangeListItem, 0)
 	for rows.Next() {
 		var c domain.ChangeListItem
-		if err = rows.Scan(&c.ID, &c.RefUUID, &c.RefSlug, &c.ProjectID, &c.ChangePhase, &c.ChangeTypes, &c.EpicID, &c.EpicName, &c.Title, &c.Open, &c.DoneTC, &c.TotalTC, &c.UpdatedAt); err != nil {
+		if err = rows.Scan(&c.ID, &c.RefUUID, &c.RefSlug, &c.ProjectID, &c.ChangePhase, &c.ChangeTypes, &c.EpicID, &c.EpicName, &c.Title, &c.DoneTC, &c.TotalTC, &c.UpdatedAt); err != nil {
 			return nil, app.DatabaseError(err, nil, nil)
 		}
 		result = append(result, c)
@@ -67,7 +77,7 @@ func (r *Repo) List(ctx context.Context, req domain.ChangeListRequest) ([]domain
 // Details reads current fields without doc or configuration dependencies.
 func (r *Repo) Details(ctx context.Context, req domain.ChangeIDRequest) (domain.ChangeDetails, error) {
 	var c domain.ChangeDetails
-	err := r.pool.QueryRow(ctx, `select `+changeListColumns+`, pr_url, created_at, after_change_id, after_change_name from public.vw_change_details where id = $1`, req.ID).Scan(&c.ID, &c.RefUUID, &c.RefSlug, &c.ProjectID, &c.ChangePhase, &c.ChangeTypes, &c.EpicID, &c.EpicName, &c.Title, &c.Open, &c.DoneTC, &c.TotalTC, &c.UpdatedAt, &c.PRUrl, &c.CreatedAt, &c.AfterChangeID, &c.AfterChangeName)
+	err := r.pool.QueryRow(ctx, `select `+changeListColumns+`, pr_url, created_at, after_change_id, after_change_name, active from public.vw_change_details where id = $1`, req.ID).Scan(&c.ID, &c.RefUUID, &c.RefSlug, &c.ProjectID, &c.ChangePhase, &c.ChangeTypes, &c.EpicID, &c.EpicName, &c.Title, &c.DoneTC, &c.TotalTC, &c.UpdatedAt, &c.PRUrl, &c.CreatedAt, &c.AfterChangeID, &c.AfterChangeName, &c.Active)
 	return c, app.DatabaseError(err, app.ErrChangeNotFound, nil)
 }
 
@@ -96,7 +106,7 @@ func (r *Repo) EpicProject(ctx context.Context, req domain.EpicIDRequest) (domai
 func (r *Repo) Create(ctx context.Context, req domain.ChangeCreateRequest) (domain.ChangeIDRequest, error) {
 	var id domain.ChangeIDRequest
 	err := r.pool.QueryRow(ctx, `select public.fn_change_insert($1,$2,$3,$4)`, req.ProjectID, req.RefUUID, req.Title, req.Brief).Scan(&id.ID)
-	return id, app.ChangeCreate(err)
+	return id, app.ChangeCreateError(err)
 }
 
 // UpdateTitle executes one database mutation without reloading the entity.
@@ -129,9 +139,9 @@ func (r *Repo) UpdateEpic(ctx context.Context, req domain.ChangeUpdateEpicReques
 	return app.DatabaseError(err, nil, app.ErrChangeInvalidReference)
 }
 
-// UpdateOpen executes one database mutation without reloading the entity.
-func (r *Repo) UpdateOpen(ctx context.Context, req domain.ChangeUpdateOpenRequest) error {
-	tag, err := r.pool.Exec(ctx, `update public.change set open = $2, updated_at = now() where id = $1`, req.ID, req.Open)
+// UpdateActive executes one database mutation without reloading the entity.
+func (r *Repo) UpdateActive(ctx context.Context, req domain.ChangeUpdateActiveRequest) error {
+	tag, err := r.pool.Exec(ctx, `update public.change set active = $2, updated_at = now() where id = $1`, req.ID, req.Active)
 	if err != nil {
 		return app.DatabaseError(err, nil, nil)
 	}

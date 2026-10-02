@@ -15,19 +15,19 @@ import (
 
 func TestWrapAndShutdownCauses(t *testing.T) {
 	cause := &pgconn.PgError{Code: "XX000", Message: "private detail"}
-	require.Nil(t, Wrap(nil, "context"))
-	require.Same(t, cause, Wrap(cause, ""))
-	wrapped := Wrap(Wrap(cause, "scan"), "read")
+	require.Nil(t, WrapError(nil, "context"))
+	require.Same(t, cause, WrapError(cause, ""))
+	wrapped := WrapError(WrapError(cause, "scan"), "read")
 	require.EqualError(t, wrapped, "read: scan: "+cause.Error())
 	require.ErrorIs(t, wrapped, cause)
 	var pgErr *pgconn.PgError
 	require.ErrorAs(t, wrapped, &pgErr)
 	require.Same(t, cause, pgErr)
-	require.Same(t, wrapped, Wrap(wrapped, ""))
-	require.Nil(t, ServerShutdown(nil))
-	require.Nil(t, ServerShutdown(http.ErrServerClosed))
-	require.Nil(t, ServerShutdown(Wrap(http.ErrServerClosed, "server")))
-	require.ErrorIs(t, ServerShutdown(cause), cause)
+	require.Same(t, wrapped, WrapError(wrapped, ""))
+	require.Nil(t, ServerShutdownError(nil))
+	require.Nil(t, ServerShutdownError(http.ErrServerClosed))
+	require.Nil(t, ServerShutdownError(WrapError(http.ErrServerClosed, "server")))
+	require.ErrorIs(t, ServerShutdownError(cause), cause)
 }
 
 func TestDatabaseMappingsAndCauses(t *testing.T) {
@@ -39,11 +39,11 @@ func TestDatabaseMappingsAndCauses(t *testing.T) {
 	}{
 		{"nil", nil, ErrChangeNotFound, nil, nil},
 		{"no rows", pgx.ErrNoRows, ErrChangeNotFound, nil, ErrChangeNotFound},
-		{"wrapped no rows", Wrap(pgx.ErrNoRows, "query"), ErrProjectNotFound, nil, ErrProjectNotFound},
+		{"wrapped no rows", WrapError(pgx.ErrNoRows, "query"), ErrProjectNotFound, nil, ErrProjectNotFound},
 		{"epic missing", pgx.ErrNoRows, ErrEpicNotFound, nil, ErrEpicNotFound},
 		{"testcase missing", pgx.ErrNoRows, ErrTestCaseNotFound, nil, ErrTestCaseNotFound},
 		{"foreign key", fk, nil, ErrTestCaseNotFound, ErrTestCaseNotFound},
-		{"nested foreign key", Wrap(Wrap(fk, "insert"), "transaction"), nil, ErrTestCaseNotFound, ErrTestCaseNotFound},
+		{"nested foreign key", WrapError(WrapError(fk, "insert"), "transaction"), nil, ErrTestCaseNotFound, ErrTestCaseNotFound},
 		{"unmapped rows", pgx.ErrNoRows, nil, nil, nil},
 		{"unmapped constraint", fk, nil, nil, nil},
 		{"other constraint", other, ErrChangeNotFound, ErrTestCaseNotFound, nil},
@@ -94,27 +94,27 @@ func TestHTTPContractsAndCauses(t *testing.T) {
 		{echo.ErrMethodNotAllowed, 405, "Method Not Allowed"},
 	} {
 		t.Run(tc.message+fmt.Sprint(tc.cause), func(t *testing.T) {
-			for _, cause := range []error{tc.cause, Wrap(tc.cause, "outer")} {
-				code, message := Interpret(cause)
+			for _, cause := range []error{tc.cause, WrapError(tc.cause, "outer")} {
+				code, message := InterpretError(cause)
 				require.Equal(t, tc.code, code)
 				require.Equal(t, tc.message, message)
-				translated := HTTP(cause)
+				translated := HTTPError(cause)
 				var he *echo.HTTPError
 				require.ErrorAs(t, translated, &he)
 				require.Equal(t, tc.code, he.Code)
 				require.Equal(t, tc.message, he.Message)
 				require.ErrorIs(t, translated, cause)
-				require.Same(t, translated, HTTP(translated))
+				require.Same(t, translated, HTTPError(translated))
 			}
 		})
 	}
-	code, message := Interpret(nil)
+	code, message := InterpretError(nil)
 	require.Zero(t, code)
 	require.Empty(t, message)
-	require.Nil(t, HTTP(nil))
+	require.Nil(t, HTTPError(nil))
 	require.NotErrorIs(t, ErrProjectNotFound, ErrChangeNotFound)
 	external := &pgconn.PgError{Code: "23503"}
-	translated := HTTP(DatabaseError(Wrap(external, "insert"), nil, ErrTestCaseNotFound))
+	translated := HTTPError(DatabaseError(WrapError(external, "insert"), nil, ErrTestCaseNotFound))
 	var actual *pgconn.PgError
 	require.ErrorAs(t, translated, &actual)
 	require.Same(t, external, actual)
@@ -122,9 +122,9 @@ func TestHTTPContractsAndCauses(t *testing.T) {
 
 func TestInvalidPayload(t *testing.T) {
 	cause := errors.New("decoder details")
-	for _, err := range []error{nil, cause, Wrap(cause, "bind")} {
-		got := InvalidPayload(err, "invalid change details payload")
-		code, message := Interpret(got)
+	for _, err := range []error{nil, cause, WrapError(cause, "bind")} {
+		got := PayloadError(err, "invalid change details payload")
+		code, message := InterpretError(got)
 		require.Equal(t, 400, code)
 		require.Equal(t, "invalid change details payload", message)
 		if err != nil {
@@ -146,22 +146,22 @@ func TestChangeDatabaseContracts(t *testing.T) {
 		{&pgconn.PgError{Code: "23502", TableName: "change", ColumnName: "title"}, nil, 500, "Internal Server Error"},
 		{&pgconn.PgError{Code: "23503"}, ErrProjectNotFound, 404, "project not found"},
 	} {
-		cause := Wrap(tc.cause, "nested")
-		err := ChangeCreate(cause)
+		cause := WrapError(tc.cause, "nested")
+		err := ChangeCreateError(cause)
 		require.ErrorIs(t, err, cause)
 		require.ErrorIs(t, err, tc.cause)
 		if tc.want != nil {
 			require.ErrorIs(t, err, tc.want)
 		}
-		code, msg := Interpret(err)
+		code, msg := InterpretError(err)
 		require.Equal(t, tc.status, code)
 		require.Equal(t, tc.message, msg)
 	}
-	require.NoError(t, ChangeCreate(nil))
+	require.NoError(t, ChangeCreateError(nil))
 	cause := &pgconn.PgError{Code: "23503"}
 	err := DatabaseError(cause, nil, ErrChangeHasTestCases)
 	require.ErrorIs(t, err, cause)
-	code, msg := Interpret(err)
+	code, msg := InterpretError(err)
 	require.Equal(t, 409, code)
 	require.Equal(t, "change has testcases and cannot be deleted", msg)
 }
@@ -171,21 +171,21 @@ func TestValidationCauses(t *testing.T) {
 		t.Run(input, func(t *testing.T) {
 			_, cause := url.Parse(input)
 			require.Error(t, cause)
-			wrapped := Wrap(cause, "parser")
+			wrapped := WrapError(cause, "parser")
 			for _, tc := range []struct {
 				name            string
 				cause, semantic error
 			}{
 				{"direct", cause, ErrChangeInvalidInput},
 				{"wrapped cause", wrapped, ErrChangeInvalidInput},
-				{"wrapped semantic", cause, Wrap(ErrChangeInvalidInput, "input")},
+				{"wrapped semantic", cause, WrapError(ErrChangeInvalidInput, "input")},
 				{"nil cause", nil, ErrChangeInvalidInput},
 				{"nil semantic", cause, nil},
 				{"nil semantic wrapped", wrapped, nil},
 				{"both nil", nil, nil},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
-					got := Validation(tc.cause, tc.semantic)
+					got := ValidationError(tc.cause, tc.semantic)
 					var httpErr *echo.HTTPError
 					require.False(t, errors.As(got, &httpErr))
 					if tc.semantic != nil {

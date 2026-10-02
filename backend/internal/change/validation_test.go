@@ -24,7 +24,7 @@ func TestAPIValidationCauses(t *testing.T) {
 		{"update-slug", `{"id":-1,"scenario":"valid"}`, "id", "min", "slug"},
 		{"update-pr-url", `{"id":-1,"scenario":"valid"}`, "id", "min", "pr url"},
 		{"update-phase", `{"id":-1,"scenario":"valid"}`, "id", "min", "phase"},
-		{"update-open", `{"id":-1,"scenario":"valid"}`, "id", "min", "open"},
+		{"update-active", `{"id":-1,"scenario":"valid"}`, "id", "min", "active"},
 		{"delete", `{"id":-1,"scenario":"valid"}`, "id", "min", "delete"},
 	} {
 		t.Run(tc.path+tc.field, func(t *testing.T) {

@@ -110,65 +110,122 @@ apih backend/apih-tests/doc
 Use mode0 or the default mode1; mode2 would run dependent init/main/post files
 concurrently. A terminal failure or interruption may prevent post files from
 running. Such partial runs can leave their own records; a new run still creates
-fresh IDs and a fresh config slug. Docs and history retained by normal API
-deletion semantics remain retained: no direct database cleanup or unsupported
-delete endpoint is used.
+fresh IDs and a fresh config slug. Document history remains retained. The document group uses the supported
+/doc/delete operation to soft-delete its own documents; no direct database
+cleanup is used. Failed or interrupted runs may leave their own records, and
+records without captured ownership are never cleaned up by guessing IDs.
 
-## Verified results — 2026-09-28
+## Verified API error-suite refresh — 2026-10-02
 
-The standalone suite previously passed repeated manual runs on the development
-server. The restored coverage target also passes all the same HTTP requests
-against its own instrumented server, using the existing database without SQL
-setup. `make -C backend tooling-test` passed 33 Python tests plus the Go validator
-tests. `make -C backend coverage` passed with fresh 1031/1045 (98.6603%) unit
-statements; the only unit gap is 14 startup/main statements in cmd/server.
-The standalone YAML and its port 8080 URL remain unchanged.
+The user requested additional missing errors that can be exercised using APIHydra.
+The suite adds **487 requests**: **479 error assertions** and eight independent
+reads checking that failed writes leave existing state unchanged. Production Go,
+dependencies, database/schema, root URL and application lifecycle remain unchanged.
 
-| Group | Requests | Successful registered operations |
+Added scenarios cover each applicable field independently with otherwise valid
+request fields: omitted/null values, wrong types, required blank/whitespace text,
+unsupported reference tables, fractional IDs, signed integer underflow, required
+booleans, UUID input and all six configuration arrays (including an invalid second
+entry). JSON array/string bodies are rejected by the typed request binders.
+All45 registered operations now have wrong-method405 assertions; removed
+`/doc/current` and `/change/update-open` remain404. Normal document insert rejects
+comments for all three parent kinds, and deleted projects/epics/changes reject new
+comments with the exact404 parent error. Existing conflict tests remain intact.
+
+Fourteen requests exercise real database-rejected NUL text in project/epic names,
+change titles/briefs, normal documents/comments, configuration array entries and
+testcase scenarios. They assert500 `Internal Server Error` with only the `message`
+key, and independent reads verify retained state. These cases document current
+behavior: the backend accepts the JSON input and PostgreSQL rejects the text;
+the backend does not validate this character into a400. No outage or SQL fixture
+is needed. Input and writes use only this campaign's captured IDs/slugs; malformed
+numeric inputs are fractional negatives or below the signed64-bit range, never
+fixed positive mutation targets. Document history remains soft-deleted as designed.
+
+| Group | Passing requests |
+| --- | ---: |
+| change | 291 |
+| config | 132 |
+| doc | 279 |
+| epic | 121 |
+| health | 3 |
+| project | 97 |
+| testcase | 137 |
+| **Total** | **1060** |
+
+All19 executable files finish, with no failures or skips. Every registered
+method/path pair still has passing success assertions: **45/45 (100%) operation
+coverage**. Requests across groups also exercise other groups' operations, so
+operation counts must be deduplicated across the whole suite.
+
+| Command actually run for this test-only refresh | Exit and result |
+| --- | --- |
+| Focused `apih --parallelism 0 <private-suite>/doc <private-suite>/config` | 0; both complete lifecycles against an owned current-source backend on19081 and the designated existing development database. |
+| `make -C backend tooling-test` | 0;35 Python tests and Go suite/capture/ownership/route validator pass. |
+| `make -C backend api-test` | 0;1060 requests pass; **1090/1204 (90.5316%)**, strict90% statement gate PASS. |
+| `git diff --check` | 0. |
+
+The private suite uses an owned instrumented server on19080; the running8080
+server is not stopped or restarted. Root URL stays8080. Bare `apih` on that server
+was not rerun in this refresh and would not measure statements. Unit/check/dependency
+audit were not repeated for these YAML/documentation-only changes. The preceding
+unchanged production implementation passed check and dependency audit, and measured
+unit coverage at1190/1204 (98.8372%); that unit measurement remains separate.
+
+| Production package | API covered/total | API gaps |
 | --- | ---: | ---: |
-| change | 143 | 11 |
-| config | 50 | 5 |
-| doc | 88 | 4 |
-| epic | 50 | 5 |
-| health | 3 | 2 |
-| project | 46 | 6 |
-| testcase | 89 | 5 |
-| **Total** | **469** | **38/38 (100%)** |
-
-Each operation has a successful case; malformed payloads, validation failures,
-missing records, reference conflicts, independent mutation reads, doc history,
-HTML sanitization and testcase completion counters are also exercised. Every
-request declares an explicit expected status. Nineteen YAML steps files pass.
-
-The prior API **statement coverage was 943/1045 (90.2392%)**; it was recorded
-before the current 90% gate was enabled and is not a fresh measurement of this change.
-The previous 980/1045 result belongs to the removed SQL/outage campaign; it is
-not reused here. Operation coverage above is a separate metric.
-
-| Production package | Covered/total statements | Uncovered |
-| --- | ---: | ---: |
-| cmd/server | 76/93 | 17 |
-| internal/app | 40/52 | 12 |
-| internal/change | 261/275 | 14 |
-| internal/config | 96/101 | 5 |
-| internal/doc | 112/127 | 15 |
+| cmd/server | 77/93 | 16 |
+| internal/app | 41/51 | 10 |
+| internal/change | 296/315 | 19 |
+| internal/config | 96/100 | 4 |
+| internal/doc | 188/210 | 22 |
 | internal/domain | 0/0 | 0 |
-| internal/epic | 106/114 | 8 |
+| internal/epic | 131/143 | 12 |
 | internal/health | 16/21 | 5 |
-| internal/project | 109/116 | 7 |
-| internal/testcase | 96/105 | 9 |
+| internal/project | 117/125 | 8 |
+| internal/testcase | 97/105 | 8 |
 | pkg/config | 23/31 | 8 |
 | pkg/markdown | 8/10 | 2 |
-| **Total** | **943/1045** | **102** |
+| **Total** | **1090/1204 (90.5316%)** | **114** |
 
-No production package is excluded. Domain has no executable statements. Gaps
-include startup errors, database failures, scan/iteration failures and service
-validation not reached through already-validated HTTP requests.
+The integration result covers eight more statements than the previous573-request
+campaign:1082/1204 (89.8671%), whose strict gate correctly failed. The fresh result
+passes without changing the1204-statement denominator, merging unit hits, altering
+production source or weakening any gate. Raw reports, source/suite hashes and
+provenance remain in `.coverage/api/`; this refresh also preserves final logs and
+profiles under `.coverage/verification/api-error-scenarios-20261002/`.
 
-Cases requiring database outages, missing selected configs, assigning a custom
-config to a project, artificial wide counters or direct history-table inspection
-are outside the standalone suite: the public API cannot set up those states
-without altering shared configuration or accessing the database. The removed
-SQL-fixture and SQL-postcondition assertions are not claimed as passing here.
-Application unit tests retain the corresponding error and validation contracts.
-See the [route ledger](../agents/backend-contracts.md) for individual operations.
+The initial tooling check rejected literal positive fractional/overflow probes
+under its captured-target rule and an extra group filename under its fixed layout.
+Those cases now use negative malformed numbers and the existing19 files; the
+validator and ownership rule were not relaxed. A second tooling run still exposed
+the filename issue before it was removed. Neither failed tooling check was recorded
+as passing; no HTTP campaign failed during this refresh.
+
+### Remaining HTTP error gaps
+
+This is broader error coverage, not a claim that every possible API error is tested:
+
+- Missing-document `/doc/delete`404 and truly nonexistent-ID
+  `/doc/comment-update`404 remain unit-only. The suite exercises comment-update404
+  using an owned ordinary document, but soft deletion cannot produce an absent doc.
+  No guessed positive mutation IDs are used.
+- Database outage503 on both health aliases, query/scan/iteration failures,
+  failed FK deactivation and timed concurrent deletion after successful preflight
+  remain unit-only; no fault injection or database lifecycle operations are allowed.
+- Missing selected configurations and change creation without configured
+  `backlog`/`brief` cannot be established through the current HTTP API without
+  changing shared configuration or assigning a custom config to a project.
+- Direct-service invalid-ID guards are intercepted by HTTP validation, so they are
+  statement gaps rather than additional untested public input-error scenarios.
+  Startup and renderer failure paths also remain outside this healthy-server suite.
+
+The application has no authentication/session middleware, so no401/403 contract
+is assumed. Arbitrary combinations of malformed input are not enumerated; the
+new cases isolate the individual field conditions rather than hiding them behind
+another rejection.
+
+See the [route ledger](../agents/backend-contracts.md) and
+[checkpoint](../agents/backend-refactor-checkpoint.md) for current contracts and
+previous implementation validation. Historical failed schema-alignment campaigns
+remain preserved in `.coverage/verification/schema-alignment-20261002/`.

@@ -44,6 +44,21 @@ func (s *Service) List(ctx context.Context, req domain.ChangeListRequest) ([]dom
 	return changes, nil
 }
 
+// ListInactive returns inactive entries with the same derived counters.
+func (s *Service) ListInactive(ctx context.Context, req domain.ChangeListRequest) ([]domain.ChangeListItem, error) {
+	if req.ProjectID <= 0 {
+		return nil, app.ErrChangeInvalidInput
+	}
+	changes, err := s.repo.ListInactive(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	for i := range changes {
+		changes[i].Completed = completion(changes[i].DoneTC, changes[i].TotalTC)
+	}
+	return changes, nil
+}
+
 // Details returns current stored fields and derived completion.
 func (s *Service) Details(ctx context.Context, req domain.ChangeIDRequest) (domain.ChangeDetails, error) {
 	if req.ID <= 0 {
@@ -81,7 +96,7 @@ func (s *Service) Create(ctx context.Context, req domain.ChangeCreateRequest) (d
 	if req.RefUUID == nil {
 		id, err := s.newUUID()
 		if err != nil {
-			return domain.ChangeIDRequest{}, app.Wrap(err, "generate change UUID")
+			return domain.ChangeIDRequest{}, app.WrapError(err, "generate change UUID")
 		}
 		req.RefUUID = &id
 	}
@@ -176,12 +191,12 @@ func (s *Service) UpdateEpic(ctx context.Context, req domain.ChangeUpdateEpicReq
 	return s.repo.UpdateEpic(ctx, req)
 }
 
-// UpdateOpen requires an explicit boolean, including false.
-func (s *Service) UpdateOpen(ctx context.Context, req domain.ChangeUpdateOpenRequest) error {
-	if req.ID <= 0 || req.Open == nil {
+// UpdateActive requires an explicit boolean, including false.
+func (s *Service) UpdateActive(ctx context.Context, req domain.ChangeUpdateActiveRequest) error {
+	if req.ID <= 0 || req.Active == nil {
 		return app.ErrChangeInvalidInput
 	}
-	return s.repo.UpdateOpen(ctx, req)
+	return s.repo.UpdateActive(ctx, req)
 }
 
 // UpdatePRUrl accepts nonblank HTTP(S) URLs only.
@@ -228,7 +243,7 @@ func invalidOptionalID(value *int) bool {
 func validatePRURL(value string) error {
 	parsed, err := url.Parse(value)
 	if err != nil {
-		return app.Validation(err, app.ErrChangeInvalidInput)
+		return app.ValidationError(err, app.ErrChangeInvalidInput)
 	}
 	if parsed.Host == "" || (!strings.EqualFold(parsed.Scheme, "https") && !strings.EqualFold(parsed.Scheme, "http")) {
 		return app.ErrChangeInvalidInput

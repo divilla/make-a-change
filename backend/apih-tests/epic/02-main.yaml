@@ -102,7 +102,54 @@ spec:
       path: /api/v1/epic/delete
       body: '{"id":${epic_id}}'
     response:
-      expected_status: 409
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '{"id":${epic_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"active":false}'
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"project_id":${epic_project}}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/epic/list-inactive
+      body: '{"project_id":${epic_project}}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${epic_id},"active":false,"change_count":1}]'
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{"id":${epic_id},"name":"Inactive epic renamed"}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${epic_project},"title":"Inactive epic child","brief":"Brief"}'
+    response:
+      expected_status: 201
+      capture:
+        epic_inactive_child: .id
+  - request:
+      method: POST
+      path: /api/v1/change/update-epic
+      body: '{"id":${epic_inactive_child},"epic_id":${epic_id}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/delete
+      body: '{"id":${epic_inactive_child}}'
+    response:
+      expected_status: 204
   - request:
       method: POST
       path: /api/v1/epic/details
@@ -273,7 +320,7 @@ spec:
       body: '{'
     response:
       expected_status: 400
-      expected_types:
+      expected_types: &id001
         .message:
         - string
   - request:
@@ -282,7 +329,7 @@ spec:
       body: '{"id":"bad","project_id":"bad","name":3}'
     response:
       expected_status: 400
-      expected_types:
+      expected_types: &id002
         .message:
         - string
   - request:
@@ -291,7 +338,7 @@ spec:
       body: '{}'
     response:
       expected_status: 400
-      expected_types:
+      expected_types: &id003
         .message:
         - string
   - request:
@@ -300,7 +347,7 @@ spec:
       body: '{"id":-1,"project_id":-1,"name":""}'
     response:
       expected_status: 400
-      expected_types:
+      expected_types: &id004
         .message:
         - string
   - request:
@@ -345,3 +392,511 @@ spec:
       body: '{"project_id":${epic_missing_project},"name":"Missing parent"}'
     response:
       expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/epic/list-inactive
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types: *id001
+  - request:
+      method: POST
+      path: /api/v1/epic/list-inactive
+      body: '{"id":"bad","project_id":"bad","name":3}'
+    response:
+      expected_status: 400
+      expected_types: *id002
+  - request:
+      method: POST
+      path: /api/v1/epic/list-inactive
+      body: '{}'
+    response:
+      expected_status: 400
+      expected_types: *id003
+  - request:
+      method: POST
+      path: /api/v1/epic/list-inactive
+      body: '{"id":-1,"project_id":-1,"name":""}'
+    response:
+      expected_status: 400
+      expected_types: *id004
+  - request:
+      method: POST
+      path: /api/v1/epic/list-inactive
+      body: '{"project_id":${epic_missing_project}}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+
+  # Independent error cases: each malformed field has otherwise valid input.
+  # list: project_id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"project_id":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # list: project_id zero; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"project_id":0}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # list: project_id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"project_id":-1.5}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic list payload"}'
+  # list: project_id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"project_id":-9223372036854775809}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic list payload"}'
+  # list: array body
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic list payload"}'
+  # list: string body
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic list payload"}'
+  # list: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/epic/list
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # list-inactive: project_id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/list-inactive
+      body: '{"project_id":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # list-inactive: project_id zero; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/list-inactive
+      body: '{"project_id":0}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # list-inactive: project_id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/list-inactive
+      body: '{"project_id":-1.5}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic inactive list payload"}'
+  # list-inactive: project_id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/list-inactive
+      body: '{"project_id":-9223372036854775809}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic inactive list payload"}'
+  # list-inactive: array body
+  - request:
+      method: POST
+      path: /api/v1/epic/list-inactive
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic inactive list payload"}'
+  # list-inactive: string body
+  - request:
+      method: POST
+      path: /api/v1/epic/list-inactive
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic inactive list payload"}'
+  # list-inactive: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/epic/list-inactive
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # details: id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '{"id":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # details: id zero; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '{"id":0}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # details: id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '{"id":-1.5}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic details payload"}'
+  # details: id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '{"id":-9223372036854775809}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic details payload"}'
+  # details: array body
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic details payload"}'
+  # details: string body
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic details payload"}'
+  # details: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/epic/details
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # create: project_id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # create: project_id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"project_id":null,"name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # create: project_id zero; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"project_id":0,"name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # create: project_id negative; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"project_id":-1,"name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # create: project_id string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"project_id":"bad","name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic create payload"}'
+  # create: project_id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"project_id":-1.5,"name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic create payload"}'
+  # create: project_id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"project_id":-9223372036854775809,"name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic create payload"}'
+  # create: name omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"project_id":${epic_project}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # create: name null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"project_id":${epic_project},"name":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # create: name empty; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"project_id":${epic_project},"name":""}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # create: name number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"project_id":${epic_project},"name":1}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic create payload"}'
+  # create: array body
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic create payload"}'
+  # create: string body
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic create payload"}'
+  # create: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/epic/create
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # update: id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{"name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # update: id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{"id":null,"name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # update: id zero; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{"id":0,"name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # update: id negative; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{"id":-1,"name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # update: id string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{"id":"bad","name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic update payload"}'
+  # update: id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{"id":-1.5,"name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic update payload"}'
+  # update: id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{"id":-9223372036854775809,"name":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic update payload"}'
+  # update: name omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{"id":${epic_id}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # update: name null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{"id":${epic_id},"name":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # update: name empty; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{"id":${epic_id},"name":""}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # update: name number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{"id":${epic_id},"name":1}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic update payload"}'
+  # update: array body
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic update payload"}'
+  # update: string body
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic update payload"}'
+  # update: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/epic/update
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # delete: id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '{"id":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # delete: id zero; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '{"id":0}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  # delete: id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '{"id":-1.5}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic delete payload"}'
+  # delete: id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '{"id":-9223372036854775809}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic delete payload"}'
+  # delete: array body
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic delete payload"}'
+  # delete: string body
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic delete payload"}'
+  # delete: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/epic/delete
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+
+  # Errors from PostgreSQL-rejected NUL text return a masked 500; owned IDs only.
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"project_id":${epic_project},"name":"Invalid\u0000name"}'
+    response:
+      expected_status: 500
+      expected_body: '{"message":"Internal Server Error"}'
+      expected_types:
+        if keys == ["message"] then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/epic/update
+      body: '{"id":${epic_id},"name":"Invalid\u0000name"}'
+    response:
+      expected_status: 500
+      expected_body: '{"message":"Internal Server Error"}'
+      expected_types:
+        if keys == ["message"] then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '{"id":${epic_id}}'
+    response:
+      expected_status: 200
+      expected_body: '{"name":"Inactive epic renamed","active":false,"change_count":0}'

@@ -34,7 +34,7 @@ func TestChangeAPIContracts(t *testing.T) {
 		"update-after-change": {[]string{"UpdateAfterChange"}, domain.ChangeUpdateAfterChangeRequest{ID: 7, AfterChangeID: intPtr(4)}},
 		"update-epic":         {[]string{"Project", "EpicProject", "UpdateEpic"}, domain.ChangeUpdateEpicRequest{ID: 7, EpicID: intPtr(4)}},
 		"update-phase":        {[]string{"Project", "UpdatePhase"}, domain.ChangeUpdatePhaseRequest{ID: 7, ChangePhase: "review"}},
-		"update-open":         {[]string{"UpdateOpen"}, domain.ChangeUpdateOpenRequest{ID: 7, Open: boolPtr(false)}},
+		"update-active":       {[]string{"UpdateActive"}, domain.ChangeUpdateActiveRequest{ID: 7, Active: boolPtr(false)}},
 		"update-types":        {[]string{"Project", "UpdateTypes"}, domain.ChangeUpdateTypesRequest{ID: 7, ChangeTypes: []string{"fix"}}},
 		"update-title":        {[]string{"Exists", "UpdateTitle"}, domain.ChangeUpdateTitleRequest{ID: 7, Title: "Title"}},
 		"update-slug":         {[]string{"UpdateSlug"}, domain.ChangeUpdateSlugRequest{ID: 7, Slug: "new-slug"}},
@@ -50,7 +50,7 @@ func TestChangeAPIContracts(t *testing.T) {
 		{"update-after-change", `{"id":7,"after_change_id":4}`, 204},
 		{"update-epic", `{"id":7,"epic_id":4}`, 204},
 		{"update-phase", `{"id":7,"change_phase":"review"}`, 204},
-		{"update-open", `{"id":7,"open":false}`, 204},
+		{"update-active", `{"id":7,"active":false}`, 204},
 		{"update-types", `{"id":7,"change_types":["fix"]}`, 204},
 		{"update-title", `{"id":7,"title":"Title"}`, 204},
 		{"update-slug", `{"id":7,"slug":"new-slug"}`, 204},
@@ -114,7 +114,7 @@ func TestChangeAPIContracts(t *testing.T) {
 							for k := range body {
 								keys = append(keys, k)
 							}
-							require.ElementsMatch(t, []string{"id", "ref_uuid", "ref_slug", "project_id", "change_phase", "change_types", "epic_id", "epic_name", "title", "open", "done_tc", "total_tc", "completed", "updated_at", "pr_url", "created_at", "after_change_id", "after_change_name"}, keys)
+							require.ElementsMatch(t, []string{"id", "ref_uuid", "ref_slug", "project_id", "change_phase", "change_types", "epic_id", "epic_name", "title", "active", "done_tc", "total_tc", "completed", "updated_at", "pr_url", "created_at", "after_change_id", "after_change_name"}, keys)
 							for _, k := range []string{"ref_slug", "epic_id", "epic_name", "after_change_name"} {
 								require.Nil(t, body[k])
 							}
@@ -140,10 +140,10 @@ func TestChangeError(t *testing.T) {
 		{app.ErrChangeInvalidReference, http.StatusBadRequest},
 		{app.ErrChangeNotFound, http.StatusNotFound},
 	} {
-		assert.Equal(t, tc.status, echo.StatusCode(app.HTTP(tc.err)))
+		assert.Equal(t, tc.status, echo.StatusCode(app.HTTPError(tc.err)))
 	}
 	err := errors.New("database unavailable")
-	assert.ErrorIs(t, app.HTTP(err), err)
+	assert.ErrorIs(t, app.HTTPError(err), err)
 }
 
 func TestChangeHandlerReturnCauses(t *testing.T) {
@@ -154,7 +154,7 @@ func TestChangeHandlerReturnCauses(t *testing.T) {
 		message string
 	}{
 		{cause, 500, "Internal Server Error"},
-		{app.Wrap(app.ErrChangeNotFound, "nested"), 404, "change not found"},
+		{app.WrapError(app.ErrChangeNotFound, "nested"), 404, "change not found"},
 		{app.ErrChangeInvalidReference, 400, "invalid change reference"},
 	} {
 		e := echo.New()

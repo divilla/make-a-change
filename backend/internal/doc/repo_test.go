@@ -92,9 +92,9 @@ func newBoundary(t *testing.T) *boundary {
 
 func TestDocRepositoryReads(t *testing.T) {
 	now := time.Now()
-	d := domain.Doc{ID: 9, RefID: 7, RefTable: "epic", DocType: "prd", Body: "raw", Current: true, AgentEdit: false, CreatedAt: now, UpdatedAt: now}
-	values := []any{d.ID, d.RefID, d.RefTable, d.DocType, d.Body, d.AgentEdit, d.Current, d.CreatedAt, d.UpdatedAt}
-	for _, op := range []string{"List", "Current", "Details"} {
+	d := domain.Doc{ID: 9, RefID: 7, RefTable: "epic", DocType: "prd", Body: "raw", AgentEdit: false, CreatedAt: now, UpdatedAt: now}
+	values := []any{d.ID, d.RefID, d.RefTable, d.DocType, d.Body, d.AgentEdit, d.CreatedAt, d.UpdatedAt, d.DeletedAt}
+	for _, op := range []string{"List", "ListActive", "CommentList", "Details"} {
 		for _, scenario := range []string{"values", "empty", "scan", "query", "iteration", "missing"} {
 			t.Run(op+scenario, func(t *testing.T) {
 				failure := errors.New("failure")
@@ -134,10 +134,13 @@ func TestDocRepositoryReads(t *testing.T) {
 				} else {
 					var got []domain.Doc
 					q := domain.DocListRequest{RefID: 7, RefTable: "epic"}
-					if op == "List" {
+					switch op {
+					case "List":
 						got, err = r.List(p.ctx, q)
-					} else {
-						got, err = r.Current(p.ctx, q)
+					case "CommentList":
+						got, err = r.CommentList(p.ctx, q)
+					default:
+						got, err = r.ListActive(p.ctx, q)
 					}
 					if err == nil {
 						require.NotNil(t, got)
@@ -148,8 +151,14 @@ func TestDocRepositoryReads(t *testing.T) {
 						}
 					}
 					require.Contains(t, p.sql, "where ref_id = $1 and ref_table = $2")
-					require.Contains(t, p.sql, "order by id desc")
-					require.Equal(t, op == "Current", strings.Contains(p.sql, "and current = true"))
+					if op == "ListActive" {
+						require.Contains(t, p.sql, "from public.vw_doc_active")
+						require.Contains(t, p.sql, "order by doc_id desc")
+					} else {
+						require.Contains(t, p.sql, "order by id desc")
+					}
+					require.Equal(t, op == "CommentList", strings.Contains(p.sql, "doc_type = 'comment'"))
+					require.NotContains(t, p.sql, "current")
 					require.Equal(t, scenario != "query", rows.closed)
 				}
 				if scenario == "scan" || scenario == "query" || scenario == "iteration" && op != "Details" {
@@ -183,15 +192,12 @@ func TestDocRepositoryInsertAndProject(t *testing.T) {
 			}
 		}
 	}
-	for _, scenario := range []string{"insert", "missing", "error"} {
+	for _, scenario := range []string{"insert", "error"} {
 		p := newBoundary(t)
 		f := false
-		p.args = []any{7, "change", "spec", "raw", &f}
+		p.args = []any{"change", 7, "spec", "raw", &f}
 		id := 9
-		value := &id
-		if scenario == "missing" {
-			value = nil
-		}
+		value := id
 		failure := errors.New("failure")
 		var cause error
 		if scenario == "error" {
@@ -199,13 +205,11 @@ func TestDocRepositoryInsertAndProject(t *testing.T) {
 		}
 		p.row = valueRow{t: t, values: []any{value}, err: cause}
 		got, err := (&Repo{pool: p}).Insert(p.ctx, domain.DocInsertRequest{RefID: 7, RefTable: "change", DocType: "spec", Body: "raw", AgentEdit: &f})
-		require.Equal(t, "select public.fn_doc_insert($1,$2,$3,$4,$5)", p.sql)
+		require.Equal(t, "select public.fn_doc_insert($1::text,$2::bigint,$3::text,$4::text,$5::boolean)", p.sql)
 		switch scenario {
 		case "insert":
 			require.NoError(t, err)
 			require.Equal(t, 9, got.ID)
-		case "missing":
-			require.ErrorIs(t, err, app.ErrDocParentNotFound)
 		case "error":
 			require.ErrorIs(t, err, failure)
 		}

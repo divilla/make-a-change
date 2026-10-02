@@ -19,6 +19,7 @@ func TestEpicHandlerErrorContracts(t *testing.T) {
 		success             int
 	}{
 		{"list", `{"project_id":1}`, "list", (*API).list, 200},
+		{"list-inactive", `{"project_id":1}`, "inactive list", (*API).listInactive, 200},
 		{"details", `{"id":1}`, "details", (*API).details, 200},
 		{"create", `{"project_id":1,"name":"Name"}`, "create", (*API).create, 201},
 		{"update", `{"id":1,"name":"Name"}`, "update", (*API).updateEpic, 204},
@@ -47,6 +48,12 @@ func TestEpicHandlerErrorContracts(t *testing.T) {
 					req.Header.Set("Content-Type", "application/json")
 					ctx := e.NewContext(req, rec)
 					err := op.handler(a, ctx)
+					if op.name == "delete" && tc.name == "conflict" {
+						require.NoError(t, err)
+						require.Equal(t, 204, rec.Code)
+						require.Empty(t, rec.Body.String())
+						return
+					}
 					if tc.cause == nil {
 						require.NoError(t, err)
 						require.Equal(t, op.success, rec.Code)

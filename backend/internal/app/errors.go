@@ -11,7 +11,7 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
-// Module errors remain distinct even where their HTTP statuses coincide.
+// Module errors remain distinct even where their HTTPError statuses coincide.
 var (
 	ErrDocInvalidInput     = errors.New("invalid doc input")
 	ErrDocInvalidReference = errors.New("invalid doc type")
@@ -38,8 +38,8 @@ var (
 	ErrTestCaseNotFound       = errors.New("test case not found")
 )
 
-// Wrap adds diagnostic context without losing the cause. No context means no wrapper.
-func Wrap(err error, context string) error {
+// WrapError adds diagnostic context without losing the cause. No context means no wrapper.
+func WrapError(err error, context string) error {
 	if err == nil || context == "" {
 		return err
 	}
@@ -66,9 +66,9 @@ func DatabaseError(err, missing, foreignKey error) error {
 	return fmt.Errorf("%w: %w", semantic, err)
 }
 
-// Validation retains an invalid-input semantic error and its external cause.
+// ValidationError retains an invalid-input semantic error and its external cause.
 // A missing cause or semantic leaves the other error unchanged.
-func Validation(cause, semantic error) error {
+func ValidationError(cause, semantic error) error {
 	if cause == nil {
 		return semantic
 	}
@@ -78,14 +78,14 @@ func Validation(cause, semantic error) error {
 	return fmt.Errorf("%w: %w", semantic, cause)
 }
 
-// InvalidPayload retains binding failures while exposing the operation's safe message.
-func InvalidPayload(err error, message string) error {
+// PayloadError retains binding failures while exposing the operation's safe message.
+func PayloadError(err error, message string) error {
 	return echo.NewHTTPError(http.StatusBadRequest, message).Wrap(err)
 }
 
-// Interpret returns the public status and message, masking unexpected internal details.
+// InterpretError returns the public status and message, masking unexpected internal details.
 // A nil error has no error response.
-func Interpret(err error) (int, string) {
+func InterpretError(err error) (int, string) {
 	if err == nil {
 		return 0, ""
 	}
@@ -132,12 +132,12 @@ func Interpret(err error) (int, string) {
 	return status, http.StatusText(status)
 }
 
-// HTTP translates a handler error, preserving its complete cause chain.
-func HTTP(err error) error {
+// HTTPError translates a handler error, preserving its complete cause chain.
+func HTTPError(err error) error {
 	if err == nil {
 		return nil
 	}
-	code, message := Interpret(err)
+	code, message := InterpretError(err)
 	var he *echo.HTTPError
 	if errors.As(err, &he) && he.Code == code && he.Message == message {
 		return err
@@ -145,18 +145,17 @@ func HTTP(err error) error {
 	return echo.NewHTTPError(code, message).Wrap(err)
 }
 
-// ServerShutdown accepts the normal net/http closure after an initiated shutdown.
-func ServerShutdown(err error) error {
+// ServerShutdownError accepts the normal net/http closure after an initiated shutdown.
+func ServerShutdownError(err error) error {
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
-	return Wrap(err, "serve")
+	return WrapError(err, "serve")
 }
 
-// ChangeCreate interprets only the known change UUID uniqueness and parent failures.
-func ChangeCreate(err error) error {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
+// ChangeCreateError interprets only the known change UUID uniqueness and parent failures.
+func ChangeCreateError(err error) error {
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
 		if pgErr.Code == "23505" && pgErr.ConstraintName == "change_ref_uuid_idx" {
 			return fmt.Errorf("%w: %w", ErrChangeDuplicateUUID, err)
 		}
@@ -168,11 +167,15 @@ func ChangeCreate(err error) error {
 	return DatabaseError(err, nil, ErrProjectNotFound)
 }
 
-// ConfigInsert maps the config primary-key constraint without hiding other errors.
-func ConfigInsert(err error) error {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "config_pkey" {
-		return Validation(err, ErrConfigDuplicate)
+// ConfigInsertError maps the config primary-key constraint without hiding other errors.
+func ConfigInsertError(err error) error {
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == "23505" && pgErr.ConstraintName == "config_pkey" {
+		return ValidationError(err, ErrConfigDuplicate)
 	}
 	return DatabaseError(err, nil, nil)
+}
+
+// IsError checks a semantic error through its retained cause chain.
+func IsError(err, target error) bool {
+	return errors.Is(err, target)
 }

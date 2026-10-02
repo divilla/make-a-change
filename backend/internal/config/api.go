@@ -30,7 +30,7 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 func (a *API) list(c *echo.Context) error {
 	result, err := a.s.List(c.Request().Context())
 	if err != nil {
-		return app.HTTP(err)
+		return app.HTTPError(err)
 	}
 	return c.JSON(http.StatusOK, result)
 }
@@ -38,14 +38,14 @@ func (a *API) list(c *echo.Context) error {
 func (a *API) details(c *echo.Context) error {
 	var req domain.ConfigSlugRequest
 	if err := c.Bind(&req); err != nil {
-		return app.InvalidPayload(err, "invalid config details payload")
+		return app.PayloadError(err, "invalid config details payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return app.HTTP(app.Validation(v.Errors, app.ErrConfigInvalidInput))
+		return app.HTTPError(app.ValidationError(v.Errors, app.ErrConfigInvalidInput))
 	}
 	result, err := a.s.Details(c.Request().Context(), req)
 	if err != nil {
-		return app.HTTP(err)
+		return app.HTTPError(err)
 	}
 	return c.JSON(http.StatusOK, result)
 }
@@ -53,14 +53,14 @@ func (a *API) details(c *echo.Context) error {
 func (a *API) insert(c *echo.Context) error {
 	var req domain.ConfigWriteRequest
 	if err := c.Bind(&req); err != nil {
-		return app.InvalidPayload(err, "invalid config insert payload")
+		return app.PayloadError(err, "invalid config insert payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return app.HTTP(app.Validation(v.Errors, app.ErrConfigInvalidInput))
+		return app.HTTPError(app.ValidationError(v.Errors, app.ErrConfigInvalidInput))
 	}
 	result, err := a.s.Insert(c.Request().Context(), req)
 	if err != nil {
-		return app.HTTP(err)
+		return app.HTTPError(err)
 	}
 	return c.JSON(http.StatusCreated, result)
 }
@@ -68,13 +68,13 @@ func (a *API) insert(c *echo.Context) error {
 func (a *API) update(c *echo.Context) error {
 	var req domain.ConfigWriteRequest
 	if err := c.Bind(&req); err != nil {
-		return app.InvalidPayload(err, "invalid config update payload")
+		return app.PayloadError(err, "invalid config update payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return app.HTTP(app.Validation(v.Errors, app.ErrConfigInvalidInput))
+		return app.HTTPError(app.ValidationError(v.Errors, app.ErrConfigInvalidInput))
 	}
 	if err := a.s.Update(c.Request().Context(), req); err != nil {
-		return app.HTTP(err)
+		return app.HTTPError(err)
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -82,13 +82,13 @@ func (a *API) update(c *echo.Context) error {
 func (a *API) delete(c *echo.Context) error {
 	var req domain.ConfigSlugRequest
 	if err := c.Bind(&req); err != nil {
-		return app.InvalidPayload(err, "invalid config delete payload")
+		return app.PayloadError(err, "invalid config delete payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return app.HTTP(app.Validation(v.Errors, app.ErrConfigInvalidInput))
+		return app.HTTPError(app.ValidationError(v.Errors, app.ErrConfigInvalidInput))
 	}
 	if err := a.s.Delete(c.Request().Context(), req); err != nil {
-		return app.HTTP(err)
+		return app.HTTPError(err)
 	}
 	return c.NoContent(http.StatusNoContent)
 }

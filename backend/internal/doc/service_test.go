@@ -12,15 +12,17 @@ import (
 )
 
 type fakeRepo struct {
-	calls []string
-	req   any
-	err   error
-	fail  string
-	docs  []domain.Doc
+	calls    []string
+	contexts []context.Context
+	req      any
+	err      error
+	fail     string
+	docs     []domain.Doc
 }
 
-func (r *fakeRepo) record(op string, q any) error {
+func (r *fakeRepo) record(ctx context.Context, op string, q any) error {
 	r.calls = append(r.calls, op)
+	r.contexts = append(r.contexts, ctx)
 	r.req = q
 	if r.fail == "" || r.fail == op {
 		return r.err
@@ -28,28 +30,28 @@ func (r *fakeRepo) record(op string, q any) error {
 	return nil
 }
 
-func (r *fakeRepo) List(_ context.Context, q domain.DocListRequest) ([]domain.Doc, error) {
-	return r.docs, r.record("List", q)
+func (r *fakeRepo) List(ctx context.Context, q domain.DocListRequest) ([]domain.Doc, error) {
+	return r.docs, r.record(ctx, "List", q)
 }
 
-func (r *fakeRepo) Current(_ context.Context, q domain.DocListRequest) ([]domain.Doc, error) {
-	return r.docs, r.record("Current", q)
+func (r *fakeRepo) ListActive(ctx context.Context, q domain.DocListRequest) ([]domain.Doc, error) {
+	return r.docs, r.record(ctx, "ListActive", q)
 }
 
-func (r *fakeRepo) Details(_ context.Context, q domain.DocIDRequest) (domain.Doc, error) {
+func (r *fakeRepo) Details(ctx context.Context, q domain.DocIDRequest) (domain.Doc, error) {
 	d := domain.Doc{}
 	if len(r.docs) > 0 {
 		d = r.docs[0]
 	}
-	return d, r.record("Details", q)
+	return d, r.record(ctx, "Details", q)
 }
 
-func (r *fakeRepo) Project(_ context.Context, q domain.DocListRequest) (domain.ProjectIDRequest, error) {
-	return domain.ProjectIDRequest{ID: 9}, r.record("Project", q)
+func (r *fakeRepo) Project(ctx context.Context, q domain.DocListRequest) (domain.ProjectIDRequest, error) {
+	return domain.ProjectIDRequest{ID: 9}, r.record(ctx, "Project", q)
 }
 
-func (r *fakeRepo) Insert(_ context.Context, q domain.DocInsertRequest) (domain.DocIDRequest, error) {
-	return domain.DocIDRequest{ID: 8}, r.record("Insert", q)
+func (r *fakeRepo) Insert(ctx context.Context, q domain.DocInsertRequest) (domain.DocIDRequest, error) {
+	return domain.DocIDRequest{ID: 8}, r.record(ctx, "Insert", q)
 }
 
 type fakeConfig struct {
@@ -75,7 +77,7 @@ func TestReadsValidateReferenceAndRenderWithoutParentLookups(t *testing.T) {
 			var docs []domain.Doc
 			var err error
 			if current {
-				docs, err = s.Current(ctx, req)
+				docs, err = s.ListActive(ctx, req)
 			} else {
 				docs, err = s.List(ctx, req)
 			}
@@ -94,7 +96,7 @@ func TestReadsValidateReferenceAndRenderWithoutParentLookups(t *testing.T) {
 		s := &Service{}
 		_, err := s.List(ctx, q)
 		require.ErrorIs(t, err, app.ErrDocInvalidInput)
-		_, err = s.Current(ctx, q)
+		_, err = s.ListActive(ctx, q)
 		require.ErrorIs(t, err, app.ErrDocInvalidInput)
 	}
 	_, err := (&Service{}).Details(ctx, domain.DocIDRequest{})
@@ -103,7 +105,7 @@ func TestReadsValidateReferenceAndRenderWithoutParentLookups(t *testing.T) {
 	s := NewService(&fakeRepo{err: failure}, renderer, nil)
 	_, err = s.List(ctx, domain.DocListRequest{RefID: 7, RefTable: "change"})
 	require.ErrorIs(t, err, failure)
-	_, err = s.Current(ctx, domain.DocListRequest{RefID: 7, RefTable: "change"})
+	_, err = s.ListActive(ctx, domain.DocListRequest{RefID: 7, RefTable: "change"})
 	require.ErrorIs(t, err, failure)
 	_, err = s.Details(ctx, domain.DocIDRequest{ID: 8})
 	require.ErrorIs(t, err, failure)
@@ -159,4 +161,20 @@ func TestInsertConfiguredKindsAndFailures(t *testing.T) {
 		_, err := (&Service{}).Insert(ctx, q)
 		require.ErrorIs(t, err, app.ErrDocInvalidInput)
 	}
+}
+
+func (r *fakeRepo) CommentList(ctx context.Context, q domain.DocListRequest) ([]domain.Doc, error) {
+	return r.docs, r.record(ctx, "CommentList", q)
+}
+
+func (r *fakeRepo) CommentInsert(ctx context.Context, q domain.DocCommentInsertRequest) (domain.DocIDRequest, error) {
+	return domain.DocIDRequest{ID: 8}, r.record(ctx, "CommentInsert", q)
+}
+
+func (r *fakeRepo) CommentUpdate(ctx context.Context, q domain.DocCommentUpdateRequest) error {
+	return r.record(ctx, "CommentUpdate", q)
+}
+
+func (r *fakeRepo) Delete(ctx context.Context, q domain.DocIDRequest) error {
+	return r.record(ctx, "Delete", q)
 }

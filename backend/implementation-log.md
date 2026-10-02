@@ -46,3 +46,6 @@
 
 2026-09-28 016 supervisor: preserve primary command failures through bounded emergency kill/reap errors; meaningful signal/timeout/permission tests; relocated review helper log into backend. All five final-source checks pass; final native review follows.
 Final native review of da7481f against 62d9f4f exited 0 with no findings; independently passed tooling, phased APIHydra 864/925, and legacy. Authorized dev merge follows.
+
+2026-02-10 backend-schema-alignment
++348 -72 code - +1606 -237 tests --- user-confirmed schema contract

@@ -24,6 +24,7 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 	}
 
 	a.g.POST("/list", a.list)
+	a.g.POST("/list-inactive", a.listInactive)
 	a.g.POST("/details", a.details)
 	a.g.POST("/create", a.create)
 	a.g.POST("/update", a.updateEpic)
@@ -35,14 +36,29 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 func (a *API) list(c *echo.Context) error {
 	var req domain.EpicListRequest
 	if err := c.Bind(&req); err != nil {
-		return app.InvalidPayload(err, "invalid epic list payload")
+		return app.PayloadError(err, "invalid epic list payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return app.HTTP(app.Validation(v.Errors, app.ErrEpicInvalidInput))
+		return app.HTTPError(app.ValidationError(v.Errors, app.ErrEpicInvalidInput))
 	}
 	res, err := a.s.List(c.Request().Context(), req)
 	if err != nil {
-		return app.HTTP(err)
+		return app.HTTPError(err)
+	}
+	return c.JSON(http.StatusOK, &res)
+}
+
+func (a *API) listInactive(c *echo.Context) error {
+	var req domain.EpicListRequest
+	if err := c.Bind(&req); err != nil {
+		return app.PayloadError(err, "invalid epic inactive list payload")
+	}
+	if v := validate.Struct(req); !v.Validate() {
+		return app.HTTPError(app.ValidationError(v.Errors, app.ErrEpicInvalidInput))
+	}
+	res, err := a.s.ListInactive(c.Request().Context(), req)
+	if err != nil {
+		return app.HTTPError(err)
 	}
 	return c.JSON(http.StatusOK, &res)
 }
@@ -50,14 +66,14 @@ func (a *API) list(c *echo.Context) error {
 func (a *API) details(c *echo.Context) error {
 	var req domain.EpicIDRequest
 	if err := c.Bind(&req); err != nil {
-		return app.InvalidPayload(err, "invalid epic details payload")
+		return app.PayloadError(err, "invalid epic details payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return app.HTTP(app.Validation(v.Errors, app.ErrEpicInvalidInput))
+		return app.HTTPError(app.ValidationError(v.Errors, app.ErrEpicInvalidInput))
 	}
 	res, err := a.s.Details(c.Request().Context(), req)
 	if err != nil {
-		return app.HTTP(err)
+		return app.HTTPError(err)
 	}
 	return c.JSON(http.StatusOK, &res)
 }
@@ -65,14 +81,14 @@ func (a *API) details(c *echo.Context) error {
 func (a *API) create(c *echo.Context) error {
 	var req domain.EpicCreateRequest
 	if err := c.Bind(&req); err != nil {
-		return app.InvalidPayload(err, "invalid epic create payload")
+		return app.PayloadError(err, "invalid epic create payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return app.HTTP(app.Validation(v.Errors, app.ErrEpicInvalidInput))
+		return app.HTTPError(app.ValidationError(v.Errors, app.ErrEpicInvalidInput))
 	}
 	res, err := a.s.Create(c.Request().Context(), req)
 	if err != nil {
-		return app.HTTP(err)
+		return app.HTTPError(err)
 	}
 	return c.JSON(http.StatusCreated, &res)
 }
@@ -80,13 +96,13 @@ func (a *API) create(c *echo.Context) error {
 func (a *API) updateEpic(c *echo.Context) error {
 	var req domain.EpicUpdateRequest
 	if err := c.Bind(&req); err != nil {
-		return app.InvalidPayload(err, "invalid epic update payload")
+		return app.PayloadError(err, "invalid epic update payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return app.HTTP(app.Validation(v.Errors, app.ErrEpicInvalidInput))
+		return app.HTTPError(app.ValidationError(v.Errors, app.ErrEpicInvalidInput))
 	}
 	if err := a.s.UpdateEpic(c.Request().Context(), req); err != nil {
-		return app.HTTP(err)
+		return app.HTTPError(err)
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -94,13 +110,13 @@ func (a *API) updateEpic(c *echo.Context) error {
 func (a *API) delete(c *echo.Context) error {
 	var req domain.EpicIDRequest
 	if err := c.Bind(&req); err != nil {
-		return app.InvalidPayload(err, "invalid epic delete payload")
+		return app.PayloadError(err, "invalid epic delete payload")
 	}
 	if v := validate.Struct(req); !v.Validate() {
-		return app.HTTP(app.Validation(v.Errors, app.ErrEpicInvalidInput))
+		return app.HTTPError(app.ValidationError(v.Errors, app.ErrEpicInvalidInput))
 	}
 	if err := a.s.Delete(c.Request().Context(), req); err != nil {
-		return app.HTTP(err)
+		return app.HTTPError(err)
 	}
 	return c.NoContent(http.StatusNoContent)
 }

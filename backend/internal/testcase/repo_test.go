@@ -152,14 +152,14 @@ func TestRepositoryTranslationKeepsExternalCauses(t *testing.T) {
 			code := 500
 			if pg, ok := cause.(*pgconn.PgError); ok {
 				var actual *pgconn.PgError
-				require.ErrorAs(t, app.HTTP(err), &actual)
+				require.ErrorAs(t, app.HTTPError(err), &actual)
 				require.Same(t, pg, actual)
 				if pg.Code == "23503" {
 					require.ErrorIs(t, err, app.ErrTestCaseNotFound)
 					code = 404
 				}
 			}
-			status, _ := app.Interpret(err)
+			status, _ := app.InterpretError(err)
 			require.Equal(t, code, status)
 		})
 	}

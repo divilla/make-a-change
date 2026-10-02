@@ -97,22 +97,22 @@ func TestRepositoryCurrentReads(t *testing.T) {
 	epic := 4
 	name := "Epic"
 	afterName := "Previous change #4"
-	for _, op := range []string{"list", "details"} {
+	for _, op := range []string{"list", "list-inactive", "details"} {
 		for _, scenario := range []string{"values", "nullable", "empty", "scan", "query", "iteration", "missing"} {
 			t.Run(op+"/"+scenario, func(t *testing.T) {
 				failure := errors.New("read failed")
 				p := newBoundary(t)
 				p.args = []any{7}
-				c := domain.ChangeListItem{ID: 7, RefUUID: "uuid", RefSlug: &refSlug, ProjectID: 9, ChangePhase: "backlog", ChangeTypes: []string{"fix"}, EpicID: &epic, EpicName: &name, Title: "Title", Open: true, DoneTC: 70000, TotalTC: 100000, UpdatedAt: now}
+				c := domain.ChangeListItem{ID: 7, RefUUID: "uuid", RefSlug: &refSlug, ProjectID: 9, ChangePhase: "backlog", ChangeTypes: []string{"fix"}, EpicID: &epic, EpicName: &name, Title: "Title", DoneTC: 70000, TotalTC: 100000, UpdatedAt: now}
 				if scenario == "nullable" {
 					c.RefSlug = nil
 					c.EpicID = nil
 					c.EpicName = nil
 				}
-				values := []any{c.ID, c.RefUUID, c.RefSlug, c.ProjectID, c.ChangePhase, c.ChangeTypes, c.EpicID, c.EpicName, c.Title, c.Open, c.DoneTC, c.TotalTC, c.UpdatedAt}
+				values := []any{c.ID, c.RefUUID, c.RefSlug, c.ProjectID, c.ChangePhase, c.ChangeTypes, c.EpicID, c.EpicName, c.Title, c.DoneTC, c.TotalTC, c.UpdatedAt}
 				switch op {
 				case "details":
-					values = append(values, "https://pr", now, &epic, &afterName)
+					values = append(values, "https://pr", now, &epic, &afterName, false)
 				}
 				row := valueRow{t: t, values: values}
 				rows := &valueRows{}
@@ -120,7 +120,7 @@ func TestRepositoryCurrentReads(t *testing.T) {
 					row.err = failure
 				}
 				if scenario == "missing" && op == "details" {
-					row.err = app.Wrap(pgx.ErrNoRows, "nested")
+					row.err = app.WrapError(pgx.ErrNoRows, "nested")
 				}
 				if scenario == "query" {
 					row.err = failure
@@ -138,9 +138,13 @@ func TestRepositoryCurrentReads(t *testing.T) {
 				r := &Repo{pool: p}
 				var err error
 				switch op {
-				case "list":
+				case "list", "list-inactive":
 					var got []domain.ChangeListItem
-					got, err = r.List(p.ctx, domain.ChangeListRequest{ProjectID: 7})
+					if op == "list-inactive" {
+						got, err = r.ListInactive(p.ctx, domain.ChangeListRequest{ProjectID: 7})
+					} else {
+						got, err = r.List(p.ctx, domain.ChangeListRequest{ProjectID: 7})
+					}
 					if err == nil {
 						require.NotNil(t, got)
 						if scenario != "empty" {
@@ -149,7 +153,11 @@ func TestRepositoryCurrentReads(t *testing.T) {
 							require.Empty(t, got)
 						}
 					}
-					require.Contains(t, p.sql, "from public.vw_change_list where project_id = $1 order by updated_at desc, id")
+					view := "public.vw_change_list"
+					if op == "list-inactive" {
+						view = "public.vw_change_inactive_list"
+					}
+					require.Contains(t, p.sql, "from "+view+" where project_id = $1 order by updated_at desc, id")
 				case "details":
 					var got domain.ChangeDetails
 					got, err = r.Details(p.ctx, domain.ChangeIDRequest{ID: 7})
@@ -181,7 +189,7 @@ func TestRepositoryCurrentReads(t *testing.T) {
 func TestRepositoryTargetedContext(t *testing.T) {
 	failure := errors.New("query failure")
 	for _, op := range []string{"exists", "project", "epic"} {
-		for _, cause := range []error{nil, failure, app.Wrap(pgx.ErrNoRows, "nested")} {
+		for _, cause := range []error{nil, failure, app.WrapError(pgx.ErrNoRows, "nested")} {
 			p := newBoundary(t)
 			p.args = []any{7}
 			p.row = valueRow{t: t, values: []any{9}, err: cause}
@@ -260,8 +268,8 @@ func TestRepositorySingleStatementMutations(t *testing.T) {
 		{"after-change", "update public.change set after_change_id = $2, updated_at = now() where id = $1", []any{7, &epic}, func(r *Repo, c context.Context) error {
 			return r.UpdateAfterChange(c, domain.ChangeUpdateAfterChangeRequest{ID: 7, AfterChangeID: &epic})
 		}, true, app.ErrChangeInvalidReference},
-		{"open", "update public.change set open = $2, updated_at = now() where id = $1", []any{7, &flag}, func(r *Repo, c context.Context) error {
-			return r.UpdateOpen(c, domain.ChangeUpdateOpenRequest{ID: 7, Open: &flag})
+		{"active", "update public.change set active = $2, updated_at = now() where id = $1", []any{7, &flag}, func(r *Repo, c context.Context) error {
+			return r.UpdateActive(c, domain.ChangeUpdateActiveRequest{ID: 7, Active: &flag})
 		}, true, nil},
 		{"types", "update public.change set change_types = $2, updated_at = now() where id = $1", []any{7, []string{}}, func(r *Repo, c context.Context) error {
 			return r.UpdateTypes(c, domain.ChangeUpdateTypesRequest{ID: 7, ChangeTypes: []string{}})
@@ -273,7 +281,7 @@ func TestRepositorySingleStatementMutations(t *testing.T) {
 	}
 	for _, tc := range cases {
 		for _, tag := range []string{"UPDATE 0", "UPDATE 1"} {
-			for _, cause := range []error{nil, errors.New("exec failed"), app.Wrap(&pgconn.PgError{Code: "23503"}, "nested")} {
+			for _, cause := range []error{nil, errors.New("exec failed"), app.WrapError(&pgconn.PgError{Code: "23503"}, "nested")} {
 				t.Run(tc.name+"/"+tag, func(t *testing.T) {
 					p := newBoundary(t)
 					p.args = tc.args

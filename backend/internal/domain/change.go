@@ -19,7 +19,6 @@ type (
 		EpicID      *int      `json:"epic_id"`
 		EpicName    *string   `json:"epic_name"`
 		Title       string    `json:"title"`
-		Open        bool      `json:"open"`
 		DoneTC      int64     `json:"done_tc"`
 		TotalTC     int64     `json:"total_tc"`
 		Completed   int64     `json:"completed"`
@@ -29,9 +28,10 @@ type (
 	// ChangeDetails contains fields exposed by the current change details view.
 	ChangeDetails struct {
 		ChangeListItem
+		PRUrl           string    `json:"pr_url"`
 		AfterChangeID   *int      `json:"after_change_id"`
 		AfterChangeName *string   `json:"after_change_name"`
-		PRUrl           string    `json:"pr_url"`
+		Active          bool      `json:"active"`
 		CreatedAt       time.Time `json:"created_at"`
 	}
 
@@ -88,10 +88,10 @@ type (
 		ID    int    `json:"id" validate:"required|min:1"`
 		PRUrl string `json:"pr_url"`
 	}
-	// ChangeUpdateOpenRequest defines ChangeUpdateOpenRequest values.
-	ChangeUpdateOpenRequest struct {
-		ID   int   `json:"id" validate:"required|min:1"`
-		Open *bool `json:"open"`
+	// ChangeUpdateActiveRequest defines ChangeUpdateActiveRequest values.
+	ChangeUpdateActiveRequest struct {
+		ID     int   `json:"id" validate:"required|min:1"`
+		Active *bool `json:"active"`
 	}
 )
 

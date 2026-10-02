@@ -15,7 +15,7 @@ type Repo struct {
 	pool epicPool
 }
 
-const epicColumns = "id, project_id, name, done_tc, total_tc, change_count, created_at, updated_at"
+const epicColumns = "v.id, v.project_id, v.name, v.done_tc, v.total_tc, v.change_count, v.created_at, v.updated_at, e.active"
 
 // NewRepo initializes or executes NewRepo behavior.
 func NewRepo(pool *pgxpool.Pool) *Repo {
@@ -24,11 +24,20 @@ func NewRepo(pool *pgxpool.Pool) *Repo {
 
 // List executes List behavior.
 func (r *Repo) List(ctx context.Context, req domain.EpicListRequest) ([]domain.Epic, error) {
+	return r.list(ctx, req, "public.vw_epic_list")
+}
+
+// ListInactive reads the separately filtered inactive view.
+func (r *Repo) ListInactive(ctx context.Context, req domain.EpicListRequest) ([]domain.Epic, error) {
+	return r.list(ctx, req, "public.vw_epic_inactive_list")
+}
+
+func (r *Repo) list(ctx context.Context, req domain.EpicListRequest, view string) ([]domain.Epic, error) {
 	rows, err := r.pool.Query(ctx, `
 		select `+epicColumns+`
-		from public.vw_epic
-		where project_id = $1
-		order by created_at, id
+		from `+view+` v join public.epic e on e.id = v.id
+		where v.project_id = $1
+		order by v.name, v.id
 	`, req.ProjectID)
 	if err != nil {
 		return nil, app.DatabaseError(err, nil, nil)
@@ -47,7 +56,9 @@ func (r *Repo) List(ctx context.Context, req domain.EpicListRequest) ([]domain.E
 
 // Details executes Details behavior.
 func (r *Repo) Details(ctx context.Context, req domain.EpicIDRequest) (domain.Epic, error) {
-	epic, err := scanEpic(r.pool.QueryRow(ctx, "select "+epicColumns+" from public.vw_epic where id = $1", req.ID))
+	epic, err := scanEpic(r.pool.QueryRow(ctx, `select `+epicColumns+` from public.vw_epic_list v join public.epic e on e.id = v.id where v.id = $1
+ union all
+ select `+epicColumns+` from public.vw_epic_inactive_list v join public.epic e on e.id = v.id where v.id = $1`, req.ID))
 	if err != nil {
 		return domain.Epic{}, app.DatabaseError(err, app.ErrEpicNotFound, nil)
 	}
@@ -89,7 +100,7 @@ func scanEpic(row pgx.Row) (domain.Epic, error) {
 	var epic domain.Epic
 	err := row.Scan(
 		&epic.ID, &epic.ProjectID, &epic.Name, &epic.DoneTC,
-		&epic.TotalTC, &epic.ChangeCount, &epic.CreatedAt, &epic.UpdatedAt,
+		&epic.TotalTC, &epic.ChangeCount, &epic.CreatedAt, &epic.UpdatedAt, &epic.Active,
 	)
 	return epic, app.DatabaseError(err, nil, nil)
 }
@@ -98,4 +109,16 @@ type epicPool interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
 	QueryRow(context.Context, string, ...any) pgx.Row
 	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}
+
+// Deactivate retains a referenced epic after its DELETE was refused by PostgreSQL.
+func (r *Repo) Deactivate(ctx context.Context, req domain.EpicIDRequest) error {
+	tag, err := r.pool.Exec(ctx, "update public.epic set active = false, updated_at = now() where id = $1", req.ID)
+	if err != nil {
+		return app.DatabaseError(err, nil, nil)
+	}
+	if tag.RowsAffected() == 0 {
+		return app.ErrEpicNotFound
+	}
+	return nil
 }

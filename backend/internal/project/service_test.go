@@ -11,12 +11,13 @@ import (
 )
 
 type fakeProjectRepository struct {
-	err    error
-	calls  []string
-	ctx    context.Context
-	req    any
-	item   domain.Project
-	config domain.Config
+	err           error
+	deactivateErr error
+	calls         []string
+	ctx           context.Context
+	req           any
+	item          domain.Project
+	config        domain.Config
 }
 
 func (r *fakeProjectRepository) record(ctx context.Context, op string, req any) {
@@ -119,4 +120,9 @@ func TestServiceConfigNeverSubstitutes(t *testing.T) {
 	_, err := NewService(r).Config(context.Background(), domain.ProjectIDRequest{ID: 7})
 	require.ErrorIs(t, err, app.ErrProjectConfigNotFound)
 	require.Equal(t, []string{"config"}, r.calls)
+}
+
+func (r *fakeProjectRepository) Deactivate(ctx context.Context, req domain.ProjectIDRequest) error {
+	r.record(ctx, "deactivate", req)
+	return r.deactivateErr
 }

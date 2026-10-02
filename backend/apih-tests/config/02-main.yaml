@@ -51,6 +51,35 @@ spec:
         - string
         if ([.[].slug] == ([.[].slug] | sort)) then 0 else 1 end:
         - zero
+
+  # Rejected array text returns masked 500; the isolated config is unchanged.
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","Invalid\u0000type"]}'
+    response:
+      expected_status: 500
+      expected_body: '{"message":"Internal Server Error"}'
+      expected_types:
+        if keys == ["message"] then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","Invalid\u0000type"]}'
+    response:
+      expected_status: 500
+      expected_body: '{"message":"Internal Server Error"}'
+      expected_types:
+        if keys == ["message"] then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/config/details
+      body: '{"slug":${config_slug}}'
+    response:
+      expected_status: 200
+      expected_body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
   - request:
       method: POST
       path: /api/v1/config/delete
@@ -332,3 +361,637 @@ spec:
     response:
       expected_status: 400
       expected_body: '{"message":"invalid config payload"}'
+
+  # Independent error cases: each malformed field has otherwise valid input.
+  # details: slug null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/details
+      body: '{"slug":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # details: slug empty; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/details
+      body: '{"slug":""}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # details: slug whitespace; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/details
+      body: '{"slug":" \t "}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # details: slug number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/details
+      body: '{"slug":1}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config details payload"}'
+  # details: array body
+  - request:
+      method: POST
+      path: /api/v1/config/details
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config details payload"}'
+  # details: string body
+  - request:
+      method: POST
+      path: /api/v1/config/details
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config details payload"}'
+  # details: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/config/details
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # delete: slug null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/delete
+      body: '{"slug":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # delete: slug empty; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/delete
+      body: '{"slug":""}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # delete: slug whitespace; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/delete
+      body: '{"slug":" \t "}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # delete: slug number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/delete
+      body: '{"slug":1}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config delete payload"}'
+  # delete: array body
+  - request:
+      method: POST
+      path: /api/v1/config/delete
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config delete payload"}'
+  # delete: string body
+  - request:
+      method: POST
+      path: /api/v1/config/delete
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config delete payload"}'
+  # delete: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/config/delete
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # insert: slug omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # insert: slug null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":null,"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # insert: slug empty; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":"","project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # insert: slug whitespace; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":" \t ","project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # insert: slug number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":1,"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config insert payload"}'
+  # insert: project_docs omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # insert: project_docs string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":"brief","epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config insert payload"}'
+  # insert: project_docs numeric entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":[1],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config insert payload"}'
+  # insert: project_docs blank second entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"," "],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # insert: epic_docs omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # insert: epic_docs string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":"brief","change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config insert payload"}'
+  # insert: epic_docs numeric entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":[1],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config insert payload"}'
+  # insert: epic_docs blank second entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"," "],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # insert: change_docs omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # insert: change_docs string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":"brief","change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config insert payload"}'
+  # insert: change_docs numeric entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":[1],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config insert payload"}'
+  # insert: change_docs blank second entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief"," "],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # insert: change_phases omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # insert: change_phases string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":"brief","change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config insert payload"}'
+  # insert: change_phases numeric entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":[1],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config insert payload"}'
+  # insert: change_phases blank second entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["brief"," "],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # insert: change_colors omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # insert: change_colors string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":"brief","change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config insert payload"}'
+  # insert: change_colors numeric entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":[1],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config insert payload"}'
+  # insert: change_colors blank second entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["brief","
+        "],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # insert: change_types omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # insert: change_types string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":"brief"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config insert payload"}'
+  # insert: change_types numeric entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":[1]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config insert payload"}'
+  # insert: change_types blank second entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["brief","
+        "]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # insert: array body
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config insert payload"}'
+  # insert: string body
+  - request:
+      method: POST
+      path: /api/v1/config/insert
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config insert payload"}'
+  # insert: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/config/insert
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # update: slug omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # update: slug null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":null,"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # update: slug empty; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":"","project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # update: slug whitespace; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":" \t ","project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # update: slug number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":1,"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config update payload"}'
+  # update: project_docs omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # update: project_docs string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":"brief","epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config update payload"}'
+  # update: project_docs numeric entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":[1],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config update payload"}'
+  # update: project_docs blank second entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"," "],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # update: epic_docs omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # update: epic_docs string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":"brief","change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config update payload"}'
+  # update: epic_docs numeric entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":[1],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config update payload"}'
+  # update: epic_docs blank second entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"," "],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # update: change_docs omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # update: change_docs string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":"brief","change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config update payload"}'
+  # update: change_docs numeric entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":[1],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config update payload"}'
+  # update: change_docs blank second entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief"," "],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # update: change_phases omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # update: change_phases string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":"brief","change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config update payload"}'
+  # update: change_phases numeric entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":[1],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config update payload"}'
+  # update: change_phases blank second entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["brief"," "],"change_colors":["blue","green"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # update: change_colors omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # update: change_colors string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":"brief","change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config update payload"}'
+  # update: change_colors numeric entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":[1],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config update payload"}'
+  # update: change_colors blank second entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["brief","
+        "],"change_types":["fix","feature"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # update: change_types omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # update: change_types string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":"brief"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config update payload"}'
+  # update: change_types numeric entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":[1]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config update payload"}'
+  # update: change_types blank second entry; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '{"slug":${config_slug},"project_docs":["brief"],"epic_docs":["brief"],"change_docs":["brief","spec","review"],"change_phases":["backlog","done"],"change_colors":["blue","green"],"change_types":["brief","
+        "]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config payload"}'
+  # update: array body
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config update payload"}'
+  # update: string body
+  - request:
+      method: POST
+      path: /api/v1/config/update
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid config update payload"}'
+  # update: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/config/update
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+
+  # List rejects the wrong HTTP method.
+  - request:
+      method: GET
+      path: /api/v1/config/list
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'

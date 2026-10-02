@@ -96,7 +96,7 @@ func newBoundary(t *testing.T) *boundaryPool {
 func TestRepositoryReads(t *testing.T) {
 	now := time.Now()
 	failure := errors.New("read failed")
-	values := []any{7, "Name", "custom", int32(42), now, now, 70000}
+	values := []any{7, "Name", "custom", int32(42), now, now, 70000, true}
 	for _, op := range []string{"details", "list"} {
 		scenarios := []string{"success", "scan", "missing", "wrapped missing"}
 		if op == "list" {
@@ -123,7 +123,7 @@ func TestRepositoryReads(t *testing.T) {
 				case "missing":
 					row.err = pgx.ErrNoRows
 				case "wrapped missing":
-					row.err = app.Wrap(pgx.ErrNoRows, "query")
+					row.err = app.WrapError(pgx.ErrNoRows, "query")
 				}
 				p.row = row
 				p.rows = rows
@@ -137,7 +137,7 @@ func TestRepositoryReads(t *testing.T) {
 						require.ErrorIs(t, err, app.ErrProjectNotFound)
 					default:
 						require.NoError(t, err)
-						require.Equal(t, domain.Project{ID: 7, Name: "Name", Config: "custom", LastRef: 42, CreatedAt: now, UpdatedAt: now, ChangeCount: 70000}, got)
+						require.Equal(t, domain.Project{ID: 7, Name: "Name", Active: true, ConfigSlug: "custom", LastRef: 42, CreatedAt: now, UpdatedAt: now, ChangeCount: 70000}, got)
 					}
 					require.Contains(t, p.sql, "where v.id = $1")
 				} else {
@@ -153,13 +153,13 @@ func TestRepositoryReads(t *testing.T) {
 							require.Empty(t, got)
 						} else {
 							require.Len(t, got, 1)
-							require.Equal(t, domain.Project{ID: 7, Name: "Name", Config: "custom", LastRef: 42, CreatedAt: now, UpdatedAt: now, ChangeCount: 70000}, got[0])
+							require.Equal(t, domain.Project{ID: 7, Name: "Name", Active: true, ConfigSlug: "custom", LastRef: 42, CreatedAt: now, UpdatedAt: now, ChangeCount: 70000}, got[0])
 						}
 					}
 					require.Equal(t, scenario != "query", rows.closed)
-					require.Contains(t, p.sql, "order by v.updated_at desc, v.id desc")
+					require.Contains(t, p.sql, "order by v.active desc, v.updated_at desc, v.id desc")
 				}
-				require.Contains(t, p.sql, "v.id, v.name, p.config, p.last_ref, v.created_at, v.updated_at, v.change_count from public.vw_project v join public.project p on p.id = v.id")
+				require.Contains(t, p.sql, "v.id, v.name, p.config_slug, p.last_ref, v.created_at, v.updated_at, v.change_count, p.active from public.vw_project_list v join public.project p on p.id = v.id")
 			})
 		}
 	}
@@ -170,7 +170,7 @@ func TestRepositorySingleStatementMutations(t *testing.T) {
 	failure := errors.New("write failed")
 	fk := &pgconn.PgError{Code: "23503"}
 	for _, op := range []string{"create", "update", "delete"} {
-		for _, cause := range []error{nil, failure, pgx.ErrNoRows, app.Wrap(fk, "constraint")} {
+		for _, cause := range []error{nil, failure, pgx.ErrNoRows, app.WrapError(fk, "constraint")} {
 			affectedRows := []string{"1"}
 			if cause == nil && op != "create" {
 				affectedRows = []string{"0", "1"}
@@ -236,7 +236,7 @@ func TestRepositorySelectedConfig(t *testing.T) {
 			require.ErrorIs(t, err, app.ErrProjectConfigNotFound)
 		}
 		require.Contains(t, p.sql, "c.slug, c.project_docs, c.epic_docs, c.change_docs, c.change_phases, c.change_colors, c.change_types")
-		require.Contains(t, p.sql, "join public.config c on c.slug = p.config where p.id = $1")
+		require.Contains(t, p.sql, "join public.config c on c.slug = p.config_slug where p.id = $1")
 		require.NotContains(t, p.sql, "default")
 	}
 }

@@ -13,7 +13,7 @@ spec:
       expected_body: '[]'
   - request:
       method: POST
-      path: /api/v1/doc/current
+      path: /api/v1/doc/list-active
       body: '{"ref_id":${doc_project},"ref_table":"project"}'
     response:
       expected_status: 200
@@ -35,8 +35,8 @@ spec:
       body: '{"id":${doc_project_old}}'
     response:
       expected_status: 200
-      expected_body: '{"id":${doc_project_old},"ref_id":${doc_project},"ref_table":"project","doc_type":${doc_project_doc},"body":"#
-        Old doc","agent_edit":false,"current":true,"html":"<h1>Old doc</h1>\n"}'
+      expected_body: '{"id":${doc_project_old},"ref_id":${doc_project},"ref_table":"project","doc_type":${doc_project_doc},"body":"# Old doc","agent_edit":false,"deleted_at":null,"html":"<h1>Old
+        doc</h1>\n"}'
       expected_types:
         .created_at:
         - string
@@ -59,8 +59,8 @@ spec:
       body: '{"id":${doc_project_new}}'
     response:
       expected_status: 200
-      expected_body: '{"id":${doc_project_new},"ref_id":${doc_project},"ref_table":"project","doc_type":${doc_project_doc},"body":"#
-        Latest doc","agent_edit":true,"current":true,"html":"<h1>Latest doc</h1>\n"}'
+      expected_body: '{"id":${doc_project_new},"ref_id":${doc_project},"ref_table":"project","doc_type":${doc_project_doc},"body":"# Latest doc","agent_edit":true,"deleted_at":null,"html":"<h1>Latest
+        doc</h1>\n"}'
       expected_types:
         .created_at:
         - string
@@ -72,21 +72,21 @@ spec:
       body: '{"ref_id":${doc_project},"ref_table":"project"}'
     response:
       expected_status: 200
-      expected_body: '[{"id":${doc_project_new},"current":true},{"id":${doc_project_old},"current":false}]'
+      expected_body: '[{"id":${doc_project_new},"deleted_at":null},{"id":${doc_project_old},"deleted_at":null}]'
   - request:
       method: POST
-      path: /api/v1/doc/current
+      path: /api/v1/doc/list-active
       body: '{"ref_id":${doc_project},"ref_table":"project"}'
     response:
       expected_status: 200
-      expected_body: '[{"id":${doc_project_new},"current":true}]'
+      expected_body: '[{"id":${doc_project_new},"deleted_at":null}]'
   - request:
       method: POST
       path: /api/v1/doc/details
       body: '{"id":${doc_project_old}}'
     response:
       expected_status: 200
-      expected_body: '{"body":"# Old doc","current":false}'
+      expected_body: '{"body":"# Old doc","deleted_at":null}'
   - request:
       method: POST
       path: /api/v1/doc/insert
@@ -102,7 +102,7 @@ spec:
       expected_body: '[]'
   - request:
       method: POST
-      path: /api/v1/doc/current
+      path: /api/v1/doc/list-active
       body: '{"ref_id":${doc_epic},"ref_table":"epic"}'
     response:
       expected_status: 200
@@ -124,8 +124,8 @@ spec:
       body: '{"id":${doc_epic_old}}'
     response:
       expected_status: 200
-      expected_body: '{"id":${doc_epic_old},"ref_id":${doc_epic},"ref_table":"epic","doc_type":${doc_epic_doc},"body":"#
-        Old doc","agent_edit":false,"current":true,"html":"<h1>Old doc</h1>\n"}'
+      expected_body: '{"id":${doc_epic_old},"ref_id":${doc_epic},"ref_table":"epic","doc_type":${doc_epic_doc},"body":"# Old doc","agent_edit":false,"deleted_at":null,"html":"<h1>Old
+        doc</h1>\n"}'
       expected_types:
         .created_at:
         - string
@@ -148,8 +148,8 @@ spec:
       body: '{"id":${doc_epic_new}}'
     response:
       expected_status: 200
-      expected_body: '{"id":${doc_epic_new},"ref_id":${doc_epic},"ref_table":"epic","doc_type":${doc_epic_doc},"body":"#
-        Latest doc","agent_edit":true,"current":true,"html":"<h1>Latest doc</h1>\n"}'
+      expected_body: '{"id":${doc_epic_new},"ref_id":${doc_epic},"ref_table":"epic","doc_type":${doc_epic_doc},"body":"# Latest doc","agent_edit":true,"deleted_at":null,"html":"<h1>Latest
+        doc</h1>\n"}'
       expected_types:
         .created_at:
         - string
@@ -161,21 +161,21 @@ spec:
       body: '{"ref_id":${doc_epic},"ref_table":"epic"}'
     response:
       expected_status: 200
-      expected_body: '[{"id":${doc_epic_new},"current":true},{"id":${doc_epic_old},"current":false}]'
+      expected_body: '[{"id":${doc_epic_new},"deleted_at":null},{"id":${doc_epic_old},"deleted_at":null}]'
   - request:
       method: POST
-      path: /api/v1/doc/current
+      path: /api/v1/doc/list-active
       body: '{"ref_id":${doc_epic},"ref_table":"epic"}'
     response:
       expected_status: 200
-      expected_body: '[{"id":${doc_epic_new},"current":true}]'
+      expected_body: '[{"id":${doc_epic_new},"deleted_at":null}]'
   - request:
       method: POST
       path: /api/v1/doc/details
       body: '{"id":${doc_epic_old}}'
     response:
       expected_status: 200
-      expected_body: '{"body":"# Old doc","current":false}'
+      expected_body: '{"body":"# Old doc","deleted_at":null}'
   - request:
       method: POST
       path: /api/v1/doc/insert
@@ -184,11 +184,11 @@ spec:
       expected_status: 400
   - request:
       method: POST
-      path: /api/v1/doc/current
+      path: /api/v1/doc/list-active
       body: '{"ref_id":${doc_change},"ref_table":"change"}'
     response:
       expected_status: 200
-      expected_body: '[{"body":"Original brief","doc_type":"brief","current":true}]'
+      expected_body: '[{"body":"Original brief","doc_type":"brief","deleted_at":null}]'
       capture:
         doc_original: .[0].id
   - request:
@@ -208,8 +208,8 @@ spec:
       body: '{"id":${doc_change_old}}'
     response:
       expected_status: 200
-      expected_body: '{"id":${doc_change_old},"ref_id":${doc_change},"ref_table":"change","doc_type":"brief","body":"#
-        Old doc","agent_edit":false,"current":true,"html":"<h1>Old doc</h1>\n"}'
+      expected_body: '{"id":${doc_change_old},"ref_id":${doc_change},"ref_table":"change","doc_type":"brief","body":"# Old doc","agent_edit":false,"deleted_at":null,"html":"<h1>Old
+        doc</h1>\n"}'
       expected_types:
         .created_at:
         - string
@@ -232,8 +232,8 @@ spec:
       body: '{"id":${doc_change_new}}'
     response:
       expected_status: 200
-      expected_body: '{"id":${doc_change_new},"ref_id":${doc_change},"ref_table":"change","doc_type":"brief","body":"#
-        Latest doc","agent_edit":true,"current":true,"html":"<h1>Latest doc</h1>\n"}'
+      expected_body: '{"id":${doc_change_new},"ref_id":${doc_change},"ref_table":"change","doc_type":"brief","body":"# Latest doc","agent_edit":true,"deleted_at":null,"html":"<h1>Latest
+        doc</h1>\n"}'
       expected_types:
         .created_at:
         - string
@@ -245,21 +245,21 @@ spec:
       body: '{"ref_id":${doc_change},"ref_table":"change"}'
     response:
       expected_status: 200
-      expected_body: '[{"id":${doc_change_new},"current":true},{"id":${doc_change_old},"current":false},{"id":${doc_original},"current":false}]'
+      expected_body: '[{"id":${doc_change_new},"deleted_at":null},{"id":${doc_change_old},"deleted_at":null},{"id":${doc_original},"deleted_at":null}]'
   - request:
       method: POST
-      path: /api/v1/doc/current
+      path: /api/v1/doc/list-active
       body: '{"ref_id":${doc_change},"ref_table":"change"}'
     response:
       expected_status: 200
-      expected_body: '[{"id":${doc_change_new},"current":true}]'
+      expected_body: '[{"id":${doc_change_new},"deleted_at":null}]'
   - request:
       method: POST
       path: /api/v1/doc/details
       body: '{"id":${doc_change_old}}'
     response:
       expected_status: 200
-      expected_body: '{"body":"# Old doc","current":false}'
+      expected_body: '{"body":"# Old doc","deleted_at":null}'
   - request:
       method: POST
       path: /api/v1/doc/insert
@@ -280,7 +280,7 @@ spec:
       body: '{"id":${doc_safe}}'
     response:
       expected_status: 200
-      expected_body: '{"current":true}'
+      expected_body: '{"deleted_at":null}'
       expected_types:
         if (.html | test("<script|javascript:";"i") | not) and (.html | contains("<strong>safe</strong>")) then 0 else 1 end:
         - zero
@@ -297,7 +297,7 @@ spec:
         - zero
   - request:
       method: POST
-      path: /api/v1/doc/current
+      path: /api/v1/doc/list-active
       body: '{"ref_id":${doc_change},"ref_table":"change"}'
     response:
       expected_status: 200
@@ -369,7 +369,7 @@ spec:
       expected_body: '[]'
   - request:
       method: POST
-      path: /api/v1/doc/current
+      path: /api/v1/doc/list-active
       body: '{'
     response:
       expected_status: 400
@@ -378,7 +378,7 @@ spec:
         - string
   - request:
       method: POST
-      path: /api/v1/doc/current
+      path: /api/v1/doc/list-active
       body: '{}'
     response:
       expected_status: 400
@@ -387,7 +387,7 @@ spec:
         - string
   - request:
       method: POST
-      path: /api/v1/doc/current
+      path: /api/v1/doc/list-active
       body: '{"ref_id":0,"ref_table":"change"}'
     response:
       expected_status: 400
@@ -396,7 +396,7 @@ spec:
         - string
   - request:
       method: POST
-      path: /api/v1/doc/current
+      path: /api/v1/doc/list-active
       body: '{"ref_id":-1,"ref_table":"change"}'
     response:
       expected_status: 400
@@ -405,7 +405,7 @@ spec:
         - string
   - request:
       method: POST
-      path: /api/v1/doc/current
+      path: /api/v1/doc/list-active
       body: '{"ref_id":"bad","ref_table":"change"}'
     response:
       expected_status: 400
@@ -414,7 +414,7 @@ spec:
         - string
   - request:
       method: POST
-      path: /api/v1/doc/current
+      path: /api/v1/doc/list-active
       body: '{"ref_id":${doc_change},"ref_table":"invalid"}'
     response:
       expected_status: 400
@@ -423,7 +423,7 @@ spec:
         - string
   - request:
       method: POST
-      path: /api/v1/doc/current
+      path: /api/v1/doc/list-active
       body: '{"ref_id":${doc_missing_project},"ref_table":"project"}'
     response:
       expected_status: 200
@@ -629,3 +629,1441 @@ spec:
       body: '{"ref_id":${doc_missing_project},"ref_table":"project","doc_type":"brief","body":"Valid","agent_edit":false}'
     response:
       expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_table":"project","ref_id":${doc_project}}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_table":"project","ref_id":${doc_project},"body":" **Comment** ","agent_edit":false}'
+    response:
+      expected_status: 201
+      capture:
+        doc_comment_project: .id
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_table":"project","ref_id":${doc_project}}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_comment_project},"doc_type":"comment","body":"**Comment**","deleted_at":null,"html":"<p><strong>Comment</strong></p>\n"}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_table":"project","ref_id":${doc_project}}'
+    response:
+      expected_status: 200
+      expected_types:
+        if any(.[]; .doc_type == "comment") then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_table":"project","ref_id":${doc_project}}'
+    response:
+      expected_status: 200
+      expected_types:
+        if all(.[]; .doc_type != "comment") then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{"id":${doc_comment_project},"body":"Edited comment"}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_comment_project}}'
+    response:
+      expected_status: 200
+      expected_body: '{"body":"Edited comment","deleted_at":null}'
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{"id":${doc_comment_project},"body":""}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_comment_project}}'
+    response:
+      expected_status: 200
+      expected_body: '{"body":""}'
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":${doc_comment_project}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_table":"project","ref_id":${doc_project}}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_comment_project},"body":""}]'
+      expected_types:
+        .[0].deleted_at:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_comment_project}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${doc_comment_project}}'
+      expected_types:
+        .deleted_at:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_table":"epic","ref_id":${doc_epic}}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_table":"epic","ref_id":${doc_epic},"body":" **Comment** ","agent_edit":false}'
+    response:
+      expected_status: 201
+      capture:
+        doc_comment_epic: .id
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_table":"epic","ref_id":${doc_epic}}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_comment_epic},"doc_type":"comment","body":"**Comment**","deleted_at":null,"html":"<p><strong>Comment</strong></p>\n"}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_table":"epic","ref_id":${doc_epic}}'
+    response:
+      expected_status: 200
+      expected_types:
+        if any(.[]; .doc_type == "comment") then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_table":"epic","ref_id":${doc_epic}}'
+    response:
+      expected_status: 200
+      expected_types:
+        if all(.[]; .doc_type != "comment") then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{"id":${doc_comment_epic},"body":"Edited comment"}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_comment_epic}}'
+    response:
+      expected_status: 200
+      expected_body: '{"body":"Edited comment","deleted_at":null}'
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{"id":${doc_comment_epic},"body":""}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_comment_epic}}'
+    response:
+      expected_status: 200
+      expected_body: '{"body":""}'
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":${doc_comment_epic}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_table":"epic","ref_id":${doc_epic}}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_comment_epic},"body":""}]'
+      expected_types:
+        .[0].deleted_at:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_comment_epic}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${doc_comment_epic}}'
+      expected_types:
+        .deleted_at:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_table":"change","ref_id":${doc_change}}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_table":"change","ref_id":${doc_change},"body":" **Comment** ","agent_edit":false}'
+    response:
+      expected_status: 201
+      capture:
+        doc_comment_change: .id
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_table":"change","ref_id":${doc_change}}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_comment_change},"doc_type":"comment","body":"**Comment**","deleted_at":null,"html":"<p><strong>Comment</strong></p>\n"}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_table":"change","ref_id":${doc_change}}'
+    response:
+      expected_status: 200
+      expected_types:
+        if any(.[]; .doc_type == "comment") then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_table":"change","ref_id":${doc_change}}'
+    response:
+      expected_status: 200
+      expected_types:
+        if all(.[]; .doc_type != "comment") then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{"id":${doc_comment_change},"body":"Edited comment"}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_comment_change}}'
+    response:
+      expected_status: 200
+      expected_body: '{"body":"Edited comment","deleted_at":null}'
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{"id":${doc_comment_change},"body":""}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_comment_change}}'
+    response:
+      expected_status: 200
+      expected_body: '{"body":""}'
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":${doc_comment_change}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_table":"change","ref_id":${doc_change}}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_comment_change},"body":""}]'
+      expected_types:
+        .[0].deleted_at:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_comment_change}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${doc_comment_change}}'
+      expected_types:
+        .deleted_at:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"id":"bad","ref_id":"bad","ref_table":1,"body":2}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"id":-1,"ref_id":-1,"ref_table":"change","body":"raw","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"id":"bad","ref_id":"bad","ref_table":1,"body":2}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"id":-1,"ref_id":-1,"ref_table":"change","body":"raw","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{"id":"bad","ref_id":"bad","ref_table":1,"body":2}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{"id":-1,"ref_id":-1,"ref_table":"change","body":"raw","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":"bad","ref_id":"bad","ref_table":1,"body":2}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":-1,"ref_id":-1,"ref_table":"change","body":"raw","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_types:
+        .message:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_missing_project},"ref_table":"project","body":"Missing parent","agent_edit":false}'
+    response:
+      expected_status: 404
+      expected_body: '{"message":"doc parent not found"}'
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","body":" ","agent_edit":false}'
+    response:
+      expected_status: 400
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","body":"raw"}'
+    response:
+      expected_status: 400
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{"id":${doc_project_new},"body":"Not a comment"}'
+    response:
+      expected_status: 404
+      expected_body: '{"message":"doc not found"}'
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{"id":${doc_project_new}}'
+    response:
+      expected_status: 400
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{"id":${doc_project_new},"body":null}'
+    response:
+      expected_status: 400
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_id":${doc_missing_project},"ref_table":"project"}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":${doc_safe}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_table":"change","ref_id":${doc_change}}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_safe}}'
+    response:
+      expected_status: 200
+      expected_types:
+        .deleted_at:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_table":"change","ref_id":${doc_change}}'
+    response:
+      expected_status: 200
+      expected_types:
+        if any(.[]; .doc_type == "brief" and (.deleted_at | type) == "string") then 0 else 1 end:
+        - zero
+
+  # Independent error cases: each malformed field has otherwise valid input.
+  # list: ref_id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_table":"project"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # list: ref_id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_id":null,"ref_table":"project"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # list: ref_id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_id":-1.5,"ref_table":"project"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc list payload"}'
+  # list: ref_id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_id":-9223372036854775809,"ref_table":"project"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc list payload"}'
+  # list: ref_table omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_id":${doc_project}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # list: ref_table null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_id":${doc_project},"ref_table":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # list: ref_table empty; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_id":${doc_project},"ref_table":""}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # list: ref_table unsupported table; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_id":${doc_project},"ref_table":"user"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # list: ref_table number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_id":${doc_project},"ref_table":1}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc list payload"}'
+  # list: array body
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc list payload"}'
+  # list: string body
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc list payload"}'
+  # list: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/doc/list
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # list-active: ref_id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_table":"project"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # list-active: ref_id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":null,"ref_table":"project"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # list-active: ref_id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":-1.5,"ref_table":"project"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc active list payload"}'
+  # list-active: ref_id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":-9223372036854775809,"ref_table":"project"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc active list payload"}'
+  # list-active: ref_table omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":${doc_project}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # list-active: ref_table null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":${doc_project},"ref_table":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # list-active: ref_table empty; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":${doc_project},"ref_table":""}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # list-active: ref_table unsupported table; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":${doc_project},"ref_table":"user"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # list-active: ref_table number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":${doc_project},"ref_table":1}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc active list payload"}'
+  # list-active: array body
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc active list payload"}'
+  # list-active: string body
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc active list payload"}'
+  # list-active: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/doc/list-active
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # comment-list: ref_id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_table":"project"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-list: ref_id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_id":null,"ref_table":"project"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-list: ref_id zero; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_id":0,"ref_table":"project"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-list: ref_id string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_id":"bad","ref_table":"project"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment list payload"}'
+  # comment-list: ref_id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_id":-1.5,"ref_table":"project"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment list payload"}'
+  # comment-list: ref_id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_id":-9223372036854775809,"ref_table":"project"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment list payload"}'
+  # comment-list: ref_table omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_id":${doc_project}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-list: ref_table null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_id":${doc_project},"ref_table":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-list: ref_table empty; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_id":${doc_project},"ref_table":""}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-list: ref_table unsupported table; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_id":${doc_project},"ref_table":"user"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-list: ref_table number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_id":${doc_project},"ref_table":1}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment list payload"}'
+  # comment-list: array body
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment list payload"}'
+  # comment-list: string body
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment list payload"}'
+  # comment-list: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/doc/comment-list
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # details: id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # details: id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":-1.5}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc details payload"}'
+  # details: id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":-9223372036854775809}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc details payload"}'
+  # details: array body
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc details payload"}'
+  # details: string body
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc details payload"}'
+  # details: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/doc/details
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # delete: id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # delete: id zero; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":0}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # delete: id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":-1.5}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc delete payload"}'
+  # delete: id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":-9223372036854775809}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc delete payload"}'
+  # delete: array body
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc delete payload"}'
+  # delete: string body
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc delete payload"}'
+  # delete: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/doc/delete
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # insert: ref_id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_table":"project","doc_type":${doc_project_doc},"body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # insert: ref_id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":null,"ref_table":"project","doc_type":${doc_project_doc},"body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # insert: ref_id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":-1.5,"ref_table":"project","doc_type":${doc_project_doc},"body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc insert payload"}'
+  # insert: ref_id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":-9223372036854775809,"ref_table":"project","doc_type":${doc_project_doc},"body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc insert payload"}'
+  # insert: ref_table omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_project},"doc_type":${doc_project_doc},"body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # insert: ref_table null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_project},"ref_table":null,"doc_type":${doc_project_doc},"body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # insert: ref_table unsupported table; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_project},"ref_table":"user","doc_type":${doc_project_doc},"body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # insert: ref_table number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_project},"ref_table":1,"doc_type":${doc_project_doc},"body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc insert payload"}'
+  # insert: doc_type omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # insert: doc_type null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","doc_type":null,"body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # insert: doc_type whitespace; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","doc_type":" \t ","body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # insert: doc_type number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","doc_type":1,"body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc insert payload"}'
+  # insert: body omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","doc_type":${doc_project_doc},"agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # insert: body whitespace; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","doc_type":${doc_project_doc},"body":" \t ","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # insert: body number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","doc_type":${doc_project_doc},"body":1,"agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc insert payload"}'
+  # insert: agent_edit string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","doc_type":${doc_project_doc},"body":"Valid","agent_edit":"true"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc insert payload"}'
+  # insert: agent_edit object; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","doc_type":${doc_project_doc},"body":"Valid","agent_edit":{}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc insert payload"}'
+  # insert: array body
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc insert payload"}'
+  # insert: string body
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc insert payload"}'
+  # insert: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/doc/insert
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # comment-insert: ref_id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_table":"project","body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-insert: ref_id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":null,"ref_table":"project","body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-insert: ref_id zero; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":0,"ref_table":"project","body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-insert: ref_id string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":"bad","ref_table":"project","body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment insert payload"}'
+  # comment-insert: ref_id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":-1.5,"ref_table":"project","body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment insert payload"}'
+  # comment-insert: ref_id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":-9223372036854775809,"ref_table":"project","body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment insert payload"}'
+  # comment-insert: ref_table omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_project},"body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-insert: ref_table null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_project},"ref_table":null,"body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-insert: ref_table empty; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_project},"ref_table":"","body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-insert: ref_table unsupported table; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_project},"ref_table":"user","body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-insert: ref_table number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_project},"ref_table":1,"body":"Valid","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment insert payload"}'
+  # comment-insert: body omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-insert: body null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","body":null,"agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-insert: body empty; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","body":"","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-insert: body whitespace; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","body":" \t ","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-insert: body number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","body":1,"agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment insert payload"}'
+  # comment-insert: agent_edit null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","body":"Valid","agent_edit":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-insert: agent_edit string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","body":"Valid","agent_edit":"true"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment insert payload"}'
+  # comment-insert: agent_edit number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","body":"Valid","agent_edit":1}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment insert payload"}'
+  # comment-insert: agent_edit object; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","body":"Valid","agent_edit":{}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment insert payload"}'
+  # comment-insert: array body
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment insert payload"}'
+  # comment-insert: string body
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment insert payload"}'
+  # comment-insert: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/doc/comment-insert
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  # comment-update: id omitted; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{"body":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-update: id null; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{"id":null,"body":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-update: id zero; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{"id":0,"body":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  # comment-update: id string; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{"id":"bad","body":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment update payload"}'
+  # comment-update: id fraction; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{"id":-1.5,"body":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment update payload"}'
+  # comment-update: id integer underflow; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{"id":-9223372036854775809,"body":"Valid"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment update payload"}'
+  # comment-update: body number; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{"id":${doc_comment_project},"body":1}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment update payload"}'
+  # comment-update: body object; other fields valid
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{"id":${doc_comment_project},"body":{}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment update payload"}'
+  # comment-update: array body
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '[]'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment update payload"}'
+  # comment-update: string body
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '"invalid"'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment update payload"}'
+  # comment-update: wrong HTTP method
+  - request:
+      method: GET
+      path: /api/v1/doc/comment-update
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+
+  # Database-rejected document bodies return masked 500 without altering history.
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","doc_type":${doc_project_doc},"body":"Invalid\u0000body","agent_edit":false}'
+    response:
+      expected_status: 500
+      expected_body: '{"message":"Internal Server Error"}'
+      expected_types:
+        if keys == ["message"] then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","body":"Invalid\u0000body","agent_edit":false}'
+    response:
+      expected_status: 500
+      expected_body: '{"message":"Internal Server Error"}'
+      expected_types:
+        if keys == ["message"] then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-update
+      body: '{"id":${doc_comment_project},"body":"Invalid\u0000body"}'
+    response:
+      expected_status: 500
+      expected_body: '{"message":"Internal Server Error"}'
+      expected_types:
+        if keys == ["message"] then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_comment_project}}'
+    response:
+      expected_status: 200
+      expected_body: '{"body":"","doc_type":"comment"}'
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_project_new}}'
+    response:
+      expected_status: 200
+      expected_body: '{"body":"# Latest doc","deleted_at":null}'
+  - request:
+      method: POST
+      path: /api/v1/doc/list
+      body: '{"ref_id":${doc_project},"ref_table":"project"}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_comment_project},"body":""},{"id":${doc_project_new},"body":"# Latest doc"},{"id":${doc_project_old},"body":"# Old doc"}]'
+
+  # project: comments rejected by normal document insert.
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","doc_type":"comment","body":"Wrong endpoint","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc type"}'
+
+  # epic: comments rejected by normal document insert.
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_epic},"ref_table":"epic","doc_type":"comment","body":"Wrong endpoint","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc type"}'
+
+  # change: comments rejected by normal document insert.
+  - request:
+      method: POST
+      path: /api/v1/doc/insert
+      body: '{"ref_id":${doc_change},"ref_table":"change","doc_type":"comment","body":"Wrong endpoint","agent_edit":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc type"}'
+
+  # Wrong methods and removed routes retain their public error contracts.
+  - request:
+      method: POST
+      path: /api/v1/health
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  - request:
+      method: POST
+      path: /api/health
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+  - request:
+      method: POST
+      path: /api/v1/doc/current
+      body: '{}'
+    response:
+      expected_status: 404
+      expected_body: '{"message":"Not Found"}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-open
+      body: '{}'
+    response:
+      expected_status: 404
+      expected_body: '{"message":"Not Found"}'

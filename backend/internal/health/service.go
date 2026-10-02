@@ -35,7 +35,7 @@ func (s *Service) Check(ctx context.Context) domain.Health {
 	}
 
 	if err := s.repo.Ping(ctx); err != nil {
-		log.Warn().Err(app.Wrap(err, "database health check")).Msg("database health check failed")
+		log.Warn().Err(app.WrapError(err, "database health check")).Msg("database health check failed")
 		res.Status = "degraded"
 		res.Database = "error"
 		res.Error = "database unavailable"

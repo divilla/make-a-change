@@ -1,5 +1,135 @@
 # Backend refactor checkpoint — 016 final failure integration
 
+## API error-suite refresh (2026-10-02)
+
+User requested missing errors that can be tested with APIHydra. This test-only
+refresh adds487 requests (479 error assertions plus eight state-preservation
+reads) across the existing19 files. Cases isolate omitted/null/blank/incorrect
+fields, malformed numeric/UUID/array input, top-level JSON mismatches, wrong
+methods for all45 routes, obsolete-route404, forbidden normal comment insertion
+and each deleted-parent comment insertion. Fourteen NUL-text requests exercise
+real PostgreSQL input errors and verify masked500 responses without outages;
+reads prove existing state is unchanged. Captured mutation targets and cleanup
+remain mandatory. No production, dependency, database/schema or root-URL edit.
+
+| Command actually run | Exit and result |
+| --- | --- |
+| Focused serial `apih` doc/config lifecycles, private URL19081 | 0; current-source owned server, existing designated DB. |
+| `make -C backend tooling-test` | 0;35 Python tests and Go suite validator. |
+| `make -C backend api-test` | 0; **1060/1060 requests**,45/45 operations; **1090/1204 (90.5316%)**, strict90% API gate PASS. |
+| `git diff --check` | 0. |
+
+| Production package | API covered/total | API gaps |
+| --- | ---: | ---: |
+| cmd/server | 77/93 | 16 |
+| internal/app | 41/51 | 10 |
+| internal/change | 296/315 | 19 |
+| internal/config | 96/100 | 4 |
+| internal/doc | 188/210 | 22 |
+| internal/domain | 0/0 | 0 |
+| internal/epic | 131/143 | 12 |
+| internal/health | 16/21 | 5 |
+| internal/project | 117/125 | 8 |
+| internal/testcase | 97/105 | 8 |
+| pkg/config | 23/31 | 8 |
+| pkg/markdown | 8/10 | 2 |
+| **Total** | **1090/1204 (90.5316%)** | **114** |
+
+This fresh API result supersedes the below-target API result in the original
+schema-alignment section below. The denominator and production sources are
+unchanged. Check, unit coverage and dependency audit were not rerun for this
+YAML/documentation-only refresh; their preceding production-source results remain
+recorded below, including independent unit1190/1204 (98.8372%). Bare `apih` against
+the configured8080 server was not rerun; that server was left running.
+
+Two initial tooling runs failed honestly on forbidden fixed-positive malformed
+numbers and the extra health filename; cases were moved into existing files and
+use negative fractions/underflow. No validator/assertion was weakened. The final
+focused and full HTTP campaigns both pass. Final artifacts/logs are preserved in
+`.coverage/verification/api-error-scenarios-20261002/`.
+
+Missing-document mutation404, health outage503, scan/iteration failures, failed
+deactivation, timed concurrent-parent deletion and inaccessible selected-config
+states still lack live HTTP scenarios. Service guards rejected earlier by HTTP
+remain coverage gaps rather than separate API error conditions. See the
+[suite guide](../apih-tests/coverage.md) for the exact scope and limitations.
+Passing the numerical gate does not establish exhaustive error coverage.
+
+## Backend schema alignment (2026-10-02)
+
+User-authorized backend-only alignment uses the updated checked-in `db/init.sql`
+and this branch's backend changes as authority. All initial ambiguities were
+resolved in chat before implementation: successful FK-delete deactivation returns
+204; projects list both activity states; epic/change have inactive list endpoints;
+details/updates/child creation support inactive parents; config_slug and
+update-active replace old names; doc list-active, separate comment operations
+(including explicitly confirmed comment-insert) and soft deletion are supported.
+The user designated and updated localhost:15432/changes. No database/schema file,
+CLI/frontend file, dependency or deployment was changed by this task.
+
+| Contract | Meaningful unit evidence | APIHydra evidence |
+| --- | --- | --- |
+| Schema-backed project active/config_slug and all-state order | project repo/API matrices; TestRepositoryReads | project details/list and selected config reads |
+| DELETE FK fallback; only FK triggers; errors/missing rows preserved;204 empty | TestDeleteDeactivatesOnlyOnDependencyConflict and TestRepositoryDeactivationPreservesFailuresAndMissingRows in project/epic; central IsError wrapping test | project/epic DELETE followed by active=false details and lists; physical deletes after children removed |
+| Active/inactive epic/change lists; full counters/completion; inactive details and allowed writes/children | expanded repo/service/API matrices; TestInactiveChangeServiceValidatesAndDerivesCompletion; TestInactiveChangeAPIValidationAndErrors | empty/populated inactive lists, validation, inactive details/updates/children and reactivation |
+| update-active and obsolete route absence | retained activity handler/validation tests; TestUpdateOpenRouteIsAbsent | both bool values plus inactive/active reads |
+| list-active uses doc_id; history includes soft-deleted docs with nullable deleted_at | TestDocRepositoryReads; TestDocRepositoryReadsNullableAndDeletedTimestamps; TestDocumentSerializationHasNullableDeletionTimestamp; TestRenamedDocRouteIsAbsent | regular-doc history, active selection, deletion and independent retained-history reads |
+| Separate comment list/insert/update; configured regular insert cannot select comment; explicit empty update supported | TestCommentAndDeleteAPIContracts; TestNewDocServiceValidationAndFailurePropagation; TestRegularInsertRejectsCommentsEvenWhenConfigured; TestCommentUpdateAcceptsExplicitEmptyBody; TestCommentsRenderRetainedHistory | each reference type; no comment active selection; edits including empty; non-comment404; soft-deleted comments retained |
+| SQL function signatures and correct ID/null results; config DELETE FK enforcement | TestDocRepositoryInsertAndProject; TestNewDocRepositoryMutations; TestConfigRepositoryMutations | cast-signature calls against the updated DB; direct config delete/missing/conflict lifecycle |
+| Complete operation inventory, contexts, response/status/error contracts | TestAPIConstructorRouteInventory; source/ledger audit; affected API/service/error tests | all573 requests and45 registered operations pass |
+
+The fallback consists of two independent statements. Repository code handles
+pgx operations; service code owns the FK fallback decision through the central
+error API. No Go transaction, child cascade, parent activity restriction or
+postmutation reload is introduced. fn_doc_insert's obsolete null-parent return
+handling was removed because the current function always returns its inserted
+ID; the service retains explicit parent validation. Calls cast parameters to
+select the checked-in signatures in a DB with retained older overloads.
+
+| Final command | Exit/result |
+| --- | --- |
+| `GOLANGCI_LINT_CACHE=/tmp/backend-align-lint-cache make -C backend check` | 0; formatting, lint, vet, race and tooling pass;35 Python tests plus Go validator. |
+| `make -C backend coverage` | 0; **1190/1204 (98.8372%)**;95% gate passes. |
+| `make -C backend deps-audit` | 0; no vulnerabilities found. |
+| `make -C backend api-test` | 2 (runner1); all573 HTTP requests pass, valid **1082/1204 (89.8671%)**;90% statement gate FAIL. |
+| `git diff --check` and scope inspection | 0; task changes confined to backend/. |
+
+| Production package | Unit covered/total | Unit gaps | API covered/total | API gaps |
+| --- | ---: | ---: | ---: | ---: |
+| cmd/server | 79/93 | 14 | 76/93 | 17 |
+| internal/app | 51/51 | 0 | 39/51 | 12 |
+| internal/change | 315/315 | 0 | 296/315 | 19 |
+| internal/config | 100/100 | 0 | 95/100 | 5 |
+| internal/doc | 210/210 | 0 | 187/210 | 23 |
+| internal/domain | 0/0 | 0 | 0/0 | 0 |
+| internal/epic | 143/143 | 0 | 130/143 | 13 |
+| internal/health | 21/21 | 0 | 16/21 | 5 |
+| internal/project | 125/125 | 0 | 116/125 | 9 |
+| internal/testcase | 105/105 | 0 | 96/105 | 9 |
+| pkg/config | 31/31 | 0 | 23/31 | 8 |
+| pkg/markdown | 10/10 | 0 | 8/10 | 2 |
+| **Total** | **1190/1204** | **14** | **1082/1204** | **122** |
+
+Remaining unit gaps are14 server startup/main statements. API gaps are122
+statements, mostly startup/external DB/scan/iteration failures and service
+validation intercepted at HTTP boundaries. Missing-document deletion remains
+unit-tested because only soft deletion exists; no unused mutation IDs are
+guessed. Final completion is **incomplete solely on the API numerical gate**:
+1084/1204 would meet it; actual1082/1204 does not. The final gate stays strict.
+See [the suite guide](../apih-tests/coverage.md) for limitations and all new
+operation assertions. Unit and API profiles are fresh and independent.
+
+Initial baseline `make -C backend test` exited2 with obsolete ChangeListItem.Active
+and Doc.Current references plus project/epic body assertion failures. During
+implementation, lint found two new test issues and the tooling audit found its
+obsolete39 route count; these were repaired. Failed API campaigns (make2, runner3
+or101) did not establish coverage. Raw failures and final logs are under
+`backend/.coverage/verification/schema-alignment-20261002/`; original diagnostic
+copies also remain in /tmp/backend-align*. Failed terminal campaigns may have left
+their own records before post-file execution; no unproven ownership was inferred
+for cleanup. Complete campaigns perform their captured-ID cleanup, retaining
+document history as required. No stage/production promotion was performed.
+
 ## Change prerequisite display name (2026-09-30)
 
 Change details now return nullable `after_change_name` from

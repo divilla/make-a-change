@@ -53,7 +53,11 @@ func (s *Service) Delete(ctx context.Context, req domain.ProjectIDRequest) error
 	if req.ID <= 0 {
 		return app.ErrProjectInvalidInput
 	}
-	return s.repo.Delete(ctx, req)
+	err := s.repo.Delete(ctx, req)
+	if app.IsError(err, app.ErrProjectHasChanges) {
+		return s.repo.Deactivate(ctx, req)
+	}
+	return err
 }
 
 // Config returns only the selected configuration, without a default fallback.

@@ -24,18 +24,18 @@ spec:
       expected_status: 204
   - request:
       method: POST
-      path: /api/v1/doc/current
+      path: /api/v1/doc/list-active
       body: '{"ref_id":${doc_project},"ref_table":"project"}'
     response:
       expected_status: 200
-      expected_body: '[{"id":${doc_project_new},"current":true}]'
+      expected_body: '[{"id":${doc_project_new},"deleted_at":null}]'
   - request:
       method: POST
       path: /api/v1/doc/details
       body: '{"id":${doc_project_new}}'
     response:
       expected_status: 200
-      expected_body: '{"current":true}'
+      expected_body: '{"deleted_at":null}'
   - request:
       method: POST
       path: /api/v1/doc/insert
@@ -44,18 +44,18 @@ spec:
       expected_status: 404
   - request:
       method: POST
-      path: /api/v1/doc/current
+      path: /api/v1/doc/list-active
       body: '{"ref_id":${doc_epic},"ref_table":"epic"}'
     response:
       expected_status: 200
-      expected_body: '[{"id":${doc_epic_new},"current":true}]'
+      expected_body: '[{"id":${doc_epic_new},"deleted_at":null}]'
   - request:
       method: POST
       path: /api/v1/doc/details
       body: '{"id":${doc_epic_new}}'
     response:
       expected_status: 200
-      expected_body: '{"current":true}'
+      expected_body: '{"deleted_at":null}'
   - request:
       method: POST
       path: /api/v1/doc/insert
@@ -64,21 +64,88 @@ spec:
       expected_status: 404
   - request:
       method: POST
-      path: /api/v1/doc/current
+      path: /api/v1/doc/list-active
       body: '{"ref_id":${doc_change},"ref_table":"change"}'
     response:
       expected_status: 200
-      expected_body: '[{"id":${doc_safe},"current":true}]'
+      expected_body: '[]'
   - request:
       method: POST
       path: /api/v1/doc/details
       body: '{"id":${doc_safe}}'
     response:
       expected_status: 200
-      expected_body: '{"current":true}'
+      expected_types:
+        .deleted_at:
+        - string
   - request:
       method: POST
       path: /api/v1/doc/insert
       body: '{"ref_id":${doc_change},"ref_table":"change","doc_type":"brief","body":"No resurrection","agent_edit":false}'
     response:
       expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":${doc_project_old}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":${doc_project_new}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":${doc_epic_old}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":${doc_epic_new}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":${doc_original}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":${doc_change_old}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":${doc_change_new}}'
+    response:
+      expected_status: 204
+
+  # Each removed parent rejects new comments, while retained history remains available.
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_project},"ref_table":"project","body":"Removed parent","agent_edit":false}'
+    response:
+      expected_status: 404
+      expected_body: '{"message":"doc parent not found"}'
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_epic},"ref_table":"epic","body":"Removed parent","agent_edit":false}'
+    response:
+      expected_status: 404
+      expected_body: '{"message":"doc parent not found"}'
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-insert
+      body: '{"ref_id":${doc_change},"ref_table":"change","body":"Removed parent","agent_edit":false}'
+    response:
+      expected_status: 404
+      expected_body: '{"message":"doc parent not found"}'

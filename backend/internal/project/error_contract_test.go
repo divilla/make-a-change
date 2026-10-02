@@ -49,6 +49,12 @@ func TestProjectHandlerErrorContracts(t *testing.T) {
 					req.Header.Set("Content-Type", "application/json")
 					ctx := e.NewContext(req, rec)
 					err := op.handler(a, ctx)
+					if op.name == "delete" && tc.name == "conflict" {
+						require.NoError(t, err)
+						require.Equal(t, 204, rec.Code)
+						require.Empty(t, rec.Body.String())
+						return
+					}
 					if tc.cause == nil {
 						require.NoError(t, err)
 						require.Equal(t, op.success, rec.Code)
