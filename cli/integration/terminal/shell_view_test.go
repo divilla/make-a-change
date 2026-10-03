@@ -236,7 +236,7 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 	send("/return\r", "Rows")
 	send("\x08", "Space activate")
 	send(" ", "activated change #31")
-	send("\x03", "returned from inactive changes")
+	send("\x03", "of 31")
 	send("/return\r", "MainScreen")
 	require.Eventually(t, func() bool {
 		entries, readErr := os.ReadDir(filepath.Join(repoRoot, ".mch", "tmp"))
@@ -362,6 +362,9 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 			rows := []map[string]any{}
 			for i := 1; i <= 30; i++ {
 				rows = append(rows, terminalChange(i, fmt.Sprintf("Row %02d", i)))
+			}
+			if !inactive {
+				rows = append(rows, terminalChange(31, "Activated PTY Change"))
 			}
 			value = rows
 		case "/api/v1/change/details":

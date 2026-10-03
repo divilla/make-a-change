@@ -44,7 +44,11 @@ func docs031Server(t *testing.T) (*docs031Backend, *httptest.Server) {
 			cfg["change_docs"] = []string{"brief", "spec", "notes"}
 			writeProgramJSON(w, cfg)
 		case "/api/v1/change/list":
-			writeProgramJSON(w, []any{programChange(12, "Program Change")})
+			rows := []any{programChange(12, "Program Change")}
+			if !b.inactive {
+				rows = append(rows, programChange(20, "Activated change"))
+			}
+			writeProgramJSON(w, rows)
 		case "/api/v1/change/list-inactive":
 			require.Equal(t, float64(7), in["project_id"])
 			if b.inactive {
@@ -221,7 +225,12 @@ func TestCLIProgram031InactiveChangesAndEpicSelection(t *testing.T) {
 	s.waitFor(t, "Space activate")
 	s.navigate(t, " ", "activated change #20")
 	s.waitFor(t, "No changes")
-	s.navigate(t, "\x03", "returned from inactive changes")
+	s.navigate(t, "\x03", "Rows 1-2 of 2")
+	s.waitFor(t, "Activated change")
+	b.mu.Lock()
+	activeReads := b.calls["/api/v1/change/list"]
+	b.mu.Unlock()
+	require.Equal(t, 2, activeReads)
 	s.navigate(t, "\r", "loaded change")
 	s.navigate(t, "/epic\r", "Active epic #3")
 	require.NotContains(t, s.output.String(), "Hidden inactive epic")

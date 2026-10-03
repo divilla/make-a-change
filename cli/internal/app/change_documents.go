@@ -55,6 +55,11 @@ func (m Model) applyChangeDocumentResult(r documents.ChangeResult) (tea.Model, t
 	if next.Committed != "" {
 		m.status = next.Committed
 	}
+	if r.Err == nil && (r.Operation == documents.NewComment || r.Operation == documents.EditComment) {
+		m.detailEditField = ""
+		m.commentID = 0
+		m = m.setPromptValue("")
+	}
 	if next.Err != nil {
 		m.err = next.Err.Error()
 		if next.Committed != "" {
@@ -136,6 +141,7 @@ func (m Model) historyKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if m.state == DocumentState {
 			m.document = m.document.Back()
+			m.document = m.document.KeepSelectedVisible(m.documentViewportHeight())
 			if m.history.Committed != "" {
 				return m.beginDocumentRefresh()
 			}
@@ -201,6 +207,6 @@ func (m Model) leaveInactiveChanges() (tea.Model, tea.Cmd) {
 	m.changeList = m.inactiveOrigin
 	m.changeList.Generation = generation
 	m.changeList.Inactive = false
-	m.status, m.err = "returned from inactive changes", ""
-	return m, nil
+	m.rememberSelectedChange()
+	return m.beginChange(changes.List, 0, changes.Input{})
 }

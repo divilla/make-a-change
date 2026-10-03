@@ -884,3 +884,16 @@ read-only retry and return. All three are in the terminal manifest.
 boundary, real bat syntax ANSI colors during scrolling/version changes, red
 metadata, purple confirmation, footer feedback and terminal restoration.
 Existing brief, configuration, testcase and health program assertions are retained.
+
+031 review fixes: `Test031CommentCommitClosesEditorBeforeRefreshRecovery` proves
+031-11/12/19 for insertion and updates with either active-document or comment
+refresh failure, including Enter and typed read-only `/retry` recovery.
+`Test031FailedCommentWriteRetainsExactEditorDraft` preserves failed-write retry
+bytes. `Test031InactiveReturnReloadsActiveRowsAndPreservesSelection` and
+`Test031InactiveReturnRestartsCanceledActiveLoad` prove 031-16 for fresh active
+rows, saved filters, selection by ID and rejection of late canceled results.
+`Test031OwnerHistoryReturnKeepsScrolledSelectionVisible` proves 031-14/18 for
+Esc and Ctrl+C after opening a scrolled owner-list record with Return.
+The inactive complete-program scenario now checks the activated row and fresh
+active-list request; the real PTY scenario checks the refreshed list count after
+activation and return.

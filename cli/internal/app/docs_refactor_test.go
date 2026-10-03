@@ -344,6 +344,7 @@ func Test031InactiveListRoutesKeyboardAndScope(t *testing.T) {
 	m, a := app031Model(t)
 	m.state = ChangesListState
 	m.changeList.Rows = []dto.ChangeView{{ID: "2", ProjectID: "7", Title: "active"}}
+	a.changeRows = slices.Clone(m.changeList.Rows)
 	a.inactive = []dto.Change{{ID: 4, ProjectID: 7, Title: "inactive"}, {ID: 3, ProjectID: 7, Title: "other"}}
 	m, cmd := sendKey(m, tea.KeyCtrlH)
 	require.NotNil(t, cmd)
@@ -355,7 +356,8 @@ func Test031InactiveListRoutesKeyboardAndScope(t *testing.T) {
 	require.Equal(t, "4", m.changeList.Rows[0].ID)
 	m, _ = sendKey(m, tea.KeyDown)
 	require.Equal(t, 1, m.changeList.Selected)
-	m, _ = sendKey(m, tea.KeyEsc)
+	m, cmd = sendKey(m, tea.KeyEsc)
+	m = applyCommand(m, cmd)
 	require.False(t, m.changeList.Inactive)
 	require.Equal(t, "2", m.changeList.Rows[0].ID)
 	m = applyMsg(m, stale)
