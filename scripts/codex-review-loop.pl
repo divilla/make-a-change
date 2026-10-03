@@ -354,7 +354,7 @@ sub parse_review_options {
 			push @review_arguments, $argument;
 		}
 	}
-	unshift @review_arguments, '--model', 'gpt-6-sol' unless $has_model;
+	unshift @review_arguments, '--model', 'gpt-6.1-sol' unless $has_model;
 	push @review_arguments, codex_settings();
 	return ($review_base, @review_arguments);
 }
@@ -445,7 +445,7 @@ sub main {
 		unlink $fix_result_file;
 		printf "=== Fix findings %02d ===\n", $fix_number;
 		$status = run_codex(
-			$findings_file, 'codex', 'exec', '--json', '--model', 'gpt-6-sol',
+			$findings_file, 'codex', 'exec', '--json', '--model', 'gpt-6.1-sol',
 			codex_settings(), '-o', $fix_result_file, $fix_prompt,
 		);
 		exit $status if $status != 0;

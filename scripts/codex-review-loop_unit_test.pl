@@ -62,9 +62,9 @@ assert_equal(
 
 assert_equal(
 	join("\0", parse_review_options('--base', 'develop')),
-	join("\0", 'develop', '--model', 'gpt-6-sol',
+	join("\0", 'develop', '--model', 'gpt-6.1-sol',
 		'-c', 'model_reasoning_effort="high"', '-c', 'service_tier="default"'),
-	'reviews default to GPT-6 Sol, high reasoning and standard speed',
+	'reviews default to GPT-6.1 Sol, high reasoning and standard speed',
 );
 
 for my $model_options (['--model=gpt-6-astra'], ['-m', 'gpt-6-astra'], ['-mgpt-6-astra']) {

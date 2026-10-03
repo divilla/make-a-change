@@ -34,7 +34,7 @@ set -euo pipefail
 [[ ${1-} == exec ]]
 [[ ${2-} == --json ]]
 [[ ${3-} == --model ]]
-[[ ${4-} == gpt-6-sol ]]
+[[ ${4-} == gpt-6.1-sol ]]
 [[ ${5-} == -c ]]
 [[ ${6-} == 'model_reasoning_effort="high"' ]]
 [[ ${7-} == -c ]]
@@ -138,7 +138,7 @@ $0 == "Repository: " repo {
 }
 END { if (!found) exit 1 }
 ' "$first_output"
-grep -Fq "codex exec --json --model gpt-6-sol -c 'model_reasoning_effort=\"high\"' -c 'service_tier=\"default\"' -o " "$first_output"
+grep -Fq "codex exec --json --model gpt-6.1-sol -c 'model_reasoning_effort=\"high\"' -c 'service_tier=\"default\"' -o " "$first_output"
 grep -Fq "'\$change-code agent/specs/000-domain-types.md'" "$first_output"
 awk '
 /^-+$/ {

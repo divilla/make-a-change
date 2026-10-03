@@ -320,7 +320,7 @@ sub main {
 	print "\n=== Implementation ===\n";
 	my $prompt = '$change-code ' . $specification;
 	my $status = run_codex(
-		'codex', 'exec', '--json', '--model', 'gpt-6-sol',
+		'codex', 'exec', '--json', '--model', 'gpt-6.1-sol',
 		'-c', 'model_reasoning_effort="high"', '-c', 'service_tier="default"',
 		'-o', $result_file, $prompt,
 	);
