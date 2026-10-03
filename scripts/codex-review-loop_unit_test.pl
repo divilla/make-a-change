@@ -61,6 +61,18 @@ assert_equal(
 );
 
 assert_equal(
+	join("\0", parse_review_options()),
+	join("\0", 'origin/dev', '--model', 'gpt-6.1-sol', codex_settings()),
+	'reviews default to origin/dev',
+);
+
+assert_equal(
+	join("\0", parse_review_options('--base=origin/stage')),
+	join("\0", 'origin/stage', '--model', 'gpt-6.1-sol', codex_settings()),
+	'an explicit base overrides origin/dev',
+);
+
+assert_equal(
 	join("\0", parse_review_options('--base', 'develop')),
 	join("\0", 'develop', '--model', 'gpt-6.1-sol',
 		'-c', 'model_reasoning_effort="high"', '-c', 'service_tier="default"'),
@@ -70,7 +82,7 @@ assert_equal(
 for my $model_options (['--model=gpt-6-astra'], ['-m', 'gpt-6-astra'], ['-mgpt-6-astra']) {
 	assert_equal(
 		join("\0", parse_review_options(@$model_options)),
-		join("\0", '', @$model_options, codex_settings()),
+		join("\0", 'origin/dev', @$model_options, codex_settings()),
 		'explicit model options override the default without duplicate flags',
 	);
 }

@@ -129,7 +129,7 @@ Inspect state before retrying a partially completed helper operation.
    establish acceptance. Keep fixes within the bounded specification.
 4. **Verify and review.** Run the required CLI checks and both suites, then
    `scripts/codex-review-loop.pl agent/specs/NNN-cli-slug.md --base origin/dev`.
-   The explicit base avoids the helper's default remote branch. Revalidate final
+   The explicit base matches the helper's `origin/dev` default. Revalidate final
    code after review fixes, refreshing coverage when production code or test
    scenarios change. Resolve findings and document remaining baseline gaps.
 5. **Merge to dev through `scripts/merge-to-dev.pl`.** Numerical coverage shortfalls

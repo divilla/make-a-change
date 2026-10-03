@@ -283,10 +283,11 @@ scripts/codex-review-loop.pl agent/specs/010-executor-service.md
 
 The required first positional argument is the specification file. The script
 always reviews a branch range so every pass includes fixes committed by earlier
-passes. It uses the default remote branch from `origin/HEAD` unless
+passes. It uses `origin/dev` unless
 `--base BRANCH` is supplied; arguments after the specification are forwarded
 to Codex. Every review pass uses the native `codex exec review --base` target,
-with the base resolved to a pinned commit before the loop begins. The
+with the base resolved to a pinned commit before the loop begins. If `origin/dev`
+is missing, the script stops rather than selecting another branch. The
 review and every fresh findings-fix session explicitly select `gpt-6.1-sol`, high
 reasoning, and the standard (`default`) service tier. An explicit review model
 option still overrides the review default. The specification is supplied only

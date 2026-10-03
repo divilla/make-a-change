@@ -356,6 +356,7 @@ sub parse_review_options {
 	}
 	unshift @review_arguments, '--model', 'gpt-6.1-sol' unless $has_model;
 	push @review_arguments, codex_settings();
+	$review_base = 'origin/dev' if $review_base eq '';
 	return ($review_base, @review_arguments);
 }
 
@@ -397,11 +398,6 @@ sub main {
 	}
 
 	my ($review_base, @review_arguments) = parse_review_options(@arguments);
-	if ($review_base eq '') {
-		($review_base, $status) = capture_command(1, 'git', 'symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD');
-		$review_base =~ s/\s+\z//;
-		$status == 0 && $review_base ne '' or fail("cannot resolve origin's default branch; supply --base explicitly");
-	}
 
 	my ($review_base_commit, $resolve_status) = capture_command(1, 'git', 'rev-parse', '--verify', '--end-of-options', "$review_base^{commit}");
 	$review_base_commit =~ s/\s+\z//;

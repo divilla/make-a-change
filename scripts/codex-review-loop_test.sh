@@ -43,8 +43,18 @@ git -C "$repo" add initial.txt "$specification" scripts/codex-review-loop.pl \
 	scripts/lib/mch/Progress.pm scripts/lib/mch/GitAuth.pm scripts/git-auth.sh scripts/commit-agent.pl
 git -C "$repo" commit -q -m initial
 git -C "$repo" push -q -u origin master
-git -C "$repo" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/master
+git -C "$repo" branch stage
+git -C "$repo" push -q origin stage
+git -C "$repo" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/stage
 git -C "$repo" branch develop
+git -C "$repo" checkout -q -b dev
+printf '%s\n' 'development base' >"$repo/dev.txt"
+git -C "$repo" add dev.txt
+git -C "$repo" commit -q -m 'development base'
+git -C "$repo" push -q origin dev
+git -C "$repo" checkout -q master
+# Keep local dev stale to prove that reviews use the remote-tracking dev tip.
+git -C "$repo" branch -f dev master
 
 cat >"$fake_bin/codex" <<'EOF'
 #!/usr/bin/env bash
@@ -205,7 +215,9 @@ review_count="$test_root/review-count"
 fix_count="$test_root/fix-count"
 helper_executed="$test_root/helper-executed"
 output="$test_root/output"
-pinned_base=$(git -C "$repo" rev-parse origin/master)
+pinned_base=$(git -C "$repo" rev-parse origin/dev)
+[[ "$pinned_base" != $(git -C "$repo" rev-parse origin/stage) ]]
+[[ "$pinned_base" != $(git -C "$repo" rev-parse dev) ]]
 expected_fix_prompt="\$change-fix-findings $specification Do not commit or push; the caller handles commits."
 (
 	cd "$repo"
@@ -225,7 +237,7 @@ findings_dir=${findings_file%/*}
 
 grep -Fxq "Repository: $repo" "$output"
 grep -Fxq 'Branch: master' "$output"
-grep -Fxq 'Base: origin/master' "$output"
+grep -Fxq 'Base: origin/dev' "$output"
 grep -Fxq "Pinned base: $pinned_base" "$output"
 grep -Fxq "Specification: $specification" "$output"
 settings=" -c 'model_reasoning_effort=\"high\"' -c 'service_tier=\"default\"'"
@@ -235,7 +247,7 @@ awk -v repo="$repo" -v base="$pinned_base" -v findings="$findings_file" -v setti
 $0 == "Repository: " repo {
 	if ((getline line) <= 0 || line != "Specification: agent/specs/test-spec.md") exit 1
 	if ((getline line) <= 0 || line != "Branch: master") exit 1
-	if ((getline line) <= 0 || line != "Base: origin/master") exit 1
+	if ((getline line) <= 0 || line != "Base: origin/dev") exit 1
 	if ((getline line) <= 0 || line != "Pinned base: " base) exit 1
 	if ((getline line) <= 0 || line != "Review options: --base " base " --model gpt-6.1-sol" settings) exit 1
 	if ((getline line) <= 0 || line != "Findings: " findings) exit 1
@@ -320,6 +332,7 @@ git -C "$repo" show HEAD:scripts/commit-agent.pl | grep -Fq 'helper was executed
 [[ -z $(git -C "$repo" status --short) ]]
 ! git -C "$repo" ls-files --error-unmatch -- findings.md >/dev/null 2>&1
 [[ $(git -C "$repo" rev-parse origin/master) != "$pinned_base" ]]
+[[ $(git -C "$repo" rev-parse origin/dev) == "$pinned_base" ]]
 
 explicit_base_output="$test_root/explicit-base-output"
 develop_base=$(git -C "$repo" rev-parse develop)
@@ -558,11 +571,17 @@ assert_rejected_invocation stdin_custom_review_prompt \
 	'custom review instructions cannot be combined with --base' \
 	"$specification" -
 
+git -C "$repo" update-ref -d refs/remotes/origin/dev
+assert_rejected_invocation missing_dev \
+	'cannot resolve review base origin/dev to a commit' \
+	"$specification"
+git -C "$repo" update-ref refs/remotes/origin/dev "$pinned_base"
+
 interrupt_output="$test_root/interrupt-output"
 interrupt_error="$test_root/interrupt-error"
 interrupt_child_pid="$test_root/interrupt-child-pid"
 interrupt_child_terminated="$test_root/interrupt-child-terminated"
-interrupt_base=$(git -C "$repo" rev-parse origin/master)
+interrupt_base=$(git -C "$repo" rev-parse origin/dev)
 set +e
 (
 	cd "$repo"
