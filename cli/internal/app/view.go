@@ -272,7 +272,7 @@ func (m Model) helpText() string {
 		return documents.Help(m.document)
 	case ChangesListState:
 		if m.changeList.Inactive {
-			return "Inactive changes | Space activate | Esc/Ctrl+C return | Up/Down select | Type to filter"
+			return "Inactive changes | Space activate | /retry reload | Esc/Ctrl+C return | Up/Down select | Type to filter"
 		}
 		return "Ctrl+H inactive changes | Type to filter changes  |  <ctrl+n> new change  |  <return> view  |  </> command"
 	case ChangeDetailsState:

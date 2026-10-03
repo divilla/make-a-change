@@ -2641,3 +2641,78 @@ in each campaign's `uncovered.txt` and `functions.log`. No baseline failures or
 blockers remain. Backend and Docker validation are outside this CLI fix's scope;
 no backend code or toolchain changed. No Git publication or deployment occurred.
 Next action: caller review/publication.
+
+## 031 review fixes 10 — inactive activation refresh recovery (2026-10-03)
+
+Validated the P2 finding against 031-16/19: activation committed successfully,
+but failed inactive-list refresh feedback was replaced by the Main-screen
+workaround and `/retry` was rejected. The new unit regression reproduced that
+feedback failure before the fix (exit 1).
+
+Command discovery and validation now include `/retry` when browsing inactive
+changes. The footer advertises it, and failed reads retain committed activation
+feedback and read-only recovery guidance. Retry uses the existing inactive-aware
+List operation without repeating UpdateChangeActive. The ordinary active-list
+menu and Main-screen reload contract remain unchanged; the architecture now
+records the inactive-list exception. No HTTP contract changed.
+
+`Test031InactiveActivationRefreshReadOnlyRetry` covers typed and dropdown retry,
+a second failed read, successful recovery, project scope, retained filters,
+exactly one activation, no active-list read during retry, and removal of the
+command after returning to active changes. The existing manifest scenario
+`TestCLIProgram031InactiveChangesAndEpicSelection` now injects two inactive-read
+failures and verifies keyboard recovery and exact write/read counts against an
+owned fake HTTP server. Its existing active-list return and epic assertions remain.
+
+| Command actually run | Exit | Evidence |
+| --- | ---: | --- |
+| `go test -count=1 ./internal/app -run '^Test031InactiveActivationRefreshReadOnlyRetry$'` (CLI cwd, before fix) | 1 | Both cases reproduce missing read-only recovery guidance. |
+| `make -C cli format` | 0 | `/tmp/031-review10-format.log`; intended Go files only. |
+| `go test -count=1 -race ./internal/changes ./internal/app` (CLI cwd) | 0 | Initial fixed implementation passes; final source rerun by `check`. |
+| `go test -count=1 ./internal/changes ./internal/app` (CLI cwd) | 0 | `/tmp/031-review10-focused.log`; final focused tests pass. |
+| `go test -count=1 ./integration -run '^TestCLIProgram031InactiveChangesAndEpicSelection$'` (CLI cwd) | 0 | `/tmp/031-review10-program.log`; final scenario rerun by campaign. |
+| `make -C cli check` | 0 | `/tmp/031-review10-check.log`; formatting, lint, vet, unit race, architecture and tooling pass. |
+| `make -C cli coverage` | 0 | `/tmp/031-review10-coverage.log`; **5611/6446 (87.0462%)**, 80% gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/031-review10-deps-audit.log`; no vulnerabilities. |
+| `make -C cli integration-coverage` | 0 | `/tmp/031-review10-integration-coverage.log`; **4958/6446 (76.9159%)**, 70% gate passes. |
+| `python3 -B -m unittest discover -s cli/scripts -p documentation_test.py` | 0 | `/tmp/031-review10-docs.log`; documentation commands and links pass after evidence updates. |
+
+Both independent campaigns complete with all 34 selected program scenarios,
+including the covered startup child, and the real PTY scenario passing. No skips,
+missing counters, assertion failures, crashes, timeouts or cleanup failures.
+Tested revision: `6fd9eb84c155744d2f9d31672819cbc7407bed60` plus the source/test
+changes captured in provenance. Both input hash maps match each other and the
+current files before these evidence/log updates. Their sorted compact mapping
+SHA-256 is `5a6b35383eb10d0c8180a2d02ef172fe663b3584f7564ee45baa82a6679d5080`.
+Terminal child binary SHA-256:
+`dc7dcb867a18fa6ac7b6894471fdb3e9d6ba43c0ff298204312593a14c26a8be`.
+Tools: Go `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0.
+Raw profiles, command exits, scenarios and uncovered statements/functions remain
+under `cli/.coverage/{unit,integration}`.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2552/3077 | 2346/3077 |
+| `cli/internal/changes` | 868/992 | 747/992 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 503/528 | 418/528 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 21/21 | 17/21 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining uncovered behavior includes main, navigation fallbacks, agent/process
+failure paths and HTTP rejection branches; exact locations are in each campaign's
+`uncovered.txt` and `functions.log`. No baseline failures or blockers remain.
+No backend source or toolchain changed; backend/Docker checks are outside scope.
+No Git publication or deployment occurred. Next action: caller review/publication.

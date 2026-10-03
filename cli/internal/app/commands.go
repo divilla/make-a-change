@@ -113,6 +113,23 @@ func commandAllowed(state State, command string) bool {
 	return false
 }
 
+func (m Model) commandOptions(state State) []dto.Option {
+	options := commandOptions(state)
+	if state == ChangesListState && m.changeList.Inactive {
+		options = append(options, dto.Option{ID: "/retry", Label: "/retry"})
+	}
+	return options
+}
+
+func (m Model) commandAllowed(state State, command string) bool {
+	for _, option := range m.commandOptions(state) {
+		if option.ID == command {
+			return true
+		}
+	}
+	return false
+}
+
 func helpStateFor(state State) State {
 	switch state {
 	case MainState:

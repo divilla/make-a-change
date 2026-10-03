@@ -34,9 +34,11 @@ clears only that filter. A blank Find entry or canceled editor retains the
 saved query. Typing ordinary text in the list prompt applies an additional
 temporary word-prefix search until the prompt is cleared or the user leaves the
 list. The list restores the selected change when returning from its details
-screen. The list menu omits `/retry` and `/brief-new`; returning to Main and
-opening `/changes` reloads the list. Epic cells show the epic name without an
-ID suffix. Types uses AccentPurple, while `%` and Complete use AccentBlue.
+screen. The ordinary active-list menu omits `/retry` and `/brief-new`; returning
+to Main and opening `/changes` reloads that list. The inactive list exposes
+`/retry` to reload inactive changes without repeating activation. Epic cells show
+the epic name without an ID suffix. Types uses AccentPurple, while `%` and
+Complete use AccentBlue.
 
 Use `brief` and `spec` consistently in commands, screens, data types, and prompts.
 Remove the legacy `def` terminology and its compatibility paths. Other configured
@@ -509,6 +511,7 @@ visible; `/retry` reads and prints without replaying committed mutations.
 `/documents` retains project/epic/change access and uses this history viewer.
 
 Ctrl+H on the change list opens project-scoped inactive changes. Space activates
-an inactive row, and Esc/Ctrl+C returns to the originating list. Change epic
-selectors exclude inactive epics. Revision, owner and project checks reject late
+an inactive row; if its refresh fails, `/retry` reloads only the inactive list
+without replaying activation. Esc/Ctrl+C returns to the originating list. Change
+epic selectors exclude inactive epics. Revision, owner and project checks reject late
 HTTP/editor/process results; menu and editor focus owns its keys.

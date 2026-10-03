@@ -940,3 +940,14 @@ matches the root Lip Gloss surface's four-space default and affects display text
 only. `Test031HistoryTabsKeepFooterWithinTerminal` verifies document/comment
 history fits the terminal at widths 20/40/80 after resize and paging, keeps the
 footer visible, and preserves syntax colors, stored bodies and captured output.
+
+031 review fixes 10: `Test031InactiveActivationRefreshReadOnlyRetry` proves
+031-16/19 for typed and dropdown inactive-list retry after committed activation,
+repeated read failure, successful recovery, retained project/filter scope and
+exactly one activation write. Retry reads no active rows; returning to active
+changes restores the ordinary menu without `/retry`. The existing manifest
+scenario `TestCLIProgram031InactiveChangesAndEpicSelection` now exercises two
+failed inactive reads and keyboard recovery against the fake HTTP backend,
+asserting one activation, four inactive reads and no premature active-list read.
+The footer and architecture describe this reachable read-only recovery; current
+HTTP contracts remain unchanged.

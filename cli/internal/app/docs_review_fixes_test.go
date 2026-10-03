@@ -682,6 +682,82 @@ func Test031InactiveReturnRestartsCanceledActiveLoad(t *testing.T) {
 	require.Empty(t, m.err, "late canceled result must not replace the reload")
 }
 
+type inactiveRefresh031Client struct {
+	*docs031Client
+	readErr error
+}
+
+func (a *inactiveRefresh031Client) ListInactiveChanges(ctx context.Context, project int) ([]dto.Change, error) {
+	rows, err := a.docs031Client.ListInactiveChanges(ctx, project)
+	if a.readErr != nil {
+		return nil, a.readErr
+	}
+	return rows, err
+}
+
+func Test031InactiveActivationRefreshReadOnlyRetry(t *testing.T) {
+	for _, dropdown := range []bool{false, true} {
+		t.Run(strconv.FormatBool(dropdown), func(t *testing.T) {
+			m, base := app031Model(t)
+			a := &inactiveRefresh031Client{docs031Client: base}
+			m.client = a
+			m.state = ChangesListState
+			m.changesFilters.find = "match"
+			a.inactive = []dto.Change{{ID: 4, ProjectID: 7, Title: "match inactive"}, {ID: 3, ProjectID: 7, Title: "match remaining"}}
+			m, cmd := sendKey(m, tea.KeyCtrlH)
+			m = applyCommand(m, cmd)
+			a.readErr = errors.New("inactive list unavailable")
+			m, cmd = sendRune(m, ' ')
+			m = applyCommand(m, cmd)
+			require.Equal(t, ChangesListState, m.state)
+			require.True(t, m.changeList.Inactive)
+			require.Contains(t, m.status, "activated change #4")
+			require.Contains(t, m.status, "/retry reads only")
+			require.Equal(t, a.readErr.Error(), m.err)
+			for _, fail := range []bool{true, false} {
+				if !fail {
+					a.readErr = nil
+				}
+				if dropdown {
+					m, _ = sendRune(m, '/')
+					require.Contains(t, m.dropdown.options, dto.Option{ID: "/retry", Label: "/retry"})
+					for _, r := range "retry" {
+						m, _ = sendRune(m, r)
+					}
+					m, cmd = sendKey(m, tea.KeyEnter)
+				} else {
+					m, cmd = sendCommand(m, "/retry")
+				}
+				require.NotNil(t, cmd)
+				require.True(t, m.changeList.Loading)
+				m = applyCommand(m, cmd)
+				require.Equal(t, ChangesListState, m.state)
+				require.True(t, m.changeList.Inactive)
+				require.Equal(t, []int{4}, a.activationIDs, "retry must not replay activation")
+				require.Zero(t, a.changeListCalls, "retry must not read the active list")
+				if fail {
+					require.Contains(t, m.status, "activated change #4")
+					require.Contains(t, m.status, "/retry reads only")
+					require.Equal(t, a.readErr.Error(), m.err)
+				} else {
+					require.Empty(t, m.err)
+					require.False(t, m.changeList.Loading)
+					require.Equal(t, "3", m.changeList.Rows[0].ID)
+					require.Equal(t, "match", m.changesFilters.find)
+				}
+			}
+			require.Equal(t, []int{7, 7, 7, 7}, a.inactiveProjects)
+			m, cmd = sendKey(m, tea.KeyEsc)
+			m = applyCommand(m, cmd)
+			require.False(t, m.changeList.Inactive)
+			require.NotContains(t, m.commandOptions(ChangesListState), dto.Option{ID: "/retry", Label: "/retry"})
+			m, cmd = sendCommand(m, "/retry")
+			require.Nil(t, cmd)
+			require.Equal(t, "unknown command: /retry", m.err)
+		})
+	}
+}
+
 func Test031OwnerHistoryReturnKeepsScrolledSelectionVisible(t *testing.T) {
 	for _, key := range []tea.KeyType{tea.KeyEsc, tea.KeyCtrlC} {
 		t.Run(key.String(), func(t *testing.T) {

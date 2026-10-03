@@ -16,14 +16,15 @@ import (
 )
 
 type docs031Backend struct {
-	mu                 sync.Mutex
-	rows               []map[string]any
-	active             map[string]int
-	calls              map[string]int
-	writes             []map[string]any
-	inactive           bool
-	pendingHistoryPath string
-	historyReadStarted chan struct{}
+	mu                   sync.Mutex
+	rows                 []map[string]any
+	active               map[string]int
+	calls                map[string]int
+	writes               []map[string]any
+	inactive             bool
+	inactiveReadFailures int
+	pendingHistoryPath   string
+	historyReadStarted   chan struct{}
 }
 
 func docs031Server(t *testing.T) (*docs031Backend, *httptest.Server) {
@@ -62,6 +63,11 @@ func docs031Server(t *testing.T) (*docs031Backend, *httptest.Server) {
 			writeProgramJSON(w, rows)
 		case "/api/v1/change/list-inactive":
 			require.Equal(t, float64(7), in["project_id"])
+			if b.inactiveReadFailures > 0 {
+				b.inactiveReadFailures--
+				http.Error(w, "inactive list unavailable", http.StatusServiceUnavailable)
+				return
+			}
 			if b.inactive {
 				row := programChange(20, "Inactive change")
 				delete(row, "active")
@@ -253,8 +259,23 @@ func TestCLIProgram031InactiveChangesAndEpicSelection(t *testing.T) {
 	s.navigate(t, "/changes\r", "Rows 1-1 of 1")
 	s.navigate(t, "\x08", "Inactive change")
 	s.waitFor(t, "Space activate")
+	b.mu.Lock()
+	b.inactiveReadFailures = 2
+	b.mu.Unlock()
 	s.navigate(t, " ", "activated change #20")
+	s.waitFor(t, "/retry reads only")
+	s.waitFor(t, "inactive list unavailable")
+	s.navigate(t, "/retry\r", "refresh failed — /retry reads only")
+	s.navigate(t, "/retry\r", "status no changes")
 	s.waitFor(t, "No changes")
+	b.mu.Lock()
+	activationCalls := b.calls["/api/v1/change/update-active"]
+	inactiveReads := b.calls["/api/v1/change/list-inactive"]
+	activeReadsBeforeReturn := b.calls["/api/v1/change/list"]
+	b.mu.Unlock()
+	require.Equal(t, 1, activationCalls)
+	require.Equal(t, 4, inactiveReads)
+	require.Equal(t, 1, activeReadsBeforeReturn)
 	s.navigate(t, "\x03", "Rows 1-2 of 2")
 	s.waitFor(t, "Activated change")
 	b.mu.Lock()

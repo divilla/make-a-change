@@ -246,7 +246,7 @@ func (m Model) applyChangeResult(r changes.Result) (tea.Model, tea.Cmd) {
 		m.detailEditField = ""
 		m = m.setPromptValue("")
 	}
-	if m.state == ChangesListState {
+	if m.state == ChangesListState && !m.changeList.Inactive {
 		m.status = strings.ReplaceAll(m.status, "/retry reads only", "return to Main and reopen /changes")
 	}
 	return m, nil

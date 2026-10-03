@@ -66,7 +66,7 @@ func (m Model) handleDropdownKey(key string, msg tea.KeyMsg) (tea.Model, tea.Cmd
 }
 
 func (m *Model) openCommandDropdown() {
-	options := commandOptions(m.state)
+	options := m.commandOptions(m.state)
 	m.previousState = m.state
 	m.dropdown = dropdownModel{
 		kind:     dropdownCommand,

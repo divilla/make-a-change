@@ -869,7 +869,7 @@ func (m Model) executeCommand(command string) (tea.Model, tea.Cmd) {
 func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.Cmd) {
 	m.state = source
 	m.dropdown = dropdownModel{}
-	if command != "/quit" && !commandAllowed(source, command) {
+	if command != "/quit" && !m.commandAllowed(source, command) {
 		m.err = "unknown command: " + command
 		return m, nil
 	}
