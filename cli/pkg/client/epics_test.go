@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const epicJSON = `{"id":3,"project_id":7,"name":"Epic Three","done_tc":2,"total_tc":8,"completed":63,"change_count":4,"created_at":"2026-09-28T10:00:00Z","updated_at":"2026-09-28T11:00:00Z"}`
+const epicJSON = `{"id":3,"project_id":7,"name":"Epic Three","active":true,"done_tc":2,"total_tc":8,"completed":63,"change_count":4,"created_at":"2026-09-28T10:00:00Z","updated_at":"2026-09-28T11:00:00Z"}`
 
 func epicFixture() map[string]any {
 	var e map[string]any
@@ -25,7 +25,7 @@ func epicFixture() map[string]any {
 }
 
 func TestP301EpicRoutesShapesAndExactlyOneOperation(t *testing.T) {
-	expected := dto.Epic{ID: 3, ProjectID: 7, Name: "Epic Three", DoneTC: 2, TotalTC: 8, Completed: 63, ChangeCount: 4, CreatedAt: time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 9, 28, 11, 0, 0, 0, time.UTC)}
+	expected := dto.Epic{ID: 3, ProjectID: 7, Name: "Epic Three", Active: true, DoneTC: 2, TotalTC: 8, Completed: 63, ChangeCount: 4, CreatedAt: time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 9, 28, 11, 0, 0, 0, time.UTC)}
 	for _, tc := range []struct {
 		route, payload, response string
 		status                   int

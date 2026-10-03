@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -231,7 +232,7 @@ func (b *synchronizedBuffer) String() string {
 }
 
 func (b *synchronizedBuffer) count(marker string) int {
-	return strings.Count(b.String(), marker)
+	return strings.Count(strings.Join(strings.Fields(ansi.Strip(b.String())), " "), strings.Join(strings.Fields(marker), " "))
 }
 
 func (b *synchronizedBuffer) waitFor(t *testing.T, marker string) {
@@ -278,6 +279,8 @@ func newShellBackend(t *testing.T, failSave bool) *httptest.Server {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/config":
 			writeProgramJSON(w, programProjectConfig())
 		case "/api/v1/project/list":
@@ -338,7 +341,7 @@ func (s *programSession) navigate(t *testing.T, keys, marker string) {
 }
 
 func programProject(id int, name string) map[string]any {
-	return map[string]any{"id": id, "name": name, "config": "program", "last_ref": 12, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z", "change_count": 3}
+	return map[string]any{"id": id, "name": name, "config_slug": "program", "active": true, "last_ref": 12, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z", "change_count": 3}
 }
 
 func programProjectConfig() map[string]any {
@@ -346,9 +349,9 @@ func programProjectConfig() map[string]any {
 }
 
 func programChange(id int, title string) map[string]any {
-	return map[string]any{"id": id, "project_id": 7, "ref_uuid": "0198a86f-9b8a-7d89-ae5b-6f25b528b04c", "ref_slug": nil, "epic_id": nil, "epic_name": nil, "change_phase": "backlog", "change_types": []string{}, "title": title, "open": true, "done_tc": int64(2), "total_tc": int64(9), "completed": int64(73), "updated_at": "2026-09-28T11:00:00Z", "after_change_id": nil, "after_change_name": nil, "pr_url": "", "created_at": "2026-09-28T10:00:00Z"}
+	return map[string]any{"id": id, "project_id": 7, "ref_uuid": "0198a86f-9b8a-7d89-ae5b-6f25b528b04c", "ref_slug": nil, "epic_id": nil, "epic_name": nil, "change_phase": "backlog", "change_types": []string{}, "title": title, "active": true, "done_tc": int64(2), "total_tc": int64(9), "completed": int64(73), "updated_at": "2026-09-28T11:00:00Z", "after_change_id": nil, "after_change_name": nil, "pr_url": "", "created_at": "2026-09-28T10:00:00Z"}
 }
 
 func programDocument(kind, body string) map[string]any {
-	return map[string]any{"id": 91, "ref_id": 12, "ref_table": "change", "doc_type": kind, "body": body, "agent_edit": false, "current": true, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T10:00:00Z", "html": ""}
+	return map[string]any{"id": 91, "ref_id": 12, "ref_table": "change", "doc_type": kind, "body": body, "agent_edit": false, "deleted_at": nil, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T10:00:00Z", "html": ""}
 }

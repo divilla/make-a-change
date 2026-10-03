@@ -96,7 +96,8 @@ func (c HTTPClient) projectRequest(ctx context.Context, path string, input any, 
 type projectWire struct {
 	ID          *int       `json:"id"`
 	Name        *string    `json:"name"`
-	Config      *string    `json:"config"`
+	ConfigSlug  *string    `json:"config_slug"`
+	Active      *bool      `json:"active"`
 	LastRef     *int32     `json:"last_ref"`
 	CreatedAt   *time.Time `json:"created_at"`
 	UpdatedAt   *time.Time `json:"updated_at"`
@@ -104,10 +105,10 @@ type projectWire struct {
 }
 
 func (p projectWire) value() (dto.Project, error) {
-	if p.ID == nil || *p.ID <= 0 || p.Name == nil || p.Config == nil || p.LastRef == nil || p.CreatedAt == nil || p.UpdatedAt == nil || p.ChangeCount == nil {
+	if p.ID == nil || *p.ID <= 0 || p.Active == nil || p.Name == nil || p.ConfigSlug == nil || p.LastRef == nil || p.CreatedAt == nil || p.UpdatedAt == nil || p.ChangeCount == nil {
 		return dto.Project{}, &ContractError{errors.New("missing or invalid project fields")}
 	}
-	return dto.Project{ID: *p.ID, Name: *p.Name, Config: *p.Config, LastRef: *p.LastRef, CreatedAt: *p.CreatedAt, UpdatedAt: *p.UpdatedAt, ChangeCount: *p.ChangeCount}, nil
+	return dto.Project{ID: *p.ID, Name: *p.Name, Active: *p.Active, ConfigSlug: *p.ConfigSlug, LastRef: *p.LastRef, CreatedAt: *p.CreatedAt, UpdatedAt: *p.UpdatedAt, ChangeCount: *p.ChangeCount}, nil
 }
 
 func contractStatus(path string, err error) error {

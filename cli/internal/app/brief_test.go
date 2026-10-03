@@ -76,7 +76,7 @@ func TestP805ReentryRejectsLateCommittedResultForSameScope(t *testing.T) {
 				preflight := agent.Result{Generation: m.brief.Generation, Revision: m.brief.Revision, ProjectID: 7, ChangeID: m.brief.ChangeID, Step: agent.Preflight, Config: validBriefConfig()}
 				if existing {
 					preflight.Detail = dto.Change{ID: 21, ProjectID: 7}
-					preflight.Documents = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Before", Current: true}}
+					preflight.Documents = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Before"}}
 				}
 				var ok bool
 				m.brief, _, ok = m.brief.Apply(preflight)

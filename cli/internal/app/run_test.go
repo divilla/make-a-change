@@ -244,7 +244,7 @@ func (f *fakeClient) UpdateChangePhase(_ context.Context, _ int, changePhase str
 	return nil
 }
 
-func (f *fakeClient) UpdateChangeOpen(_ context.Context, _ int, open bool) error {
+func (f *fakeClient) UpdateChangeActive(_ context.Context, _ int, open bool) error {
 	f.changeOpenUpdateCalls++
 	f.changeOpenUpdates = append(f.changeOpenUpdates, open)
 	if f.changeUpdateErr != nil {
@@ -318,7 +318,7 @@ func (f *fakeClient) ListEpics(_ context.Context, projectID int) ([]dto.Epic, er
 	rows := make([]dto.Epic, 0, len(f.epics))
 	for _, o := range f.epics {
 		id, _ := strconv.Atoi(o.ID)
-		rows = append(rows, dto.Epic{ID: id, ProjectID: projectID, Name: o.Label})
+		rows = append(rows, dto.Epic{ID: id, ProjectID: projectID, Name: o.Label, Active: true})
 	}
 	return rows, nil
 }
@@ -1275,7 +1275,7 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 			PR:          "Pull request summary.",
 			PRUrl:       "https://github.com/divilla/project-manager/pull/107",
 
-			Open:     true,
+			Active:   true,
 			Created:  "2026-06-29T08:15:00Z",
 			Modified: "2026-06-29T10:45:00Z",
 		},
@@ -1314,7 +1314,7 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 	assert.Contains(t, view, "  2")
 	assert.Contains(t, view, "  5")
 	assert.Contains(t, view, " 40")
-	assert.Contains(t, view, "2026-06-29 10.45")
+	assert.Contains(t, view, "2026-06-29 12:45")
 
 	got, cmd = sendKey(got, tea.KeyEnter)
 	require.NotNil(t, cmd)
@@ -1351,9 +1351,9 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 	got, _ = sendKey(got, tea.KeyPgDown)
 	got.changeList.DetailOffset = max(0, got.changeList.DetailOffset-4)
 	view = stripANSI(got.View())
-	assert.Contains(t, view, "Spec │ # Backend Change")
-	assert.Contains(t, view, "PR │ Pull request summary.")
-	assert.Less(t, strings.Index(view, "Spec │ # Backend Change"), strings.Index(view, "PR │ Pull request summary."))
+	assert.Contains(t, view, "spec [✓]")
+	assert.Contains(t, view, "pr [✓]")
+	assert.Less(t, strings.Index(view, "spec [✓]"), strings.Index(view, "pr [✓]"))
 
 	got, _ = sendKey(got, tea.KeyPgDown)
 	view = stripANSI(got.View())
@@ -1363,9 +1363,9 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 
 	got, _ = sendKey(got, tea.KeyPgDown)
 	view = stripANSI(got.View())
-	assert.Contains(t, view, "Open │ ✅")
-	assert.Contains(t, view, "Created │ 2026-06-29 08.15")
-	assert.Contains(t, view, "Modified │ 2026-06-29 10.45")
+	assert.Contains(t, view, "Active │ ✅")
+	assert.Contains(t, view, "Comments")
+	assert.Contains(t, view, "Modified │ 2026-06-29 12:45")
 }
 
 func TestChangesTableTruncatesEpicAndTitleAtMaxWidth(t *testing.T) {
@@ -2599,19 +2599,19 @@ func TestChangeDetailsTypesSelectionEnterWithoutToggleReturnsWithoutSaving(t *te
 func TestChangeDetailsOpenSpaceTogglesAndReloads(t *testing.T) {
 	client := &fakeClient{
 		gotChange: dto.ChangeView{
-			ID:    "12",
-			Ref:   "3",
-			Title: "Backend Change",
-			Open:  false,
+			ID:     "12",
+			Ref:    "3",
+			Title:  "Backend Change",
+			Active: false,
 		},
 	}
 	m := newChangeTestModel(client)
 	m.state = ChangeDetailsState
 	m.changeList = m.changeList.WithDetail(dto.ChangeView{
-		ID:    "12",
-		Ref:   "3",
-		Title: "Backend Change",
-		Open:  true,
+		ID:     "12",
+		Ref:    "3",
+		Title:  "Backend Change",
+		Active: true,
 	})
 	m.changeList.DetailSelected = 11
 
@@ -2622,7 +2622,7 @@ func TestChangeDetailsOpenSpaceTogglesAndReloads(t *testing.T) {
 
 	assert.Equal(t, []bool{false}, client.changeOpenUpdates)
 	assert.Equal(t, []int{12}, client.changeGetIDs)
-	assert.False(t, got.changeList.Detail.Open)
+	assert.False(t, got.changeList.Detail.Active)
 	assert.Equal(t, ChangeDetailsState, got.state)
 	assert.Equal(t, 11, got.changeList.DetailSelected)
 }
@@ -2650,7 +2650,7 @@ func TestChangeDetailsTestCaseSpaceTogglesAndReloads(t *testing.T) {
 			{ID: 32, Scenario: "second", Done: true},
 		},
 	})
-	m.changeList.DetailSelected = 8
+	m.changeList.DetailSelected = 7
 
 	got, cmd := sendRune(m, ' ')
 	require.NotNil(t, cmd)
@@ -2662,7 +2662,7 @@ func TestChangeDetailsTestCaseSpaceTogglesAndReloads(t *testing.T) {
 	assert.Equal(t, []int{12}, client.changeGetIDs)
 	assert.True(t, got.changeList.Detail.TestCases[0].Done)
 	assert.Equal(t, ChangeDetailsState, got.state)
-	assert.Equal(t, 8, got.changeList.DetailSelected)
+	assert.Equal(t, 7, got.changeList.DetailSelected)
 }
 
 func TestChangeDetailsNewTestcaseCreatesAndRefreshes(t *testing.T) {
@@ -2717,7 +2717,7 @@ func TestChangeDetailsTestcaseEnterEditsScenarioAndRefreshes(t *testing.T) {
 			{ID: 31, Scenario: "old scenario", Done: false, ChangeID: 12},
 		},
 	})
-	m.changeList.DetailSelected = 8
+	m.changeList.DetailSelected = 7
 
 	got, cmd := sendKey(m, tea.KeyEnter)
 	require.Nil(t, cmd)
@@ -2749,7 +2749,7 @@ func TestChangeDetailsTestcaseDeleteConfirmsAndRefreshes(t *testing.T) {
 			{ID: 31, Scenario: "old scenario", Done: false, ChangeID: 12},
 		},
 	})
-	m.changeList.DetailSelected = 8
+	m.changeList.DetailSelected = 7
 
 	got, cmd := sendKey(m, tea.KeyDelete)
 	require.Nil(t, cmd)
@@ -2868,38 +2868,20 @@ func TestChangesListFiltersRenderValuesPureWhite(t *testing.T) {
 }
 
 func TestChangeDetailsTableTruncatesLongSpecAndPullRequestRows(t *testing.T) {
-	m := NewModel()
+	m := newChangeTestModel(&fakeClient{})
 	m.state = ChangeDetailsState
-	m.width = 120
-	m.height = 40
-	m.changeList = m.changeList.WithDetail(dto.ChangeView{
-		ID:          "11",
-		Ref:         "3",
-		RefSlug:     "003-change-three",
-		Title:       "Backend Change",
-		ChangePhase: "backlog",
-		EpicName:    "Epic Five",
-		Spec:        strings.Repeat("spec content ", 180),
-		PR:          "pull request start\n" + strings.Repeat("pull request middle ", 120) + "\npull request end",
-		PRUrl:       "https://example.test/pr",
-	})
-
-	firstView := stripANSI(m.View())
-	assert.Contains(t, firstView, "Slug │ 003-change-three")
-	assert.Contains(t, firstView, "Spec │ spec content")
-	assert.Contains(t, firstView, "...")
-	assert.NotContains(t, firstView, "pull request end")
-	assert.Contains(t, firstView, "───────────┼")
-
-	got, _ := sendKey(m, tea.KeyPgDown)
-	scrolledView := stripANSI(got.View())
-	assert.Contains(t, scrolledView, "PR │ pull request start")
-	assert.Contains(t, scrolledView, "...")
-	assert.NotContains(t, firstView, "pull request end")
-
-	got, _ = sendKey(got, tea.KeyPgUp)
-	backView := stripANSI(got.View())
-	assert.Contains(t, backView, "Slug │ 003-change-three")
+	m.width, m.height = 120, 40
+	m.changeList.Detail = dto.ChangeView{ID: "11", Title: "Change", RefSlug: "003-change", Brief: strings.Repeat("brief content\n", 40), DocumentTypes: []string{"brief", "spec", "pr"}, Documents: []dto.Document{{ID: 9, DocType: "spec", Body: strings.Repeat("spec content ", 180)}, {ID: 8, DocType: "pr", Body: "pull request start\npull request end"}}}
+	var rendered strings.Builder
+	for i := 0; i < 5; i++ {
+		rendered.WriteString(stripANSI(m.View()))
+		m, _ = sendKey(m, tea.KeyPgDown)
+	}
+	assert.Contains(t, rendered.String(), "spec [✓]")
+	assert.Contains(t, rendered.String(), "pr [✓]")
+	assert.Contains(t, rendered.String(), "...")
+	assert.NotContains(t, rendered.String(), "spec content")
+	assert.NotContains(t, rendered.String(), "pull request start")
 }
 
 func TestP302EpicActionsRequireRealSelection(t *testing.T) {
@@ -3036,8 +3018,9 @@ func TestDeleteCommandsOpenExpectedConfirmations(t *testing.T) {
 
 func TestChangeDetailsCommandsAreExact(t *testing.T) {
 	assert.Equal(t, []string{
+		"/new-comment",
 		"/find",
-		"/document", "/title", "/brief", "/pr-url", "/after-change", "/open", "/retry", "/help",
+		"/document", "/title", "/brief", "/pr-url", "/after-change", "/active", "/retry", "/help",
 		"/new-testcase",
 		"/phase",
 		"/epic",
@@ -3757,7 +3740,7 @@ func (f *fakeClient) GetProjectConfig(context.Context, int) (dto.ProjectConfig, 
 }
 
 func (f *fakeClient) GetEpic(_ context.Context, id int) (dto.Epic, error) {
-	return dto.Epic{ID: id, ProjectID: 7, Name: "Epic"}, f.getErr
+	return dto.Epic{ID: id, ProjectID: 7, Name: "Epic", Active: true}, f.getErr
 }
 
 func (f *fakeClient) CreateEpic(_ context.Context, _ int, _ string) (int, error) {
@@ -3772,7 +3755,7 @@ func fakeWire(v dto.ChangeView) dto.Change {
 	if project == 0 {
 		project = 7
 	}
-	w := dto.Change{ID: id, ProjectID: project, RefUUID: v.RefUUID, Title: v.Title, ChangePhase: v.ChangePhase, ChangeTypes: v.ChangeTypes, Open: v.Open, DoneTC: v.Done, TotalTC: v.Total, Completed: v.Completed, PRUrl: v.PRUrl}
+	w := dto.Change{ID: id, ProjectID: project, RefUUID: v.RefUUID, Title: v.Title, ChangePhase: v.ChangePhase, ChangeTypes: v.ChangeTypes, Active: v.Active, DoneTC: v.Done, TotalTC: v.Total, Completed: v.Completed, PRUrl: v.PRUrl}
 	w.CreatedAt, _ = time.Parse(time.RFC3339, v.Created)
 	w.UpdatedAt, _ = time.Parse(time.RFC3339, v.Modified)
 	if v.RefSlug != "" {
@@ -3795,8 +3778,8 @@ func (f *fakeClient) UpdateChangeAfterChange(_ context.Context, _ int, _ *int) e
 	return f.changeUpdateErr
 }
 
-func (f *fakeClient) CurrentDocuments(_ context.Context, id int, _ string) ([]dto.Document, error) {
-	return []dto.Document{{ID: 1, RefID: id, DocType: "brief", Body: f.gotChange.Brief}, {ID: 2, RefID: id, DocType: "spec", Body: f.gotChange.Spec}, {ID: 3, RefID: id, DocType: "pr", Body: f.gotChange.PR}}, nil
+func (f *fakeClient) ActiveDocuments(_ context.Context, id int, _ string) ([]dto.Document, error) {
+	return []dto.Document{{ID: 1, RefID: id, RefTable: "change", DocType: "brief", Body: f.gotChange.Brief}, {ID: 2, RefID: id, RefTable: "change", DocType: "spec", Body: f.gotChange.Spec}, {ID: 3, RefID: id, RefTable: "change", DocType: "pr", Body: f.gotChange.PR}}, nil
 }
 
 func (f *fakeClient) ListDocuments(_ context.Context, _ int, _ string) ([]dto.Document, error) {
@@ -3868,4 +3851,19 @@ func loadedChangeForTest(m Model, view dto.ChangeView, err error) Model {
 		m.changeList.Operation = changes.Details
 	}
 	return applyMsg(m, changes.Result{Generation: m.changeList.Generation, ProjectID: project, ID: id, Operation: changes.Details, Detail: view, Err: err})
+}
+
+func (f *fakeClient) ListComments(context.Context, int, string) ([]dto.Document, error) {
+	return []dto.Document{}, nil
+}
+
+func (f *fakeClient) InsertComment(context.Context, int, string, string) (int, error) {
+	return 99, f.err
+}
+func (f *fakeClient) UpdateComment(context.Context, int, string) error { return f.err }
+func (f *fakeClient) DeleteDocument(context.Context, int) error        { return f.err }
+func (f *fakeClient) ActivateDocument(context.Context, int) error      { return f.err }
+func (f *fakeClient) UndeleteComment(context.Context, int) error       { return f.err }
+func (f *fakeClient) ListInactiveChanges(ctx context.Context, id int) ([]dto.Change, error) {
+	return f.ListChangeRows(ctx, id)
 }

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -141,10 +143,10 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 	send("\x1b", "status prompt cleared")
 	send("\x03", "EpicsListScreen")
 	send("/return\r", "MainScreen")
-	send("/changes\r", "Rows 1-9 of 30")
+	send("/changes\r", "Rows 1-8 of 30")
 	assert.Contains(t, capture.after(0), "\x1b[", "terminal output retains styles")
-	send("\x1b[6~", "Rows 2-10 of 30")
-	send("\x1b[5~", "Rows 1-9 of 30")
+	send("\x1b[6~", "Rows 2-9 of 30")
+	send("\x1b[5~", "Rows 1-8 of 30")
 	send("/", "Create a change")
 	assert.Contains(t, capture.after(0), "▄")
 	assert.Contains(t, capture.after(0), "▀")
@@ -163,6 +165,34 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 	send("\x03", "status cancel")
 	send("/types\r", "Types >")
 	send("\x1b", "status cancel")
+	// Capture real bat stdout inside the PTY, including older/deleted versions,
+	// scrolling syntax colors, same-ID activation and confirmed deletion.
+	send(strings.Repeat("\x1b[B", 9)+"\x08", "Version #65")
+	historyOutput := capture.after(0)
+	assert.Contains(t, historyOutput, "created_at:")
+	assert.Contains(t, historyOutput, "updated_at:")
+	assert.Contains(t, historyOutput, "\x1b[38;5;211mdeleted_at:")
+	syntaxColor := regexp.MustCompile(`\x1b\[38;2;[0-9;]+m`)
+	require.NotEmpty(t, syntaxColor.FindString(historyOutput), "captured bat syntax colors")
+	offset := capture.len()
+	send("\x1b[6~", "colored_line_20")
+	require.NotEmpty(t, syntaxColor.FindString(capture.after(offset)), "bat colors survive scrolling")
+	offset = capture.len()
+	send("\x1b[C", "Version #64")
+	_, err = io.WriteString(stdin, "\x1b[C") // oldest boundary does not wrap or redraw
+	require.NoError(t, err)
+	require.NotEmpty(t, syntaxColor.FindString(capture.after(offset)), "bat colors survive version change")
+	send("\x1b[D", "Version #65")
+	send(" ", "committed active selection document #65")
+	send("\x1b", "returned from history")
+	send("\x1b[3~", "Are you sure?")
+	assert.Contains(t, capture.after(0), "\x1b[38;5;183mAre you sure?")
+	send("\x03", "cancel")
+	send("\x1b[3~", "Are you sure?")
+	send("\r", "committed delete document #65")
+	send("\x08", "Version #65")
+	send(" ", "committed active selection document #65")
+	send("\x03", "returned from history")
 	send("/title\r", "Title > ")
 	send("\x03", "status prompt cleared")
 	send("/pr-url\r", "PR URL >")
@@ -204,6 +234,9 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 	send(strings.Repeat("\x1b[6~", 5), "Complete")
 	assert.Contains(t, capture.after(0), "73%")
 	send("/return\r", "Rows")
+	send("\x08", "Space activate")
+	send(" ", "activated change #31")
+	send("\x03", "returned from inactive changes")
 	send("/return\r", "MainScreen")
 	require.Eventually(t, func() bool {
 		entries, readErr := os.ReadDir(filepath.Join(repoRoot, ".mch", "tmp"))
@@ -234,9 +267,13 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 	backendConfigExists := true
 	backendConfig := map[string]any{"slug": "pty", "project_docs": []string{strings.Repeat("very-long-document-name-", 12)}, "epic_docs": []string{}, "change_docs": []string{"brief", "spec"}, "change_phases": []string{"backlog"}, "change_colors": []string{"12"}, "change_types": []string{"feature"}}
 	var testCases []map[string]any
+	inactive := true
+	specActive := 64
+	specRows := []map[string]any{terminalSpec(65, true), terminalSpec(64, false)}
+	activeDocumentID := 90
 	docs := make([]map[string]any, 0, 20)
 	for id := 90; id >= 71; id-- {
-		docs = append(docs, map[string]any{"id": id, "ref_id": 7, "ref_table": "project", "doc_type": "notes", "body": fmt.Sprintf("historical body %d", id), "agent_edit": false, "current": id == 90, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z", "html": "<p>rendered</p>"})
+		docs = append(docs, map[string]any{"id": id, "ref_id": 7, "ref_table": "project", "doc_type": "notes", "body": fmt.Sprintf("historical body %d", id), "agent_edit": false, "deleted_at": nil, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z", "html": "<p>rendered</p>"})
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
@@ -245,6 +282,8 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		var value any
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			value = []any{}
 		case "/api/v1/health":
 			require.Equal(t, http.MethodGet, r.Method)
 			value = map[string]string{"status": "ok", "api": "ok", "database": "ok"}
@@ -294,6 +333,31 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 				w.WriteHeader(204)
 				return
 			}
+		case "/api/v1/change/list-inactive":
+			value = []any{}
+			if inactive {
+				value = []any{terminalChange(31, "Inactive PTY Change")}
+			}
+		case "/api/v1/change/update-active":
+			var payload map[string]any
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+			require.Equal(t, map[string]any{"id": float64(31), "active": true}, payload)
+			inactive = false
+			w.WriteHeader(204)
+			return
+		case "/api/v1/doc/delete", "/api/v1/doc/active-set":
+			var payload map[string]int
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+			require.Equal(t, 65, payload["id"])
+			if strings.HasSuffix(r.URL.Path, "delete") {
+				specActive = 0
+				specRows[0]["deleted_at"] = "2026-09-28T12:00:00Z"
+			} else {
+				specActive = 65
+				specRows[0]["deleted_at"] = nil
+			}
+			w.WriteHeader(204)
+			return
 		case "/api/v1/change/list":
 			rows := []map[string]any{}
 			for i := 1; i <= 30; i++ {
@@ -309,7 +373,7 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 			if body.ID == 1 {
 				value.(map[string]any)["ref_slug"] = changeSlug
 			}
-		case "/api/v1/doc/current":
+		case "/api/v1/doc/list-active":
 			var request struct {
 				RefID    int    `json:"ref_id"`
 				RefTable string `json:"ref_table"`
@@ -318,13 +382,20 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 			if request.RefTable == "project" {
 				current := []map[string]any{}
 				for _, d := range docs {
-					if d["current"] == true {
+					if int(d["id"].(int)) == activeDocumentID {
 						current = append(current, d)
 					}
 				}
 				value = current
 			} else {
-				value = []any{map[string]any{"id": changeBriefID, "ref_id": request.RefID, "ref_table": "change", "doc_type": "brief", "body": changeBrief, "agent_edit": false, "current": true, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z", "html": "<p>rendered</p>"}}
+				value = []any{map[string]any{"id": changeBriefID, "ref_id": request.RefID, "ref_table": "change", "doc_type": "brief", "body": changeBrief, "agent_edit": false, "deleted_at": nil, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z", "html": "<p>rendered</p>"}}
+			}
+			if request.RefTable == "change" && specActive > 0 {
+				for _, d := range specRows {
+					if d["id"] == specActive {
+						value = append([]any{d}, value.([]any)...)
+					}
+				}
 			}
 		case "/api/v1/doc/list":
 			var request struct {
@@ -332,9 +403,14 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 				RefTable string `json:"ref_table"`
 			}
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
-			require.Equal(t, 7, request.RefID)
-			require.Equal(t, "project", request.RefTable)
-			value = docs
+			if request.RefTable == "change" {
+				require.Equal(t, 1, request.RefID)
+				value = specRows
+			} else {
+				require.Equal(t, 7, request.RefID)
+				require.Equal(t, "project", request.RefTable)
+				value = docs
+			}
 		case "/api/v1/doc/details":
 			var request struct {
 				ID int `json:"id"`
@@ -375,10 +451,8 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 			require.Equal(t, "notes", request.DocType)
 			require.Equal(t, "PTY document", request.Body)
 			require.False(t, request.AgentEdit)
-			for _, d := range docs {
-				d["current"] = false
-			}
-			docs = append([]map[string]any{{"id": 91, "ref_id": 7, "ref_table": "project", "doc_type": "notes", "body": request.Body, "agent_edit": false, "current": true, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z", "html": "<p>rendered</p>"}}, docs...)
+			activeDocumentID = 91
+			docs = append([]map[string]any{{"id": 91, "ref_id": 7, "ref_table": "project", "doc_type": "notes", "body": request.Body, "agent_edit": false, "deleted_at": nil, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z", "html": "<p>rendered</p>"}}, docs...)
 			w.WriteHeader(201)
 			value = map[string]any{"id": 91}
 		case "/api/v1/test-case/list":
@@ -488,7 +562,7 @@ func (c *terminalCapture) waitForAfter(marker string, offset int, timeout time.D
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	for {
-		if strings.Contains(c.after(offset), marker) {
+		if strings.Contains(strings.Join(strings.Fields(ansi.Strip(c.after(offset))), " "), strings.Join(strings.Fields(marker), " ")) {
 			return nil
 		}
 		select {
@@ -500,13 +574,26 @@ func (c *terminalCapture) waitForAfter(marker string, offset int, timeout time.D
 }
 
 func terminalProject() map[string]any {
-	return map[string]any{"id": 7, "name": "PTY Project", "config": "pty", "last_ref": 0, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T10:00:00Z", "change_count": 0}
+	return map[string]any{"id": 7, "name": "PTY Project", "config_slug": "pty", "active": true, "last_ref": 0, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T10:00:00Z", "change_count": 0}
 }
 
 func terminalEpic(name string) map[string]any {
-	return map[string]any{"id": 3, "project_id": 7, "name": name, "done_tc": 2, "total_tc": 8, "completed": 63, "change_count": 4, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z"}
+	return map[string]any{"id": 3, "project_id": 7, "name": name, "active": true, "done_tc": 2, "total_tc": 8, "completed": 63, "change_count": 4, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z"}
 }
 
 func terminalChange(id int, title string) map[string]any {
-	return map[string]any{"id": id, "project_id": 7, "ref_uuid": "0198a86f-9b8a-7d89-ae5b-6f25b528b04c", "ref_slug": fmt.Sprintf("%03d-old-slug", id+110), "epic_id": nil, "epic_name": nil, "change_phase": "backlog", "change_types": []string{}, "title": title, "open": true, "done_tc": 2, "total_tc": 9, "completed": 73, "updated_at": "2026-09-28T11:00:00Z", "after_change_id": nil, "after_change_name": nil, "pr_url": "", "created_at": "2026-09-28T10:00:00Z"}
+	return map[string]any{"id": id, "project_id": 7, "ref_uuid": "0198a86f-9b8a-7d89-ae5b-6f25b528b04c", "ref_slug": fmt.Sprintf("%03d-old-slug", id+110), "epic_id": nil, "epic_name": nil, "change_phase": "backlog", "change_types": []string{}, "title": title, "active": true, "done_tc": 2, "total_tc": 9, "completed": 73, "updated_at": "2026-09-28T11:00:00Z", "after_change_id": nil, "after_change_name": nil, "pr_url": "", "created_at": "2026-09-28T10:00:00Z"}
+}
+
+func terminalSpec(id int, deleted bool) map[string]any {
+	body := fmt.Sprintf("# Highlighted version %d\n\n```go\n", id)
+	for i := 0; i < 45; i++ {
+		body += fmt.Sprintf("var colored_line_%02d = \"colored value\"\n", i)
+	}
+	body += "```\n"
+	var deletedAt any
+	if deleted {
+		deletedAt = "2026-09-28T12:00:00Z"
+	}
+	return map[string]any{"id": id, "ref_id": 1, "ref_table": "change", "doc_type": "spec", "body": body, "agent_edit": false, "deleted_at": deletedAt, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z", "html": "<p>rendered</p>"}
 }

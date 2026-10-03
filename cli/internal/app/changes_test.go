@@ -618,7 +618,7 @@ func TestP404ChangeViewportsFitAndExposeEveryField(t *testing.T) {
 		for i := 0; i < 40; i++ {
 			require.Contains(t, seen.String(), fmt.Sprintf("title line %02d", i))
 		}
-		for _, value := range []string{"server-slug", "After Change", "https://example.test/pr", "73%", "Created", "Modified"} {
+		for _, value := range []string{"server-slug", "After Change", "https://example.test/pr", "73%", "Comments", "Modified"} {
 			require.Contains(t, seen.String(), value)
 		}
 	}

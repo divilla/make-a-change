@@ -118,9 +118,9 @@ func (a *changeAPI) UpdateChangeAfterChange(ctx context.Context, _ int, v *int) 
 	return a.call(ctx, "after-change")
 }
 
-func (a *changeAPI) UpdateChangeOpen(ctx context.Context, _ int, v bool) error {
-	a.value.Open = v
-	return a.call(ctx, "open")
+func (a *changeAPI) UpdateChangeActive(ctx context.Context, _ int, v bool) error {
+	a.value.Active = v
+	return a.call(ctx, "active")
 }
 
 func (a *changeAPI) UpdateChangePRUrl(ctx context.Context, _ int, v string) error {
@@ -145,7 +145,7 @@ func changeCatalog() dto.ProjectConfig {
 }
 
 func changeSetup() (Model, *changeAPI) {
-	a := &changeAPI{value: dto.Change{ID: 12, ProjectID: 7, Title: "Original", Open: true, Completed: 73, DoneTC: 2, TotalTC: 9}}
+	a := &changeAPI{value: dto.Change{ID: 12, ProjectID: 7, Title: "Original", Active: true, Completed: 73, DoneTC: 2, TotalTC: 9}}
 	return Model{ProjectID: 7, Detail: Present(a.value), DetailLoaded: true}, a
 }
 
@@ -163,7 +163,7 @@ func TestP403EachChangeActionAndValidation(t *testing.T) {
 		op Operation
 		in Input
 	}{
-		{List, Input{}}, {Details, Input{}}, {Create, Input{Title: "Explicit", Value: "plain brief"}}, {Delete, Input{}}, {Title, Input{Value: "/save"}}, {Phase, Input{Value: "review"}}, {Types, Input{Types: []string{}}}, {Epic, Input{Association: &assoc}}, {Epic, Input{}}, {AfterChange, Input{Association: &assoc}}, {AfterChange, Input{}}, {Open, Input{Open: false}}, {PRURL, Input{Value: "https://host/path"}}, {Document, Input{DocumentType: "spec", Value: "new\tbytes\n"}},
+		{List, Input{}}, {Details, Input{}}, {Create, Input{Title: "Explicit", Value: "plain brief"}}, {Delete, Input{}}, {Title, Input{Value: "/save"}}, {Phase, Input{Value: "review"}}, {Types, Input{Types: []string{}}}, {Epic, Input{Association: &assoc}}, {Epic, Input{}}, {AfterChange, Input{Association: &assoc}}, {AfterChange, Input{}}, {Active, Input{Active: false}}, {PRURL, Input{Value: "https://host/path"}}, {Document, Input{DocumentType: "spec", Value: "new\tbytes\n"}},
 	} {
 		t.Run(string(tt.op), func(t *testing.T) {
 			m, a := changeSetup()
@@ -328,7 +328,7 @@ func TestP402EveryReturnedFieldAndLiteralNoOp(t *testing.T) {
 	for _, row := range append(fixedDetailRows(view), DetailRows(view)...) {
 		labels[row.Label] = true
 	}
-	for _, label := range []string{"ID", "Ref UUID", "Slug", "Epic", "After Change", "Phase", "Types", "Title", "Open", "Complete", "Created", "Modified", "PR URL"} {
+	for _, label := range []string{"ID", "Ref UUID", "Slug", "Epic", "After Change", "Phase", "Types", "Title", "Active", "Complete", "Comments", "Modified", "PR URL"} {
 		require.True(t, labels[label], label)
 	}
 	for _, value := range []string{"/save", "/cancel", "/editor", "/return"} {
@@ -372,7 +372,7 @@ func TestP405CancellationAfterCommitRetainsStepAndLiteralValue(t *testing.T) {
 			defer cancel()
 			a.cancelAfter = string(op)
 			a.cancel = cancel
-			in := Input{Title: "Created", Value: "literal\tbytes\n", DocumentType: "brief"}
+			in := Input{Title: "Comments", Value: "literal\tbytes\n", DocumentType: "brief"}
 			m, cmd := m.Begin(ctx, a, a, op, 7, 12, in, changeCatalog())
 			m = finish(t, m, cmd)
 			require.ErrorIs(t, m.Err, context.Canceled)
@@ -392,4 +392,8 @@ func TestP405CancellationAfterCommitRetainsStepAndLiteralValue(t *testing.T) {
 			require.Equal(t, []string{"details", "documents", "testcases"}, a.calls[before:])
 		})
 	}
+}
+
+func (a *changeAPI) ListInactiveChanges(ctx context.Context, id int) ([]dto.Change, error) {
+	return a.ListChangeRows(ctx, id)
 }

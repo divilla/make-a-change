@@ -272,8 +272,8 @@ Use the current backend handlers and request/response definitions as the
 executable contract, with [backend architecture](backend-architecture.md) as
 the design reference.
 
-The checked-in client predates the backend refactor. These are required contract
-corrections, not alternative APIs to preserve:
+The client follows the current backend contracts. Historical assumptions are
+listed here to make the migration explicit:
 
 | Existing CLI assumption | Current backend contract and target client behavior |
 | --- | --- |
@@ -281,7 +281,7 @@ corrections, not alternative APIs to preserve:
 | Global `/options/change-phases-list` and `/options/change-types-list` | Fetch `/project/config` with the selected project's ID. Use its configured phases, colors, types, and document types. |
 | Create/insert returns a complete entity | Decode HTTP `201` and the created ID, or the slug for config insertion; explicitly load details if the screen needs them. |
 | Update returns a complete entity | Accept HTTP `204` without decoding an entity; explicitly refresh the relevant reads. Delete also returns `204`. |
-| Definition, spec, PR, and agent-edit state are fields of a change | Read documents through `/doc/current`, `/doc/list`, or `/doc/details`; append document versions through `/doc/insert`. `agent_edit` belongs to the document. |
+| Definition, spec, PR, and agent-edit state are fields of a change | Read documents through `/doc/list-active`, `/doc/list`, or `/doc/details`; append document versions through `/doc/insert`. `agent_edit` belongs to the document. |
 | Change creation sends `def` | Send the backend's `brief` field and use “brief” in the CLI. |
 | Testcase mutations return an updated change with embedded testcases | Use `/test-case/list` and separate change/details reads as needed. Mutations return an ID or no content. |
 | `/change/assign-flow` assigns identity | That route is removed. Read persisted identity from current change responses; do not reconstruct an obsolete operation in the client. |
@@ -313,7 +313,8 @@ without an established idempotency contract.
 ## Complete API access
 
 The following inventory comes from the current backend route registrations.
-Every row is required in both the typed HTTP adapter and a reachable CLI action.
+Every in-scope row is required in both the typed HTTP adapter and a reachable CLI action.
+Inactive epic browsing is deferred; it is outside specification 031.
 All listed operations use `POST` under `/api/v1`, except the two `GET` health
 routes. Keep this inventory and CLI action/contract tests aligned when routes
 change.
@@ -322,11 +323,11 @@ change.
 | --- | --- | --- |
 | Projects | `/project/list`, `/project/details`, `/project/create`, `/project/update`, `/project/delete`, `/project/config` | Browse, inspect, create, edit, delete, and inspect the project's resolved configuration. |
 | Epics | `/epic/list`, `/epic/details`, `/epic/create`, `/epic/update`, `/epic/delete` | Full epic management within a project, including details and completion data. |
-| Changes: reads and lifecycle | `/change/list`, `/change/details`, `/change/create`, `/change/delete` | Browse/filter, inspect, create from a brief, and delete independently of the agent workflow. |
+| Changes: reads and lifecycle | `/change/list`, `/change/list-inactive`, `/change/details`, `/change/create`, `/change/delete` | Browse/filter, inspect, create from a brief, and delete independently of the agent workflow. |
 | Changes: associations | `/change/update-epic`, `/change/update-after-change` | Set or clear the epic and prerequisite change, preserving nullable values. Details show plain `epic_name` and `after_change_name`; the latter editor uses `after_change_id` and starts blank for null. |
-| Changes: fields | `/change/update-phase`, `/change/update-open`, `/change/update-types`, `/change/update-title`, `/change/update-slug`, `/change/update-pr-url` | Explicitly edit each supported field, including clearing values where the API permits it. Slug updates send only the lowercase suffix; list and details read the full `ref_slug`. |
+| Changes: fields | `/change/update-phase`, `/change/update-active`, `/change/update-types`, `/change/update-title`, `/change/update-slug`, `/change/update-pr-url` | Explicitly edit each supported field, including clearing values where the API permits it. Slug updates send only the lowercase suffix; list and details read the full `ref_slug`. |
 | Testcases | `/test-case/list`, `/test-case/create`, `/test-case/update`, `/test-case/update-done`, `/test-case/delete` | List, create, edit, mark done/undone, and delete testcases for a change. |
-| Documents | `/doc/list`, `/doc/current`, `/doc/details`, `/doc/insert` | Browse history, read current documents, inspect a version, and append a version for project, epic, or change owners and their configured document types. |
+| Documents | `/doc/list`, `/doc/list-active`, `/doc/details`, `/doc/insert`, `/doc/delete`, `/doc/active-set`, `/doc/comment-list`, `/doc/comment-insert`, `/doc/comment-update`, `/doc/comment-undelete` | Browse history, read selected active documents, inspect, append, delete and activate the same retained non-comment ID. Comments use independent insert/update/delete/undelete operations. Owner catalogs apply to non-comment inserts. |
 | Configurations | `/config/list`, `/config/details`, `/config/insert`, `/config/update`, `/config/delete` | Manage configurations by slug and edit all six catalog arrays, including explicit empty arrays. |
 | Health | `GET /api/v1/health`, `GET /api/health` | Show API/database status and degraded errors; allow selection of either supported route from the health action. |
 
@@ -470,3 +471,44 @@ Contract migration and removal of old workflows change behavior. Review them
 against this scope rather than treating old Flow tests as acceptance criteria.
 Track progress in change specifications/checkpoints; this target document is not
 evidence that the implementation or API migration is complete.
+
+## Change document presentation and history
+
+Project responses use `config_slug` and `active`; epic responses use `active`.
+Change details use `active`, while change-list rows have neither `active` nor
+`open`. `/active` sends an explicit boolean to `change/update-active`.
+Project/epic deletion may deactivate referenced records; refresh and report the
+returned state rather than assuming physical removal from a 204 response.
+
+The selected project's ordered `change_docs` defines Docs slots, excluding
+`brief` and `comment`. Selection comes solely from `doc/list-active`; document
+rows contain nullable `deleted_at` and no wire `current` flag. Duplicate active
+types or different owners are contract errors. Brief keeps its sixteen-line
+preview; editors retain full bodies. Comments are independent records with
+three unwrapped preview lines, followed by their local update time.
+`/new-comment` is the first detail command and requires no document catalog.
+Human inserts send `agent_edit: false`; comment updates retain the same ID and
+send explicit bodies, including an empty string. Delete opens the bottom purple
+`Are you sure?` menu with `yes` / `no`; cancellation sends no mutation.
+
+Ctrl+H opens the selected type's retained history, including deleted records;
+the Comments heading provides access when no comments remain live. Left/Right
+browse newer/older IDs without wrapping. Metadata sits immediately under the
+header: local `created_at`, `updated_at`, and optional red `deleted_at`.
+All displayed timestamps use `2006-01-02 15:04` after local-time conversion.
+Normal change details show update timestamps only.
+
+The document process adapter writes the exact full Markdown body to an owned
+file and captures `bat -pp --color=always <file>` with separate arguments.
+The history viewport preserves bat syntax ANSI colors while clipping, scrolling
+and resizing. Space selects the same historical non-comment ID through
+`doc/active-set`, or restores the same deleted comment through
+`doc/comment-undelete`. Live comments and already selected documents are no-ops.
+Esc/Ctrl+C returns with the originating selection. Process/HTTP failures remain
+visible; `/retry` reads and prints without replaying committed mutations.
+`/documents` retains project/epic/change access and uses this history viewer.
+
+Ctrl+H on the change list opens project-scoped inactive changes. Space activates
+an inactive row, and Esc/Ctrl+C returns to the originating list. Change epic
+selectors exclude inactive epics. Revision, owner and project checks reject late
+HTTP/editor/process results; menu and editor focus owns its keys.

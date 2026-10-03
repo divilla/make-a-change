@@ -29,6 +29,8 @@ func testProgramTestCaseRetry(t *testing.T, scenario string, useEditor bool) {
 		w.Header().Set("Content-Type", "application/json")
 		change := programChange(12, "Existing")
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/config":
 			writeProgramJSON(w, programProjectConfig())
 		case "/api/v1/project/details":
@@ -37,7 +39,7 @@ func testProgramTestCaseRetry(t *testing.T, scenario string, useEditor bool) {
 			writeProgramJSON(w, []any{change})
 		case "/api/v1/change/details":
 			writeProgramJSON(w, change)
-		case "/api/v1/doc/current":
+		case "/api/v1/doc/list-active":
 			writeProgramJSON(w, []any{})
 		case "/api/v1/test-case/list":
 			rows := []any{}

@@ -24,16 +24,18 @@ func (m Model) View() string {
 	width := terminalWidth(m.width)
 	if epicIndex != 0 {
 		height := m.epicViewportHeight(lines)
-		switch m.state {
-		case ChangesListState:
+		switch {
+		case m.historyOpen:
+			lines[epicIndex] = m.history.View(width, height)
+		case m.state == ChangesListState:
 			lines[epicIndex] = changes.TableViewport(m.changeList, m.changeFilters(), width, height, phaseColorMap(m.optionCatalog.phases))
-		case ChangeDetailsState:
+		case m.state == ChangeDetailsState:
 			lines[epicIndex] = changes.DetailsViewport(m.changeList, width, height, phaseColorMap(m.optionCatalog.phases))
-		case DocumentState:
+		case m.state == DocumentState:
 			lines[epicIndex] = documents.View(m.document, width, height)
-		case EpicDetailsState:
+		case m.state == EpicDetailsState:
 			lines[epicIndex] = epics.DetailsViewport(m.epicList, width, height)
-		case BackendConfigListState, BackendConfigDetailsState, BackendConfigFormState, BackendConfigDeleteState:
+		case isConfigurationState(m.state):
 			lines[epicIndex] = configurations.View(m.configurations, width, height)
 		default:
 			lines[epicIndex] = epics.TableView(m.epicList, width, height)
@@ -47,6 +49,18 @@ func (m Model) viewLines() ([]string, int) {
 	width := terminalWidth(m.width)
 	lines := []string{m.headerLine(width)}
 	epicIndex := 0
+	if m.historyOpen {
+		lines = append(lines, ansi.Truncate(m.history.Metadata(), width, ""), "")
+		epicIndex = len(lines) - 1
+		if m.hasDropdown() {
+			lines = append(lines, m.dropdownView(width))
+		}
+		if m.err != "" {
+			lines = append(lines, styles.Default.Error.Render(m.err))
+		}
+		lines = append(lines, styles.Default.Footer.Width(width).Render(m.footerText()))
+		return lines, epicIndex
+	}
 	if m.state == MainHelpState {
 		lines = append(lines, "Selected project: /brief-new starts brief clarification for a new change.\nUse /changes to browse and select an existing change, then /brief-clarify.")
 	}
@@ -163,6 +177,9 @@ func (m Model) headerLine(width int) string {
 }
 
 func (m Model) headerRight() string {
+	if m.historyOpen {
+		return styles.Default.Foreground.Render("DocumentHistoryScreen")
+	}
 	title := screenTitle(m.state)
 	if before, _, ok := strings.Cut(title, " - "); ok {
 		title = before
@@ -233,6 +250,9 @@ func firstLineWidth(value string) int {
 }
 
 func (m Model) helpText() string {
+	if m.historyOpen {
+		return m.history.Help()
+	}
 	if m.hasDropdown() {
 		if m.dropdown.kind == dropdownConfirm {
 			return "<return> select  |  <esc> or <ctrl+c> cancel"
@@ -251,9 +271,12 @@ func (m Model) helpText() string {
 		}
 		return documents.Help(m.document)
 	case ChangesListState:
-		return "Type to filter changes  |  <ctrl+n> new change  |  <return> view  |  </> command"
+		if m.changeList.Inactive {
+			return "Inactive changes | Space activate | Esc/Ctrl+C return | Up/Down select | Type to filter"
+		}
+		return "Ctrl+H inactive changes | Type to filter changes  |  <ctrl+n> new change  |  <return> view  |  </> command"
 	case ChangeDetailsState:
-		return "<ctrl+n> new testcase  |  <return> edit  |  <space> toggle  |  <del> delete  |  <ctrl+ins> copy  |  </> command"
+		return "Ctrl+H document history | <ctrl+n> new testcase  |  <return> edit  |  <space> toggle  |  <del> delete  |  <ctrl+ins> copy  |  </> command"
 	case TestCaseCreateState:
 		return testcases.CreateForm().Help
 	case TestCaseUpdateState:
@@ -404,7 +427,7 @@ func promptValueLines(value string) []string {
 func (m Model) footerText() string {
 	currentProject := "Current Project: " + m.currentProjectFooter()
 	if m.status != "" {
-		return fmt.Sprintf("%s  |  status %s  |  %s  |  %s", m.helpText(), m.visibleDocumentText(m.status), currentProject, footerColorStrip())
+		return fmt.Sprintf("status %s  |  %s  |  %s  |  %s", m.visibleDocumentText(m.status), m.helpText(), currentProject, footerColorStrip())
 	}
 	return m.helpText() + "  |  " + currentProject + "  |  " + footerColorStrip()
 }

@@ -12,6 +12,7 @@ import (
 	"cli/internal/styles"
 	"cli/internal/testcases"
 	"cli/pkg/briefprocess"
+	"cli/pkg/documentprocess"
 	"context"
 	"strconv"
 
@@ -59,6 +60,7 @@ const (
 type detailEditField string
 
 const (
+	detailEditComment     detailEditField = "comment"
 	detailEditTitle       detailEditField = "title"
 	detailEditSlug        detailEditField = "slug"
 	detailEditDocument    detailEditField = "document"
@@ -139,10 +141,18 @@ type currentProjectLoadedMsg struct {
 }
 
 type editorFinishedMsg struct {
-	source   State
-	original string
-	content  string
-	err      error
+	generation         uint64
+	projectID, ownerID string
+	field              detailEditField
+	documentRevision   uint64
+	documentOwner      int
+	documentTable      string
+	documentType       string
+	commentID          int
+	source             State
+	original           string
+	content            string
+	err                error
 }
 
 type startupProjectSelectionMsg struct{}
@@ -151,7 +161,7 @@ type appClient interface {
 	projects.API
 	changes.API
 	epics.API
-	documents.ScreenAPI
+	documents.MutationAPI
 	testcases.API
 }
 
@@ -164,6 +174,7 @@ type Model struct {
 	selectorGeneration  uint64
 	input               textarea.Model
 	editorDraft         *string
+	editorGeneration    uint64
 	state               State
 	previousState       State
 	width               int
@@ -183,6 +194,7 @@ type Model struct {
 	configurations      configurations.Model
 	health              health.Model
 	changeList          changes.Model
+	inactiveOrigin      changes.Model
 	changeDetailLoaded  bool
 	currentProject      dto.Option
 	projectList         projects.Model
@@ -196,6 +208,12 @@ type Model struct {
 	detailEditField     detailEditField
 	slugPrefix          string
 	testCase            testcases.Model
+	history             documents.History
+	historyOpen         bool
+	historyPrinter      documents.Printer
+	changeDocuments     documents.ChangeModel
+	commentID           int
+	deleteDocumentID    int
 	document            documents.Model
 	documentReturn      State
 	documentForm        bool
@@ -261,6 +279,7 @@ func newModelWithConfig(client appClient, cfg appConfig) Model {
 		configPath:     cfg.ConfigPath,
 		status:         "MainState",
 		briefRunner:    briefprocess.Runner{},
+		historyPrinter: documentprocess.Bat{},
 	}
 }
 

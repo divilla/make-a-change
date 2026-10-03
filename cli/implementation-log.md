@@ -95,3 +95,7 @@
 
 2026-30-09 22:54 cli-check-cleanup
 +33 -31 code - +0 -0 tests --- format the remaining two Go files and add package comments so the full CLI check passes
+
+2026-03-10 19:30 031-cli-docs-refactor
++1437 -135 code - +2019 -230 tests --- spec
+

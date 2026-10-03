@@ -36,18 +36,24 @@ func (m Model) openTextEditor(source State, original string) (tea.Model, tea.Cmd
 
 func (m Model) openEditorPath(source State, path string, removeAfter bool, original string) (tea.Model, tea.Cmd) {
 	m.status = "editor"
+	m.editorGeneration++
+	generation, projectID, ownerID, field := m.editorGeneration, m.currentProject.ID, m.changeList.Detail.ID, m.detailEditField
+	documentRevision, documentOwner, documentTable, documentType, commentID := m.document.Revision, m.document.OwnerID, m.document.OwnerTable, m.changeList.Draft.DocumentType, m.commentID
+	if source == DocumentState {
+		documentType = m.document.DraftType
+	}
 	cmd := tea.ExecProcess(editorCommand(path), func(err error) tea.Msg {
 		content, readErr := os.ReadFile(path)
 		if removeAfter {
 			_ = os.Remove(path)
 		}
 		if err != nil {
-			return editorFinishedMsg{source: source, err: err}
+			return editorFinishedMsg{generation: generation, projectID: projectID, ownerID: ownerID, field: field, documentRevision: documentRevision, documentOwner: documentOwner, documentTable: documentTable, documentType: documentType, commentID: commentID, source: source, err: err}
 		}
 		if readErr != nil {
-			return editorFinishedMsg{source: source, err: readErr}
+			return editorFinishedMsg{generation: generation, projectID: projectID, ownerID: ownerID, field: field, documentRevision: documentRevision, documentOwner: documentOwner, documentTable: documentTable, documentType: documentType, commentID: commentID, source: source, err: readErr}
 		}
-		return editorFinishedMsg{source: source, original: original, content: string(content)}
+		return editorFinishedMsg{generation: generation, projectID: projectID, ownerID: ownerID, field: field, documentRevision: documentRevision, documentOwner: documentOwner, documentTable: documentTable, documentType: documentType, commentID: commentID, source: source, original: original, content: string(content)}
 	})
 	return m, cmd
 }

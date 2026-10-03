@@ -214,7 +214,13 @@ func selectorCommand(ctx context.Context, client appClient, source selectorSourc
 			}
 			var rows []dto.Epic
 			rows, err = client.ListEpics(ctx, id)
-			options = epics.Options(rows)
+			active := make([]dto.Epic, 0, len(rows))
+			for _, row := range rows {
+				if row.Active {
+					active = append(active, row)
+				}
+			}
+			options = epics.Options(active)
 		}
 		return selectorLoadedMsg{source: source, options: options, err: err}
 	}

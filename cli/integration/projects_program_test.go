@@ -40,6 +40,8 @@ func TestCLIProgramProjectCRUDAndPartialSuccess(t *testing.T) {
 				}
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 				switch r.URL.Path {
+				case "/api/v1/doc/comment-list":
+					writeProgramJSON(w, []any{})
 				case "/api/v1/project/list":
 					if failList {
 						failList = false
@@ -115,9 +117,9 @@ func TestCLIProgramProjectCRUDAndPartialSuccess(t *testing.T) {
 			s.waitFor(t, "Renamed project")
 			s.navigate(t, "/delete\r", "Are you sure?")
 			s.send(t, "\r")
-			s.waitFor(t, "deleted project")
+			s.waitFor(t, map[bool]string{true: "project delete committed", false: "deleted project"}[partial])
 			if partial {
-				s.waitFor(t, "deleted project; refresh failed")
+				s.waitFor(t, "project delete committed; refresh failed")
 				s.navigate(t, "/retry\r", "loaded projects")
 			}
 			s.navigate(t, "/return\r", "MainScreen")
@@ -144,6 +146,8 @@ func testSelectedProjectDeletionConfigFailure(t *testing.T, refreshFails bool) {
 		mu.Lock()
 		defer mu.Unlock()
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/details":
 			writeProgramJSON(w, programProject(7, "Program Project"))
 		case "/api/v1/project/config":
@@ -185,7 +189,7 @@ func testSelectedProjectDeletionConfigFailure(t *testing.T, refreshFails bool) {
 	s.waitFor(t, "config save failed")
 	s.waitFor(t, "project selection cleared in memory; failed to save project_id:")
 	if refreshFails {
-		s.waitFor(t, "deleted project; refresh failed")
+		s.waitFor(t, "project delete committed; refresh failed")
 		s.waitFor(t, "/retry reads only; config save failed")
 		s.waitFor(t, "refresh unavailable")
 	} else {
@@ -216,6 +220,8 @@ func TestCLIProgramProjectSwitchWithPendingConfig(t *testing.T) {
 		}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/details":
 			name := "Program Project"
 			if body.ID == 8 {
@@ -275,6 +281,8 @@ func TestCLIProgramShutdownCancelsProjectHTTP(t *testing.T) {
 	canceled := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/details":
 			writeProgramJSON(w, programProject(7, "Program Project"))
 		case "/api/v1/project/config":
@@ -314,6 +322,8 @@ func TestCLIProgramProjectReloadBlocksCachedSelection(t *testing.T) {
 		}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/config":
 			writeProgramJSON(w, programProjectConfig())
 		case "/api/v1/project/details":

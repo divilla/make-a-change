@@ -30,6 +30,8 @@ func TestCLIProgramBriefFailuresAndStaleCancellation(t *testing.T) {
 		var body map[string]any
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/details":
 			writeProgramJSON(w, programProject(7, "Program Project"))
 		case "/api/v1/project/config":
@@ -51,7 +53,7 @@ func TestCLIProgramBriefFailuresAndStaleCancellation(t *testing.T) {
 			writeProgramJSON(w, map[string]int{"id": 12})
 		case "/api/v1/change/details":
 			writeProgramJSON(w, programChange(12, "Title"))
-		case "/api/v1/doc/current":
+		case "/api/v1/doc/list-active":
 			writeAndReadCalls = append(writeAndReadCalls, "current")
 			if readsFailed < 2 {
 				readsFailed++
@@ -134,6 +136,8 @@ func TestCLIProgramBriefStaleCancellation(t *testing.T) {
 		var body map[string]any
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/details":
 			writeProgramJSON(w, programProject(7, "Program Project"))
 		case "/api/v1/project/config":
@@ -142,7 +146,7 @@ func TestCLIProgramBriefStaleCancellation(t *testing.T) {
 			writeProgramJSON(w, []any{programChange(12, "Original")})
 		case "/api/v1/change/details":
 			writeProgramJSON(w, programChange(12, "Original"))
-		case "/api/v1/doc/current":
+		case "/api/v1/doc/list-active":
 			writeProgramJSON(w, []any{programDocument("brief", "Original")})
 		case "/api/v1/test-case/list":
 			writeProgramJSON(w, []any{})
@@ -210,6 +214,8 @@ func TestCLIProgramBriefNewAndExistingPersistence(t *testing.T) {
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 		calls = append(calls, r.URL.Path)
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/test-case/list":
 			writeProgramJSON(w, []any{})
 		case "/api/v1/project/details":
@@ -220,7 +226,7 @@ func TestCLIProgramBriefNewAndExistingPersistence(t *testing.T) {
 			writeProgramJSON(w, []any{change})
 		case "/api/v1/change/details":
 			writeProgramJSON(w, change)
-		case "/api/v1/doc/current":
+		case "/api/v1/doc/list-active":
 			if len(inserted) == 4 && failedInsertRefreshes < 1 {
 				failedInsertRefreshes++
 				http.Error(w, "read down", http.StatusInternalServerError)

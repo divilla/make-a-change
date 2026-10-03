@@ -72,11 +72,11 @@ func viewLines(m Model, width int) []string {
 			provenance = "agent"
 		}
 		status := "historical"
-		if d.Current {
+		if m.IsActive(d.ID) {
 			status = "current"
 		}
 		lines = append(lines, fmt.Sprintf("Version #%d | %s | %s | %s #%d | type %s", d.ID, status, provenance, d.RefTable, d.RefID, SafeLine(d.DocType)),
-			"Created: "+d.CreatedAt.Format("2006-01-02 15:04:05 -0700"), "Updated: "+d.UpdatedAt.Format("2006-01-02 15:04:05 -0700"), "Raw body:")
+			"Created: "+d.CreatedAt.Local().Format("2006-01-02 15:04"), "Updated: "+d.UpdatedAt.Local().Format("2006-01-02 15:04"), "Raw body:")
 		lines = appendWrapped(lines, d.Body, width)
 		lines = append(lines, "Rendered HTML:")
 		lines = appendWrapped(lines, d.HTML, width)
@@ -92,14 +92,14 @@ func viewLines(m Model, width int) []string {
 			marker = ">"
 		}
 		status := "history"
-		if d.Current {
+		if m.IsActive(d.ID) {
 			status = "current"
 		}
 		provenance := "human"
 		if d.AgentEdit {
 			provenance = "agent"
 		}
-		line := fmt.Sprintf("%s #%d %s %s %s created %s", marker, d.ID, SafeLine(d.DocType), status, provenance, d.CreatedAt.Format("2006-01-02 15:04"))
+		line := fmt.Sprintf("%s #%d %s %s %s created %s", marker, d.ID, SafeLine(d.DocType), status, provenance, d.CreatedAt.Local().Format("2006-01-02 15:04"))
 		lines = append(lines, ansi.Truncate(line, width, ""))
 	}
 	return lines

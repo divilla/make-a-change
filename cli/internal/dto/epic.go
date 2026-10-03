@@ -6,6 +6,7 @@ import "time"
 type Epic struct {
 	ID          int
 	ProjectID   int
+	Active      bool
 	Name        string
 	DoneTC      int64
 	TotalTC     int64

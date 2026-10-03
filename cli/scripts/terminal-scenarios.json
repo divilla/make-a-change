@@ -32,7 +32,10 @@
       "TestCLIProgramConfigurationStaleResponseIsolation",
       "TestCLIProgramBriefNewAndExistingPersistence",
       "TestCLIProgramBriefFailuresAndStaleCancellation",
-      "TestCLIProgramBriefStaleCancellation"
+      "TestCLIProgramBriefStaleCancellation",
+      "TestCLIProgram031DocumentCommentsAndHistory",
+      "TestCLIProgram031InactiveChangesAndEpicSelection",
+      "TestCLIProgram031BatFailureKeepsHistoryAndReturns"
     ]
   },
   "pty": {

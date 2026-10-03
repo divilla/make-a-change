@@ -14,7 +14,7 @@ import (
 )
 
 func changeFixture() map[string]any {
-	return map[string]any{"id": 12, "project_id": 7, "ref_uuid": "uuid", "ref_slug": "042-stored-slug", "epic_id": nil, "epic_name": nil, "change_phase": "backlog", "change_types": []string{}, "title": "Title", "open": false, "done_tc": int64(1 << 34), "total_tc": int64(1 << 35), "completed": int64(73), "updated_at": "2026-09-28T11:00:00Z", "after_change_id": nil, "after_change_name": nil, "pr_url": "", "created_at": "2026-09-28T10:00:00Z"}
+	return map[string]any{"id": 12, "project_id": 7, "ref_uuid": "uuid", "ref_slug": "042-stored-slug", "epic_id": nil, "epic_name": nil, "change_phase": "backlog", "change_types": []string{}, "title": "Title", "active": false, "done_tc": int64(1 << 34), "total_tc": int64(1 << 35), "completed": int64(73), "updated_at": "2026-09-28T11:00:00Z", "after_change_id": nil, "after_change_name": nil, "pr_url": "", "created_at": "2026-09-28T10:00:00Z"}
 }
 
 func TestP401AllChangeOperationsExactTypedPayloadsAndOneRequest(t *testing.T) {
@@ -41,7 +41,7 @@ func TestP401AllChangeOperationsExactTypedPayloadsAndOneRequest(t *testing.T) {
 			v, e := c.GetChange(ctx, 12)
 			if e == nil {
 				require.Equal(t, "042-stored-slug", *v.RefSlug)
-				require.False(t, v.Open)
+				require.False(t, v.Active)
 				require.Equal(t, 3, *v.AfterChangeID)
 				require.Equal(t, "First change #3", *v.AfterChangeName)
 				require.Equal(t, "", v.PRUrl)
@@ -58,7 +58,7 @@ func TestP401AllChangeOperationsExactTypedPayloadsAndOneRequest(t *testing.T) {
 		{"update-slug", `{"id":12,"slug":"new-slug"}`, 204, func(c HTTPClient) error { return c.UpdateChangeSlug(ctx, 12, "new-slug") }},
 		{"update-types", `{"id":12,"change_types":[]}`, 204, func(c HTTPClient) error { return c.UpdateChangeTypes(ctx, 12, nil) }},
 		{"update-phase", `{"id":12,"change_phase":"review"}`, 204, func(c HTTPClient) error { return c.UpdateChangePhase(ctx, 12, "review") }},
-		{"update-open", `{"id":12,"open":false}`, 204, func(c HTTPClient) error { return c.UpdateChangeOpen(ctx, 12, false) }},
+		{"update-active", `{"id":12,"active":false}`, 204, func(c HTTPClient) error { return c.UpdateChangeActive(ctx, 12, false) }},
 		{"update-epic", `{"id":12,"epic_id":3}`, 204, func(c HTTPClient) error { return c.UpdateChangeEpic(ctx, 12, &association) }},
 		{"update-epic", `{"id":12,"epic_id":null}`, 204, func(c HTTPClient) error { return c.UpdateChangeEpic(ctx, 12, nil) }},
 		{"update-after-change", `{"id":12,"after_change_id":3}`, 204, func(c HTTPClient) error { return c.UpdateChangeAfterChange(ctx, 12, &association) }},
@@ -172,9 +172,9 @@ func TestP406DocumentCurrentInsertAndSeparateTestCases(t *testing.T) {
 		var body map[string]any
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 		switch r.URL.Path {
-		case "/api/v1/doc/current":
+		case "/api/v1/doc/list-active":
 			require.Equal(t, map[string]any{"ref_id": float64(12), "ref_table": "change"}, body)
-			_ = json.NewEncoder(w).Encode([]dto.Document{{ID: 91, RefID: 12, RefTable: "change", DocType: "brief", Body: "raw\tbytes\n", Current: true, CreatedAt: time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC), HTML: "<p>raw</p>"}})
+			_ = json.NewEncoder(w).Encode([]dto.Document{{ID: 91, RefID: 12, RefTable: "change", DocType: "brief", Body: "raw\tbytes\n", CreatedAt: time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC), HTML: "<p>raw</p>"}})
 		case "/api/v1/doc/insert":
 			require.Equal(t, map[string]any{"ref_id": float64(12), "ref_table": "change", "doc_type": "brief", "body": "raw\tbytes\n", "agent_edit": false}, body)
 			w.WriteHeader(201)
@@ -188,7 +188,7 @@ func TestP406DocumentCurrentInsertAndSeparateTestCases(t *testing.T) {
 	}))
 	defer server.Close()
 	c := NewHTTPClient(server.URL)
-	docs, err := c.CurrentDocuments(context.Background(), 12, "change")
+	docs, err := c.ActiveDocuments(context.Background(), 12, "change")
 	require.NoError(t, err)
 	require.Equal(t, "raw\tbytes\n", docs[0].Body)
 	id, err := c.InsertDocument(context.Background(), dto.DocumentInput{RefID: 12, RefTable: "change", DocType: "brief", Body: docs[0].Body})
@@ -210,7 +210,7 @@ func TestP401InvalidIDsNeverRequest(t *testing.T) {
 	require.Error(t, e)
 	_, e = c.CreateChange(ctx, dto.ChangeCreateInput{})
 	require.Error(t, e)
-	for _, e := range []error{c.UpdateChangeTitle(ctx, 0, "a"), c.UpdateChangePhase(ctx, 0, "a"), c.UpdateChangeTypes(ctx, 0, nil), c.UpdateChangeOpen(ctx, 0, false), c.UpdateChangeEpic(ctx, 0, nil), c.UpdateChangeAfterChange(ctx, 0, nil), c.UpdateChangePRUrl(ctx, 0, ""), c.DeleteChange(ctx, 0), c.UpdateChangeEpic(ctx, 1, &negative), c.UpdateChangeAfterChange(ctx, 1, &negative)} {
+	for _, e := range []error{c.UpdateChangeTitle(ctx, 0, "a"), c.UpdateChangePhase(ctx, 0, "a"), c.UpdateChangeTypes(ctx, 0, nil), c.UpdateChangeActive(ctx, 0, false), c.UpdateChangeEpic(ctx, 0, nil), c.UpdateChangeAfterChange(ctx, 0, nil), c.UpdateChangePRUrl(ctx, 0, ""), c.DeleteChange(ctx, 0), c.UpdateChangeEpic(ctx, 1, &negative), c.UpdateChangeAfterChange(ctx, 1, &negative)} {
 		require.Error(t, e)
 		var h *HTTPError
 		require.False(t, errors.As(e, &h))
@@ -218,7 +218,7 @@ func TestP401InvalidIDsNeverRequest(t *testing.T) {
 }
 
 func TestP406MalformedDocumentAndTestcaseReads(t *testing.T) {
-	for _, path := range []string{"/api/v1/doc/current", "/api/v1/test-case/list"} {
+	for _, path := range []string{"/api/v1/doc/list-active", "/api/v1/test-case/list"} {
 		for _, body := range []string{`null`, `{}`, `[null]`, `[{}]`, `[{"id":-1}]`} {
 			t.Run(path+body, func(t *testing.T) {
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -228,8 +228,8 @@ func TestP406MalformedDocumentAndTestcaseReads(t *testing.T) {
 				defer server.Close()
 				c := NewHTTPClient(server.URL)
 				var err error
-				if path == "/api/v1/doc/current" {
-					_, err = c.CurrentDocuments(context.Background(), 12, "change")
+				if path == "/api/v1/doc/list-active" {
+					_, err = c.ActiveDocuments(context.Background(), 12, "change")
 				} else {
 					_, err = c.ListTestCases(context.Background(), 12)
 				}

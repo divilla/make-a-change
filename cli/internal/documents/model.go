@@ -218,7 +218,7 @@ func (m Model) begin(ctx context.Context, api ScreenAPI, op Operation, input dto
 		if r.RefreshErr != nil {
 			return r
 		}
-		r.Current, r.RefreshErr = api.CurrentDocuments(work, ownerID, table)
+		r.Current, r.RefreshErr = api.ActiveDocuments(work, ownerID, table)
 		if r.RefreshErr != nil {
 			return r
 		}
@@ -356,4 +356,14 @@ func (m Model) Scroll(delta, width, height int) Model {
 	lines := viewLines(m, width)
 	m.Offset = max(0, min(max(0, len(lines)-height), m.Offset+delta))
 	return m
+}
+
+// IsActive tests membership in the server-selected active list.
+func (m Model) IsActive(id int) bool {
+	for _, d := range m.Current {
+		if d.ID == id {
+			return true
+		}
+	}
+	return false
 }

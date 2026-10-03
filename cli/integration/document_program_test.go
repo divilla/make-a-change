@@ -42,6 +42,8 @@ func TestCLIProgramOrdinaryDocumentEditor(t *testing.T) {
 					change := programChange(12, "Existing")
 					change["change_types"] = []string{"bugfix"}
 					switch r.URL.Path {
+					case "/api/v1/doc/comment-list":
+						writeProgramJSON(w, []any{})
 					case "/api/v1/project/config":
 						writeProgramJSON(w, programProjectConfig())
 					case "/api/v1/project/details":
@@ -50,7 +52,7 @@ func TestCLIProgramOrdinaryDocumentEditor(t *testing.T) {
 						writeProgramJSON(w, []any{change})
 					case "/api/v1/change/details":
 						writeProgramJSON(w, change)
-					case "/api/v1/doc/current":
+					case "/api/v1/doc/list-active":
 						writeProgramJSON(w, []any{programDocument(field, saved)})
 					case "/api/v1/test-case/list":
 						writeProgramJSON(w, []any{})
@@ -164,6 +166,8 @@ func testDocumentEditorWaitsForDetail(t *testing.T, failed bool) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/config":
 			writeProgramJSON(w, programProjectConfig())
 		case "/api/v1/project/details":
@@ -179,7 +183,7 @@ func testDocumentEditorWaitsForDetail(t *testing.T, failed bool) {
 				}
 			}
 			writeProgramJSON(w, programChange(12, "Existing"))
-		case "/api/v1/doc/current":
+		case "/api/v1/doc/list-active":
 			writeProgramJSON(w, []any{programDocument("spec", original)})
 		case "/api/v1/test-case/list":
 			writeProgramJSON(w, []any{})

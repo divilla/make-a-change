@@ -70,7 +70,7 @@ func TestP503ShellRendersFeatureSuppliedTestCaseForms(t *testing.T) {
 func TestP502SelectionAfterRefreshAndReloadSafety(t *testing.T) {
 	f := &fakeClient{gotChange: dto.ChangeView{ID: "12", ProjectID: "7", Title: "Change", TestCases: []dto.TestCase{{ID: 31, ChangeID: 12, Scenario: "before"}}}}
 	m := testcaseScreen(f)
-	m.changeList.DetailSelected = 8
+	m.changeList.DetailSelected = 7
 	m.testCase = testcases.Model{ProjectID: 7, ChangeID: 12, Revision: 4, Busy: true}
 	r := testcases.Result{ProjectID: 7, ChangeID: 12, Revision: 4, Operation: testcases.Edit, ID: 31, Committed: true, Rows: []dto.TestCase{{ID: 31, ChangeID: 12, Scenario: "after"}}, Change: fakeWire(f.gotChange)}
 	next, _ := m.applyTestCaseResult(r)
@@ -126,5 +126,5 @@ func TestP502EmptyLoadingErrorAndScrollableDetails(t *testing.T) {
 	rows := changes.DetailRows(m.changeList.Detail)
 	require.True(t, len(rows) > 20)
 	require.Contains(t, m.View(), "case scenario")
-	require.Contains(t, strings.Join([]string{rows[8].Text}, ""), "created 2026-09-28")
+	require.Contains(t, strings.Join([]string{rows[8].Text}, ""), "updated 2026-09-28")
 }

@@ -73,7 +73,13 @@ func (m Model) applyProjectResult(r projects.Result) (tea.Model, tea.Cmd) {
 			m = m.setPromptValue("")
 		case projects.Delete:
 			m.state = ProjectsListState
-			if m.appConfig.ProjectID == r.ID {
+			retained := false
+			for _, row := range r.Rows {
+				if row.ID == r.ID {
+					retained = true
+				}
+			}
+			if m.appConfig.ProjectID == r.ID && !retained {
 				m.currentProject = dto.Option{}
 				m.appConfig.ProjectID = 0
 				m.selectionGeneration++

@@ -17,6 +17,7 @@ import (
 type documentProgramBackend struct {
 	mu                      sync.Mutex
 	calls                   map[string]int
+	active                  map[int]bool
 	rows                    map[string][]map[string]any
 	inserts                 []map[string]any
 	failInsert, failList    int
@@ -25,7 +26,7 @@ type documentProgramBackend struct {
 
 func newDocumentProgramBackend(t *testing.T) (*documentProgramBackend, *httptest.Server) {
 	t.Helper()
-	b := &documentProgramBackend{calls: map[string]int{}, rows: map[string][]map[string]any{}}
+	b := &documentProgramBackend{active: map[int]bool{}, calls: map[string]int{}, rows: map[string][]map[string]any{}}
 	for _, o := range []struct {
 		table string
 		id    int
@@ -40,6 +41,7 @@ func newDocumentProgramBackend(t *testing.T) (*documentProgramBackend, *httptest
 		}
 		old := programDocVersion(base, o.table, o.id, o.kind, "old historical", false)
 		current := programDocVersion(base+1, o.table, o.id, o.kind, "new current", true)
+		b.active[base+1] = true
 		b.rows[fmt.Sprintf("%s:%d", o.table, o.id)] = []map[string]any{current, old}
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +59,8 @@ func newDocumentProgramBackend(t *testing.T) (*documentProgramBackend, *httptest
 		owner := intFromJSON(in["ref_id"])
 		key := fmt.Sprintf("%s:%d", table, owner)
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/details":
 			writeProgramJSON(w, programProject(7, "Program Project"))
 		case "/api/v1/project/list":
@@ -84,10 +88,10 @@ func newDocumentProgramBackend(t *testing.T) (*documentProgramBackend, *httptest
 				return
 			}
 			writeProgramJSON(w, b.rows[key])
-		case "/api/v1/doc/current":
+		case "/api/v1/doc/list-active":
 			var current []map[string]any
 			for _, d := range b.rows[key] {
-				if d["current"] == true {
+				if b.active[intFromJSON(d["id"])] {
 					current = append(current, d)
 				}
 			}
@@ -125,11 +129,12 @@ func newDocumentProgramBackend(t *testing.T) (*documentProgramBackend, *httptest
 			id := 91 + len(b.inserts) - 1
 			for _, d := range b.rows[key] {
 				if d["doc_type"] == in["doc_type"] {
-					d["current"] = false
+					delete(b.active, intFromJSON(d["id"]))
 				}
 			}
 			row := programDocVersion(id, table, owner, in["doc_type"].(string), in["body"].(string), true)
 			row["agent_edit"] = in["agent_edit"]
+			b.active[id] = true
 			b.rows[key] = append([]map[string]any{row}, b.rows[key]...)
 			w.WriteHeader(201)
 			writeProgramJSON(w, map[string]any{"id": id})
@@ -152,8 +157,8 @@ func intFromJSON(v any) int {
 	return 0
 }
 
-func programDocVersion(id int, table string, owner int, kind, body string, current bool) map[string]any {
-	return map[string]any{"id": id, "ref_id": owner, "ref_table": table, "doc_type": kind, "body": body, "agent_edit": false, "current": current, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z", "html": "<p>server rendered</p>"}
+func programDocVersion(id int, table string, owner int, kind, body string, _ bool) map[string]any {
+	return map[string]any{"id": id, "ref_id": owner, "ref_table": table, "doc_type": kind, "body": body, "agent_edit": false, "deleted_at": nil, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z", "html": "<p>server rendered</p>"}
 }
 
 func documentSession(t *testing.T, server *httptest.Server) *programSession {
@@ -202,9 +207,9 @@ func TestCLIProgramDocumentOwnersAndHistory(t *testing.T) {
 				wantID = 60
 			}
 			s.navigate(t, "\x1b[B\r", fmt.Sprintf("Version #%d", wantID))
-			require.Contains(t, s.output.String(), "historical")
-			require.Contains(t, s.output.String(), "Raw body:")
-			require.Contains(t, s.output.String(), "Rendered HTML:")
+			require.Contains(t, s.output.String(), "history")
+			require.Contains(t, s.output.String(), "created_at:")
+			require.Contains(t, s.output.String(), "updated_at:")
 			s.navigate(t, "/return\r", "History: 2")
 			if owner == "change" {
 				s.navigate(t, "/type\r", "selected document type: spec")
@@ -215,7 +220,7 @@ func TestCLIProgramDocumentOwnersAndHistory(t *testing.T) {
 			b.mu.Lock()
 			defer b.mu.Unlock()
 			require.GreaterOrEqual(t, b.calls["/api/v1/doc/list"], 1)
-			require.GreaterOrEqual(t, b.calls["/api/v1/doc/current"], 1)
+			require.GreaterOrEqual(t, b.calls["/api/v1/doc/list-active"], 1)
 			if owner == "change" {
 				require.Equal(t, "spec", b.inserts[0]["doc_type"])
 				require.Equal(t, "configured choice", b.inserts[0]["body"])
@@ -309,6 +314,8 @@ func TestCLIProgramDocumentNavigationCancelsRequest(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/config":
 			writeProgramJSON(w, programProjectConfig())
 		case "/api/v1/project/list":
@@ -339,7 +346,7 @@ func TestCLIProgramDocumentNavigationCancelsRequest(t *testing.T) {
 				return
 			}
 			writeProgramJSON(w, []any{})
-		case "/api/v1/doc/current":
+		case "/api/v1/doc/list-active":
 			writeProgramJSON(w, []any{})
 		default:
 			t.Errorf("unexpected request %s", r.URL.Path)
@@ -381,6 +388,8 @@ func TestCLIProgramDocumentShutdownCancelsRequest(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/config":
 			writeProgramJSON(w, programProjectConfig())
 		case "/api/v1/project/list":

@@ -89,29 +89,14 @@ func TestTypesAndCompletionUseRequestedColors(t *testing.T) {
 }
 
 func TestDetailsViewSeparatesSpecAndTestCases(t *testing.T) {
-	model := Model{}.WithDetail(dto.ChangeView{
-		ID:      "12",
-		RefUUID: "11111111-2222-4333-8444-555555555555",
-		Ref:     "3",
-		Title:   "Backend Change",
-		Spec:    "Spec text",
-		TestCases: []dto.TestCase{
-			{ID: 31, Scenario: "first scenario", Done: true},
-		},
-	})
-
-	view := stripANSI(DetailsView(model, 120, 20))
-
-	assert.Contains(t, view, "ID │ 12")
-	assert.Contains(t, view, "Ref UUID │ 11111111-2222-4333-8444-555555555555")
-	specIndex := strings.Index(view, "Spec │ Spec text")
-	dividerIndex := strings.Index(view[specIndex:], "───────────┼")
-	testCaseIndex := strings.Index(view, "✅ │ first scenario (#31)")
-	require.NotEqual(t, -1, specIndex)
-	require.NotEqual(t, -1, dividerIndex)
-	require.NotEqual(t, -1, testCaseIndex)
-	assert.Less(t, specIndex, specIndex+dividerIndex)
-	assert.Less(t, specIndex+dividerIndex, testCaseIndex)
+	model := Model{}.WithDetail(dto.ChangeView{ID: "12", RefUUID: "uuid", Title: "Change", DocumentTypes: []string{"brief", "spec"}, Documents: []dto.Document{{ID: 9, DocType: "spec", Body: "Spec text"}}, TestCases: []dto.TestCase{{ID: 31, Scenario: "first scenario", Done: true}}})
+	view := stripANSI(DetailsView(model, 120, 30))
+	assert.Contains(t, view, "spec [✓]")
+	assert.NotContains(t, view, "Spec text")
+	assert.Contains(t, view, "first scenario (#31)")
+	assert.Contains(t, view, "Docs")
+	assert.Contains(t, view, "Comments")
+	assert.Less(t, strings.Index(view, "first scenario (#31)"), strings.Index(view, "Docs"))
 }
 
 func TestDetailsViewEmojiRowsDoNotOverflowSelectionWidth(t *testing.T) {
@@ -120,7 +105,7 @@ func TestDetailsViewEmojiRowsDoNotOverflowSelectionWidth(t *testing.T) {
 		Ref:     "3",
 		Title:   "Backend Change",
 		Spec:    "Spec text",
-		Open:    true,
+		Active:  true,
 		Created: "2026-06-29T08:15:00Z",
 		TestCases: []dto.TestCase{
 			{ID: 31, Scenario: "first scenario", Done: true},

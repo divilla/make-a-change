@@ -189,7 +189,7 @@ func TestP703UpdateRefreshesCatalogWhileProjectIdentityLoads(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/v1/project/details":
-			_ = json.NewEncoder(w).Encode(dto.Project{ID: 7, Config: "program"})
+			_ = json.NewEncoder(w).Encode(dto.Project{ID: 7, ConfigSlug: "program"})
 		case "/api/v1/project/config":
 			reads++
 			_ = json.NewEncoder(w).Encode(row)

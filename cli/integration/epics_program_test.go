@@ -16,7 +16,7 @@ import (
 )
 
 func programEpic(id, projectID int, name string) map[string]any {
-	return map[string]any{"id": id, "project_id": projectID, "name": name, "done_tc": 2, "total_tc": 8, "completed": 63, "change_count": 4, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z"}
+	return map[string]any{"id": id, "project_id": projectID, "name": name, "active": true, "done_tc": 2, "total_tc": 8, "completed": 63, "change_count": 4, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z"}
 }
 
 func TestCLIProgramEpicCRUDAndPartialSuccess(t *testing.T) {
@@ -43,6 +43,8 @@ func TestCLIProgramEpicCRUDAndPartialSuccess(t *testing.T) {
 				}
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 				switch r.URL.Path {
+				case "/api/v1/doc/comment-list":
+					writeProgramJSON(w, []any{})
 				case "/api/v1/project/details":
 					writeProgramJSON(w, programProject(7, "Program Project"))
 				case "/api/v1/project/config":
@@ -147,13 +149,13 @@ func TestCLIProgramEpicCRUDAndPartialSuccess(t *testing.T) {
 			s.navigate(t, "/delete\r", "Are you sure?")
 			s.navigate(t, "\x1b", "status cancel")
 			s.navigate(t, "/delete\r", "Are you sure?")
-			s.navigate(t, "\r", map[bool]string{true: "delete failed", false: "deleted epic"}[mode == "write failures"])
+			s.navigate(t, "\r", map[bool]string{true: "delete failed", false: map[bool]string{true: "epic delete committed", false: "deleted epic"}[mode == "refresh failures"]}[mode == "write failures"])
 			if mode == "write failures" {
 				s.navigate(t, "/delete\r", "Are you sure?")
 				s.navigate(t, "\r", "deleted epic")
 			}
 			if mode == "refresh failures" {
-				s.waitFor(t, "deleted epic; refresh failed")
+				s.waitFor(t, "epic delete committed; refresh failed")
 				s.navigate(t, "/retry\r", "loaded epics")
 			}
 			s.waitFor(t, "Unrelated epic")
@@ -207,6 +209,8 @@ func TestCLIProgramEpicDelayedScopeAndShutdown(t *testing.T) {
 				}
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 				switch r.URL.Path {
+				case "/api/v1/doc/comment-list":
+					writeProgramJSON(w, []any{})
 				case "/api/v1/project/details":
 					name := "Program Project"
 					if body.ID == 8 {
@@ -296,6 +300,8 @@ func TestCLIProgramEpicReloadBlocksCachedRows(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.Copy(io.Discard, r.Body)
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/details":
 			writeProgramJSON(w, programProject(7, "Program Project"))
 		case "/api/v1/project/config":

@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // Filters stores active change list filter selections.
@@ -42,6 +41,7 @@ type Model struct {
 	DetailSelected int
 	DetailOffset   int
 	Loading        bool
+	Inactive       bool
 }
 
 // DetailRow is one row in the Change details table.
@@ -53,6 +53,10 @@ type DetailRow struct {
 	TestCaseID   string
 	TestCaseText string
 	TestCaseDone bool
+	DocumentType string
+	DocumentID   int
+	Comment      bool
+	NoWrap       bool
 }
 
 // ParsedSpec stores metadata extracted from spec markdown.
@@ -249,13 +253,12 @@ func DetailRows(change dto.ChangeView) []DetailRow {
 		{Label: "Types", Text: strings.Join(change.ChangeTypes, "|"), Selectable: true},
 		{Label: "After Change", Text: displayNullable(change.AfterChangeName), Selectable: true, DividerAfter: true},
 		{Label: "Title", Text: change.Title, Selectable: true, DividerAfter: true},
-		{Label: "Brief", Text: change.Brief, Selectable: true, DividerAfter: true},
-		{Label: "Spec", Text: change.Spec, Selectable: true, DividerAfter: true},
+		{Label: "Brief", Text: change.Brief, Selectable: true, DividerAfter: true, DocumentType: "brief", DocumentID: documentID(change.Documents, "brief")},
 	}
 	for i, testCase := range change.TestCases {
 		label := fmt.Sprintf("%s (#%d)", testCase.Scenario, testCase.ID)
 		if !testCase.CreatedAt.IsZero() && !testCase.UpdatedAt.IsZero() {
-			label += fmt.Sprintf("  created %s  updated %s", testCase.CreatedAt.Format(time.RFC3339), testCase.UpdatedAt.Format(time.RFC3339))
+			label += "  updated " + testCase.UpdatedAt.Local().Format("2006-01-02 15:04")
 		}
 		rows = append(rows, DetailRow{
 			Label:        testCaseDoneIcon(testCase.Done),
@@ -267,17 +270,36 @@ func DetailRows(change dto.ChangeView) []DetailRow {
 			TestCaseDone: testCase.Done,
 		})
 	}
-	for _, d := range change.Documents {
-		if d.DocType != "brief" && d.DocType != "spec" && d.DocType != "pr" {
-			rows = append(rows, DetailRow{Label: "Doc " + d.DocType, Text: d.Body, Selectable: true, DividerAfter: true})
+	rows = append(rows, DetailRow{Label: "Docs"})
+	for _, kind := range change.DocumentTypes {
+		if kind == "brief" || kind == "comment" {
+			continue
 		}
+		row := DetailRow{Text: kind + " [ ]", Selectable: true, DocumentType: kind, NoWrap: true}
+		for _, d := range change.Documents {
+			if d.DocType == kind {
+				row.DocumentID = d.ID
+				row.Text = kind + " [✓] " + d.UpdatedAt.Local().Format("2006-01-02 15:04")
+			}
+		}
+		rows = append(rows, row)
+	}
+	rows = append(rows, DetailRow{Label: "Comments", Selectable: true, Comment: true, DocumentType: "comment"})
+	for _, d := range change.Comments {
+		if d.DeletedAt != nil {
+			continue
+		}
+		lines := strings.Split(normalizeNewlines(d.Body), "\n")
+		if len(lines) > 3 {
+			lines = lines[:3]
+		}
+		lines = append(lines, d.UpdatedAt.Local().Format("2006-01-02 15:04"))
+		rows = append(rows, DetailRow{Text: strings.Join(lines, "\n"), Selectable: true, DocumentType: "comment", DocumentID: d.ID, Comment: true, NoWrap: true})
 	}
 	rows = append(rows,
-		DetailRow{Label: "PR", Text: change.PR, Selectable: true, DividerAfter: true},
 		DetailRow{Label: "PR URL", Text: change.PRUrl, Selectable: true},
 		DetailRow{Label: "Complete", Text: fmt.Sprintf("%d/%d - %d%%", change.Done, change.Total, change.Completed), Selectable: true},
-		DetailRow{Label: "Open", Text: testCaseDoneIcon(change.Open), Selectable: true},
-		DetailRow{Label: "Created", Text: formatListTimestamp(change.Created), Selectable: true},
+		DetailRow{Label: "Active", Text: testCaseDoneIcon(change.Active), Selectable: true},
 		DetailRow{Label: "Modified", Text: formatListTimestamp(change.Modified), Selectable: true},
 	)
 	return rows
@@ -479,6 +501,9 @@ func selectableDetailRowAtOffset(rows []DetailRow, offset int, textWidth int) in
 }
 
 func detailRowTextLines(row DetailRow, textWidth int) []string {
+	if row.NoWrap {
+		return strings.Split(row.Text, "\n")
+	}
 	value := strings.TrimSpace(row.Text)
 	if value == "" {
 		value = "-"
@@ -499,7 +524,7 @@ func detailRowTextLines(row DetailRow, textWidth int) []string {
 }
 
 func detailRowShouldTruncate(row DetailRow) bool {
-	return row.Label == "Brief" || row.Label == "Spec" || row.Label == "PR"
+	return row.Label == "Brief"
 }
 
 func detailDividerAfter(row DetailRow) bool {
@@ -789,4 +814,13 @@ func SortedTypeOptions(options []dto.Option) []dto.Option {
 		return sorted[i].Label < sorted[j].Label
 	})
 	return sorted
+}
+
+func documentID(rows []dto.Document, kind string) int {
+	for _, d := range rows {
+		if d.DocType == kind {
+			return d.ID
+		}
+	}
+	return 0
 }

@@ -88,6 +88,12 @@ func (m Model) applyDocumentResult(r documents.Result) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.document = next
+	if r.Operation == documents.Details && next.DetailLoaded && next.Err == nil {
+		var cmd tea.Cmd
+		m.history, cmd = m.history.OpenRecord(m.ctx, m.client, m.historyPrinter, m.document.ProjectID, next.Detail)
+		m.historyOpen = cmd != nil
+		return m, cmd
+	}
 	m.status, m.err = next.Status, ""
 	if next.Err != nil {
 		m.err = next.Err.Error()
@@ -204,6 +210,10 @@ func (m Model) leaveDocuments() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) documentKey(key string, msg tea.KeyMsg) (Model, tea.Cmd, bool) {
+	if m.state == DocumentState && !m.documentForm && m.input.Value() == "" && key == "ctrl+h" && m.document.Loaded && !m.document.ShowingDetail && m.document.Selected < len(m.document.Rows) {
+		next, cmd := m.openHistory(m.document.Rows[m.document.Selected].DocType)
+		return next.(Model), cmd, true
+	}
 	if m.state != DocumentState || m.documentForm || m.input.Value() != "" {
 		return m, nil, false
 	}

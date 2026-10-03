@@ -1856,3 +1856,95 @@ before producing a valid profile; the rerun exits 0 with **4788/5563 (86.0687%)*
 `make -C cli integration-coverage` exits 0 with **4237/5563 (76.1639%)**.
 Both final campaigns report complete, independent profiles and pass the 80%/70%
 gates. No live backend or database was used.
+
+## 031 CLI document refactor (2026-10-03)
+
+Implemented [031](../../agent/specs/031-cli-docs-refactor.md): current backend
+DTO/routes, ordered configured Docs slots and the full Brief editor, independent
+comments, captured-ID bottom delete confirmation, owner/type-scoped retained
+history with captured real bat colors, same-ID activation/undelete, inactive
+changes and active-only epic selection. `/documents` retains all three owners
+and starts history at the explicitly selected version. Local timestamps and
+committed-write/read-only retry behavior are covered by unit and program tests.
+Editor callbacks additionally bind owner, type, project and revision.
+The [assertion ledger](cli-contracts.md) maps every numbered requirement.
+
+Fresh baseline at `63ce51493cf69a3d1b1531d9df9bb89d8cbd2ab1` was clean Git source:
+`make -C cli check` exited 2 solely for the stale backend-route ledger; formatting,
+lint (zero issues), vet, race and architecture passed. Earlier checkpoint format
+and package-comment findings were already repaired in this revision.
+Baseline unit **4987/5784 (86.2206%)** and terminal **4416/5784 (76.3485%)**
+campaigns both exited 0. Baseline command logs are under `/tmp/031-baseline-*.log`.
+
+| Final command | Exit | Evidence |
+| --- | ---: | --- |
+| `make -C cli check` | 0 | Formatting, zero lint findings, vet, uncached unit race, architecture and all 36 tooling tests pass. `/tmp/031-check-final4.log`. |
+| `make -C cli coverage` | 0 | Complete independent unit campaign **5503/6363 (86.4844%)**; strict 80% gate passes. `/tmp/031-unit-final3.log`. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities; dependencies unchanged. `/tmp/031-deps-final2.log`. |
+| `make -C cli integration-coverage` | 0 | Complete independent terminal campaign **4892/6363 (76.8820%)**; strict 70% gate passes. All 34 program manifest scenarios plus the instrumented real PTY child pass without skips, missing counters or cleanup failures. `/tmp/031-integration-final3.log`. |
+| `make -C cli integration-test` | 0 | Retained whole-program, startup and Flow suites pass. `/tmp/031-integration-work4.log`; later final campaign verifies the changed program scenarios after final editor isolation fixes. |
+| `make -C cli terminal-test` | 0 | PTY and harness assertions pass. `/tmp/031-pty-work5.log`; the final campaign repeats the PTY only to validate final source and collect independent counters. |
+| `go test -count=1 ./internal/doc -run 'Test(CommentAndDeleteAPIContracts\|CommentUndelete\|ActiveSet)'` (backend cwd) | 0 | Fresh unchanged backend endpoint unit assertions. Backend source and APIHydra suites were already implemented/verified before this pass; no new API coverage measurement is claimed here. |
+
+Both `cli/.coverage/{unit,integration}/status.json` report `complete: true` and
+`exit: 0`. Each contains independent raw/complete profiles, command exits,
+revision plus full worktree diff and file hashes, exact package totals,
+`functions.log` and `uncovered.txt`. Tested base revision is the hash above;
+the common aggregate production Go source SHA-256 is
+`d679f859b2d3947c8285455f8a5521ef63283e600407d99f378b4e999bf0fd16`
+(SHA-256 of sorted compact JSON mapping of the 77 production Go input hashes).
+The terminal child binary SHA-256 is
+`97001e376ab02305588e5028db20a1a4435fa835675cbff8f2845775b4ac3eb8`.
+Go is `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0;
+exact bat/socat command versions and scenario lists are retained in campaign logs.
+Only this evidence/checkpoint, assertion ledger and implementation log were edited
+after the final campaigns; production and test source hashes remain unchanged.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2486/3029 | 2313/3029 |
+| `cli/internal/changes` | 858/989 | 742/989 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 484/509 | 400/509 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 8/8 | 8/8 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 317/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+The denominator includes the untested main package and structurally empty DTO
+and style packages; no unit hits contribute to terminal totals. Remaining gaps
+are visible in each campaign's uncovered statements/functions: main error exits,
+navigation fallbacks, agent/brief error paths, transport rejection branches,
+and some document/history invalid-input/cancellation/printing paths. Both final
+aggregate targets pass without excluding those statements.
+
+Intermediate focused runs exposed stale Active/testcase/menu/PTY expectations,
+footer line-wrap synchronization, missing refresh feedback on first history
+activation, test color-profile leakage and new lint/manifest findings. Those were
+repaired; diagnostic logs remain under `/tmp/031-*-work*.log` and
+`/tmp/031-check-final.log`. Incomplete/failed runs established no coverage success.
+The final two complete campaigns above supersede earlier measurements.
+No CLI test used a live backend/database. No backend source/schema, database
+lifecycle, Git publication, deployment, stage or production promotion occurred.
+
+Final review additionally repaired retry attribution after switching from comment
+mutations to change-field or testcase mutations. Successful old comment feedback
+cannot capture a subsequent reload; starting another write clears that old outcome.
+`Test031RetryBelongsToTheLatestCommittedOperation` proves committed read-only
+recovery without repeating either write. A fixture initially assumed a failed read
+without injecting the failure; it was corrected. That incomplete unit campaign's
+raw artifacts remain at `/tmp/031-unit-failed-02`, and its diagnostics at
+`/tmp/031-unit-final2.log`. The final campaigns above use the corrected fixture.
+The final log keeps the skill-required blank line after its implementation block;
+`git diff --check` flags that trailing log line only. Production, test and other
+documentation diffs have no whitespace findings.

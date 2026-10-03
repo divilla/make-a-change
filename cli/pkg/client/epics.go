@@ -10,6 +10,7 @@ import (
 type epicWire struct {
 	ID          *int       `json:"id"`
 	ProjectID   *int       `json:"project_id"`
+	Active      *bool      `json:"active"`
 	Name        *string    `json:"name"`
 	DoneTC      *int64     `json:"done_tc"`
 	TotalTC     *int64     `json:"total_tc"`
@@ -20,10 +21,10 @@ type epicWire struct {
 }
 
 func (e epicWire) value() (dto.Epic, error) {
-	if e.ID == nil || *e.ID <= 0 || e.ProjectID == nil || *e.ProjectID <= 0 || e.Name == nil || e.DoneTC == nil || e.TotalTC == nil || e.Completed == nil || e.ChangeCount == nil || e.CreatedAt == nil || e.UpdatedAt == nil {
+	if e.ID == nil || *e.ID <= 0 || e.ProjectID == nil || *e.ProjectID <= 0 || e.Active == nil || e.Name == nil || e.DoneTC == nil || e.TotalTC == nil || e.Completed == nil || e.ChangeCount == nil || e.CreatedAt == nil || e.UpdatedAt == nil {
 		return dto.Epic{}, &ContractError{errors.New("missing or invalid epic fields")}
 	}
-	return dto.Epic{ID: *e.ID, ProjectID: *e.ProjectID, Name: *e.Name, DoneTC: *e.DoneTC, TotalTC: *e.TotalTC, Completed: *e.Completed, ChangeCount: *e.ChangeCount, CreatedAt: *e.CreatedAt, UpdatedAt: *e.UpdatedAt}, nil
+	return dto.Epic{ID: *e.ID, ProjectID: *e.ProjectID, Name: *e.Name, Active: *e.Active, DoneTC: *e.DoneTC, TotalTC: *e.TotalTC, Completed: *e.Completed, ChangeCount: *e.ChangeCount, CreatedAt: *e.CreatedAt, UpdatedAt: *e.UpdatedAt}, nil
 }
 
 type epicProjectID struct {

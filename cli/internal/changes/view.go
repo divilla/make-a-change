@@ -408,7 +408,10 @@ func detailTableRowLines(row DetailRow, labelWidth int, textWidth int, selected 
 			label = row.Label
 		}
 		labelText := padLeftDisplay(tableText(label, labelWidth), labelWidth)
-		valueText := padRightDisplay(tableText(text, textWidth), textWidth)
+		valueText := padRightDisplay(text, textWidth)
+		if row.DocumentID > 0 && !row.Comment && row.DocumentType != "brief" {
+			valueText = strings.Replace(valueText, "✓", lipgloss.NewStyle().Foreground(styles.AccentGreen).Render("✓"), 1)
+		}
 		line := labelText + " │ " + valueText
 		if selected && row.Selectable {
 			lines = append(lines, detailSelectedStyle(row, phaseColors).Render(line))
@@ -534,7 +537,7 @@ func formatListTimestamp(value string) string {
 	for _, layout := range layouts {
 		parsed, err := time.Parse(layout, value)
 		if err == nil {
-			return parsed.Format("2006-01-02 15.04")
+			return parsed.Local().Format("2006-01-02 15:04")
 		}
 	}
 	return "not a date"

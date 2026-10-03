@@ -15,8 +15,8 @@ type memoryDocs struct {
 	calls int
 }
 
-func (a *memoryDocs) CurrentDocuments(context.Context, int, string) ([]dto.Document, error) {
-	return []dto.Document{{ID: 91, DocType: "notes", Body: "raw\tbytes\n"}}, a.err
+func (a *memoryDocs) ActiveDocuments(context.Context, int, string) ([]dto.Document, error) {
+	return []dto.Document{{ID: 91, RefID: 12, RefTable: "change", DocType: "notes", Body: "raw\tbytes\n"}}, a.err
 }
 
 func (a *memoryDocs) InsertDocument(_ context.Context, input dto.DocumentInput) (int, error) {
@@ -43,4 +43,8 @@ func TestP406ConfiguredDocumentAccessAndExactBytes(t *testing.T) {
 	a.err = errors.New("save failed")
 	_, err = access.Save(context.Background(), 12, "notes", "text")
 	require.ErrorIs(t, err, a.err)
+}
+
+func (a *memoryDocs) ListComments(context.Context, int, string) ([]dto.Document, error) {
+	return []dto.Document{}, nil
 }

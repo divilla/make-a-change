@@ -54,7 +54,7 @@ func DetailsView(m Model, width int) string {
 	}
 	lines := []string{"ID: " + strconv.Itoa(e.ID), "Project ID: " + strconv.Itoa(e.ProjectID), "Name: " + e.Name}
 	if m.DetailLoaded {
-		lines = append(lines, fmt.Sprintf("Done TC: %d\nTotal TC: %d\nCompleted: %d\nChanges: %d\nCreated: %s\nModified: %s", e.DoneTC, e.TotalTC, e.Completed, e.ChangeCount, e.CreatedAt.Format("2006-01-02 15:04:05Z07:00"), e.UpdatedAt.Format("2006-01-02 15:04:05Z07:00")))
+		lines = append(lines, fmt.Sprintf("Done TC: %d\nTotal TC: %d\nCompleted: %d\nChanges: %d\nCreated: %s\nModified: %s", e.DoneTC, e.TotalTC, e.Completed, e.ChangeCount, e.CreatedAt.Local().Format("2006-01-02 15:04"), e.UpdatedAt.Local().Format("2006-01-02 15:04")))
 	} else {
 		lines = append(lines, "Details unavailable; /retry to load")
 	}

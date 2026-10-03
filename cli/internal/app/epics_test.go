@@ -34,7 +34,7 @@ func (f *epicAppClient) ListEpics(ctx context.Context, id int) ([]dto.Epic, erro
 func (f *epicAppClient) CreateEpic(_ context.Context, p int, name string) (int, error) {
 	f.names = append(f.names, name)
 	if f.createErr == nil {
-		f.detail = dto.Epic{ID: 3, ProjectID: p, Name: name}
+		f.detail = dto.Epic{ID: 3, ProjectID: p, Name: name, Active: true}
 	}
 	return 3, f.createErr
 }
@@ -67,7 +67,7 @@ func TestP303EpicEditorRawDraftRetryCancelAndNoOp(t *testing.T) {
 	for _, state := range []State{EpicCreateState, EpicUpdateState} {
 		for _, raw := range []string{"/cancel", "/api/v1/health returns 200", "\t" + strings.Repeat("long\n", 10001)} {
 			t.Run(string(state)+raw[:min(len(raw), 20)], func(t *testing.T) {
-				f := &epicAppClient{fakeClient: fakeClient{createErr: errors.New("offline"), updateErr: errors.New("offline")}, detail: dto.Epic{ID: 3, ProjectID: 7, Name: "before"}}
+				f := &epicAppClient{fakeClient: fakeClient{createErr: errors.New("offline"), updateErr: errors.New("offline")}, detail: dto.Epic{ID: 3, ProjectID: 7, Name: "before", Active: true}}
 				m := epicApp(f)
 				m.state = state
 				m.changeDetailLoaded = true
@@ -109,7 +109,7 @@ func TestP303EpicEditorRawDraftRetryCancelAndNoOp(t *testing.T) {
 }
 
 func TestP302EpicKeyboardCRUDHelpConfirmationAndScope(t *testing.T) {
-	f := &epicAppClient{fakeClient: fakeClient{epics: []dto.Option{{ID: "3", Label: "Epic"}}}, detail: dto.Epic{ID: 3, ProjectID: 7, Name: "Epic", Completed: 63}}
+	f := &epicAppClient{fakeClient: fakeClient{epics: []dto.Option{{ID: "3", Label: "Epic"}}}, detail: dto.Epic{ID: 3, ProjectID: 7, Name: "Epic", Completed: 63, Active: true}}
 	m := epicApp(f)
 	next, cmd := m.executeCommand("/epics")
 	m = applyCommand(next.(Model), cmd)
@@ -139,7 +139,7 @@ func TestP302EpicKeyboardCRUDHelpConfirmationAndScope(t *testing.T) {
 	m = applyCommand(m, cmd)
 	assert.Equal(t, 1, f.deletes)
 	assert.Equal(t, EpicsListState, m.state)
-	assert.Equal(t, "deleted epic", m.status)
+	assert.Equal(t, "epic delete committed; record retained", m.status)
 	next, cmd = m.executeCommand("/help")
 	m = applyCommand(next.(Model), cmd)
 	assert.Contains(t, m.View(), "/new-epic")
@@ -163,10 +163,10 @@ func TestP302EpicKeyboardCRUDHelpConfirmationAndScope(t *testing.T) {
 func TestP304EpicObsoleteReadCannotChangeShellOrDraft(t *testing.T) {
 	for _, command := range []string{"/return", "/help", "/new-epic"} {
 		t.Run(command, func(t *testing.T) {
-			f := &epicAppClient{detail: dto.Epic{ID: 3, ProjectID: 7, Name: "old"}}
+			f := &epicAppClient{detail: dto.Epic{ID: 3, ProjectID: 7, Name: "old", Active: true}}
 			f.read = func(ctx context.Context, _ int) (dto.Epic, error) {
 				require.ErrorIs(t, ctx.Err(), context.Canceled)
-				return dto.Epic{ID: 3, ProjectID: 7, Name: "stale"}, errors.New("stale error")
+				return dto.Epic{ID: 3, ProjectID: 7, Name: "stale", Active: true}, errors.New("stale error")
 			}
 			m := epicApp(f)
 			m.state = EpicsListState
@@ -198,7 +198,7 @@ func TestP304EpicEmptyFindRestartsCanceledRead(t *testing.T) {
 	for _, state := range []State{EpicsListState, EpicDetailsState} {
 		for _, query := range []string{"", " \t "} {
 			t.Run(string(state)+"/"+query, func(t *testing.T) {
-				f := &epicAppClient{detail: dto.Epic{ID: 3, ProjectID: 7, Name: "Fresh epic"}}
+				f := &epicAppClient{detail: dto.Epic{ID: 3, ProjectID: 7, Name: "Fresh epic", Active: true}}
 				var contexts []context.Context
 				f.read = func(ctx context.Context, id int) (dto.Epic, error) {
 					contexts = append(contexts, ctx)
@@ -310,7 +310,7 @@ func TestP304EpicSelectorReopenRejectsOlderSameProjectResult(t *testing.T) {
 func TestP303LoadedEpicNamesRemainLiteralOnEnter(t *testing.T) {
 	for _, name := range []string{"/save", "/cancel", "/editor", "/return"} {
 		t.Run(name, func(t *testing.T) {
-			f := &epicAppClient{detail: dto.Epic{ID: 3, ProjectID: 7, Name: name}}
+			f := &epicAppClient{detail: dto.Epic{ID: 3, ProjectID: 7, Name: name, Active: true}}
 			m := epicApp(f)
 			m.state = EpicDetailsState
 			next, cmd := m.executeCommand("/edit")
@@ -336,7 +336,7 @@ func TestP302EpicListFitsTerminalWhileMovingAndResizing(t *testing.T) {
 	m := epicApp(f)
 	m.state = EpicsListState
 	for i := 1; i <= 40; i++ {
-		m.epicList.Rows = append(m.epicList.Rows, dto.Epic{ID: i, ProjectID: 7, Name: fmt.Sprintf("Epic-%02d", i)})
+		m.epicList.Rows = append(m.epicList.Rows, dto.Epic{ID: i, ProjectID: 7, Name: fmt.Sprintf("Epic-%02d", i), Active: true})
 	}
 	for _, size := range []tea.WindowSizeMsg{{Width: 100, Height: 24}, {Width: 60, Height: 16}, {Width: 120, Height: 40}} {
 		m = applyMsg(m, size)
@@ -358,7 +358,7 @@ func TestP302EpicListFitsTerminalWhileMovingAndResizing(t *testing.T) {
 }
 
 func TestP302EpicDetailsFitsTerminalAndScrollsEveryField(t *testing.T) {
-	f := &epicAppClient{detail: dto.Epic{ID: 3, ProjectID: 7}}
+	f := &epicAppClient{detail: dto.Epic{ID: 3, ProjectID: 7, Active: true}}
 	for i := range 40 {
 		f.detail.Name += fmt.Sprintf("name-line-%02d\n", i)
 	}
