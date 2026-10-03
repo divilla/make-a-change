@@ -8,6 +8,7 @@ import (
 	"errors"
 	"strconv"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/require"
@@ -16,6 +17,94 @@ import (
 type review031Client struct {
 	*docs031Client
 	activeErr, commentsErr error
+}
+
+type pendingDetail031Client struct {
+	*docs031Client
+	blockComments, commentsStarted, releaseComments chan struct{}
+	detailContext                                   context.Context
+	activated                                       []int
+}
+
+func (a *pendingDetail031Client) ListComments(ctx context.Context, id int, table string) ([]dto.Document, error) {
+	select {
+	case <-a.blockComments:
+		rows, err := a.docs031Client.ListComments(ctx, id, table)
+		a.detailContext = ctx
+		close(a.commentsStarted)
+		// Simulate a response that completes after cancellation, so revision
+		// isolation is tested independently of the collaborator's cancellation.
+		<-a.releaseComments
+		return rows, err
+	default:
+		return a.docs031Client.ListComments(ctx, id, table)
+	}
+}
+
+func (a *pendingDetail031Client) ActivateDocument(_ context.Context, id int) error {
+	a.activated = append(a.activated, id)
+	for _, row := range a.rows {
+		if row.ID == id {
+			a.current = []dto.Document{row}
+			return nil
+		}
+	}
+	return errors.New("historical document missing")
+}
+
+func Test031HistoryActivationRejectsPendingDetailSnapshot(t *testing.T) {
+	for _, key := range []tea.KeyType{tea.KeyEsc, tea.KeyCtrlC} {
+		t.Run(key.String(), func(t *testing.T) {
+			m, base := app031Model(t)
+			base.gotChange = dto.ChangeView{ID: "12", ProjectID: "7", Title: "Change"}
+			base.rows = []dto.Document{app031Row(9, "spec", "old active snapshot"), app031Row(5, "spec", "selected history version")}
+			base.current = []dto.Document{base.rows[0]}
+			a := &pendingDetail031Client{docs031Client: base, blockComments: make(chan struct{}, 1), commentsStarted: make(chan struct{}), releaseComments: make(chan struct{})}
+			a.blockComments <- struct{}{}
+			m.client = a
+			m, retry := sendCommand(m, "/retry")
+			require.NotNil(t, retry)
+			result := make(chan tea.Msg, 1)
+			go func() { result <- retry() }()
+			t.Cleanup(func() { close(a.releaseComments) })
+			select {
+			case <-a.commentsStarted:
+			case <-time.After(3 * time.Second):
+				t.Fatal("detail read did not reach comments")
+			}
+			m = select031Row(t, m, "spec", 9)
+			m, cmd := sendKey(m, tea.KeyCtrlH)
+			m = applyCommand(m, cmd)
+			require.True(t, m.historyOpen)
+			require.ErrorIs(t, a.detailContext.Err(), context.Canceled)
+			require.False(t, m.changeList.Loading)
+			m, cmd = sendKey(m, tea.KeyRight)
+			m = applyCommand(m, cmd)
+			m, cmd = sendRune(m, ' ')
+			m = applyCommand(m, cmd)
+			require.Equal(t, []int{5}, a.activated)
+			m, cmd = sendKey(m, key)
+			m = applyCommand(m, cmd)
+			require.False(t, m.historyOpen)
+			require.Equal(t, 5, m.changeList.Detail.Documents[0].ID)
+			// Release explicitly, leaving cleanup's close safe on early failures.
+			a.releaseComments <- struct{}{}
+			var late changes.Result
+			select {
+			case msg := <-result:
+				late = msg.(changes.Result)
+			case <-time.After(3 * time.Second):
+				t.Fatal("detail read did not finish")
+			}
+			require.NoError(t, late.Err)
+			require.Equal(t, 9, late.Detail.Documents[0].ID)
+			before := m
+			m = applyMsg(m, late)
+			require.Equal(t, before.changeList.Detail, m.changeList.Detail)
+			require.Equal(t, before.status, m.status)
+			require.Equal(t, before.err, m.err)
+		})
+	}
 }
 
 func (a *review031Client) ActiveDocuments(ctx context.Context, id int, table string) ([]dto.Document, error) {

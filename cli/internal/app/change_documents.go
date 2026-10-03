@@ -105,6 +105,9 @@ func (m Model) openHistory(kind string) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.history, cmd = m.history.Open(m.ctx, m.client, m.historyPrinter, project, owner, table, kind)
 	m.historyOpen = cmd != nil
+	if m.historyOpen && m.state == ChangeDetailsState {
+		m.changeList = m.changeList.Invalidate()
+	}
 	if m.history.Err != nil {
 		m.err = m.history.Err.Error()
 	}

@@ -2033,3 +2033,75 @@ is claimed for them. The final complete campaigns above supersede those runs.
 The implementation log retains the skill-required final blank line; any
 `git diff --check` finding for that log line is intentional. No other whitespace
 finding remains. No live backend/database or Git publication was used.
+
+## 031 review fixes 02 — inactive deletion refresh and stale detail isolation
+
+Both findings are valid under 031-16/19 and 031-15/19 respectively. Change list
+loads and post-delete refreshes now capture the same inactive-aware reader.
+Opening change document history invalidates and cancels the originating change
+request, preventing a delayed detail snapshot from overwriting a successful
+history activation and its return refresh. HTTP contracts remain unchanged.
+
+`Test031DeleteRefreshPreservesListModeAndReadOnlyRecovery` covers both list modes,
+success and failed post-delete refreshes, retained undeleted rows and read-only
+recovery without replaying the mutation. The keyboard-driven
+`Test031HistoryActivationRejectsPendingDetailSnapshot` pauses comments after
+capturing the old active documents, opens history, activates an older document,
+returns through Esc/Ctrl+C and then delivers the old snapshot despite cancellation.
+It verifies cancellation at history entry and unchanged detail/status/error on
+late delivery. Both regression tests failed on the original production code;
+raw expected-failure output remains in `/tmp/031-review02-repro.log`.
+
+| Command | Exit | Evidence |
+| --- | ---: | --- |
+| Baseline `make -C cli check` | 0 | `/tmp/031-review02-baseline-check.log`; clean baseline. |
+| Focused two new regression tests (before fixes) | 1 | Both reported regressions reproduced; `/tmp/031-review02-repro.log`. |
+| `make -C cli format` | 0 | `/tmp/031-review02-format.log`; only intended edits. |
+| `go test -count=1 -race ./internal/app ./internal/changes ./internal/documents` (CLI cwd) | 0 | `/tmp/031-review02-focused.log`. |
+| Final `make -C cli check` | 0 | `/tmp/031-review02-check.log`; format, lint, vet, race, architecture and tooling pass, including the final strengthened cancellation assertion. |
+| `make -C cli coverage` | 0 | `/tmp/031-review02-unit.log`; **5525/6370 (86.7347%)**, 80% integer gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/031-review02-deps.log`; no vulnerabilities. |
+| `make -C cli integration-coverage` | 0 | `/tmp/031-review02-integration.log`; **4899/6370 (76.9074%)**, 70% integer gate passes. |
+
+Both independent campaign status files report complete and exit 0. All 34 program
+scenarios and the real PTY scenario finish without skips, missing counters,
+assertion failures or cleanup failures. Base revision is
+`59d4a8c5df24d47e82a83fe0dbbcec26c188e7b0`, plus the recorded worktree diff.
+Both campaigns hash the same 77 production files; the sorted compact JSON
+production-hash mapping has SHA-256
+`ae6bde237eb17dd4d121a06ec5c48be18aa104f30fce25bca4a90f19a454af42`.
+The terminal child binary SHA-256 is
+`6732c1df99ee57ff3c13c36c3cef9e093578e47d0cca55b2b257d1e04efbfd59`.
+Go is `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1 and govulncheck 1.7.0.
+Raw profiles, commands/exits, source provenance, exact package totals and uncovered
+statements/functions remain in `cli/.coverage/{unit,integration}`. Only this
+checkpoint and the implementation log changed after the completed campaigns;
+production, tests and the assertion ledger are unchanged.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2504/3036 | 2320/3036 |
+| `cli/internal/changes` | 862/989 | 742/989 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 484/509 | 400/509 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 8/8 | 8/8 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 317/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining gaps include the main unit boundary, navigation fallbacks, agent and
+brief error paths, transport rejection branches and document/history error paths;
+exact locations remain in each campaign's `uncovered.txt` and `functions.log`.
+No required scenario failed or was skipped in final verification. No backend,
+database or Git publication was used. The skill-required final blank line in
+`cli/implementation-log.md` remains intentional.

@@ -897,3 +897,12 @@ Esc and Ctrl+C after opening a scrolled owner-list record with Return.
 The inactive complete-program scenario now checks the activated row and fresh
 active-list request; the real PTY scenario checks the refreshed list count after
 activation and return.
+
+031 review fixes 02: `Test031DeleteRefreshPreservesListModeAndReadOnlyRecovery`
+proves 031-16/19 for active and inactive post-delete endpoint selection, committed
+deletion with a failed refresh, retained rows and read-only recovery without
+replaying deletion. `Test031HistoryActivationRejectsPendingDetailSnapshot`
+proves 031-15/19 by pausing `/retry` after its old active-document read, opening
+history with Ctrl+H, activating an older version and refreshing on Esc/Ctrl+C.
+History entry cancels the originating read; a collaborator that returns its old
+snapshot despite cancellation cannot overwrite the refreshed document or feedback.

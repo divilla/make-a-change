@@ -4,6 +4,7 @@ import (
 	"cli/internal/dto"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -396,4 +397,49 @@ func TestP405CancellationAfterCommitRetainsStepAndLiteralValue(t *testing.T) {
 
 func (a *changeAPI) ListInactiveChanges(ctx context.Context, id int) ([]dto.Change, error) {
 	return a.ListChangeRows(ctx, id)
+}
+
+type inactiveDeleteAPI struct{ *changeAPI }
+
+func (a inactiveDeleteAPI) ListInactiveChanges(ctx context.Context, _ int) ([]dto.Change, error) {
+	return []dto.Change{{ID: 13, ProjectID: 7, Active: false}}, a.call(ctx, "list-inactive")
+}
+
+func Test031DeleteRefreshPreservesListModeAndReadOnlyRecovery(t *testing.T) {
+	for _, inactive := range []bool{false, true} {
+		for _, refreshFails := range []bool{false, true} {
+			t.Run(fmt.Sprintf("inactive=%t/failure=%t", inactive, refreshFails), func(t *testing.T) {
+				m, base := changeSetup()
+				api := inactiveDeleteAPI{base}
+				m.Inactive = inactive
+				m.Rows = []dto.ChangeView{{ID: "12"}, {ID: "13", Active: false}}
+				endpoint := "list"
+				if inactive {
+					endpoint = "list-inactive"
+				}
+				if refreshFails {
+					base.fail = endpoint
+				}
+				m, cmd := m.Begin(context.Background(), api, base, Delete, 7, 12, Input{}, changeCatalog())
+				m = finish(t, m, cmd)
+				require.Equal(t, []string{"delete", endpoint}, base.calls)
+				require.Equal(t, inactive, m.Inactive)
+				require.Contains(t, m.Status, "deleted change #12")
+				if refreshFails {
+					require.ErrorContains(t, m.Err, endpoint+" failed")
+					require.Contains(t, m.Status, "/retry reads only")
+					require.Equal(t, []dto.ChangeView{{ID: "13", Active: false}}, m.Rows)
+					base.fail = ""
+					m, cmd = m.Begin(context.Background(), api, base, List, 7, 0, Input{}, changeCatalog())
+					m = finish(t, m, cmd)
+					require.Equal(t, []string{"delete", endpoint, endpoint}, base.calls)
+				}
+				require.NoError(t, m.Err)
+				if inactive {
+					require.Equal(t, "13", m.Rows[0].ID)
+					require.False(t, m.Rows[0].Active)
+				}
+			})
+		}
+	}
 }

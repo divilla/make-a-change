@@ -115,17 +115,16 @@ func (m Model) Begin(ctx context.Context, api API, docs Documents, op Operation,
 	prior := m.Detail
 	prior.Documents = append([]dto.Document(nil), m.Detail.Documents...)
 	priorRows := append([]dto.ChangeView(nil), m.Rows...)
-	inactive := m.Inactive
+	readList := readRows
+	if m.Inactive {
+		readList = readInactiveRows
+	}
 	return m, func() tea.Msg {
 		defer cancel()
 		r := Result{Generation: generation, ProjectID: project, ID: id, Operation: op, Detail: prior}
 		switch op {
 		case List:
-			if inactive {
-				r.Rows, r.Err = readInactiveRows(ctx, api, project)
-			} else {
-				r.Rows, r.Err = readRows(ctx, api, project)
-			}
+			r.Rows, r.Err = readList(ctx, api, project)
 			return r
 		case Details:
 			r.Detail, r.Err = readDetail(ctx, api, docs, project, id)
@@ -225,7 +224,7 @@ func (m Model) Begin(ctx context.Context, api API, docs Documents, op Operation,
 			r.Steps = append(r.Steps, completedStep(op, id, in))
 		}
 		if op == Delete {
-			r.Rows, r.RefreshErr = readRows(ctx, api, project)
+			r.Rows, r.RefreshErr = readList(ctx, api, project)
 			if r.RefreshErr != nil {
 				for _, v := range priorRows {
 					if v.ID != strconv.Itoa(id) {
