@@ -12,6 +12,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 )
 
@@ -212,6 +213,85 @@ func Test031OwnerHistoryExitDrainsQueuedMutationResult(t *testing.T) {
 			require.Equal(t, 5, m.document.Rows[m.document.Selected].ID)
 			require.Equal(t, []int{5}, a.writes)
 			require.Empty(t, base.insert)
+		})
+	}
+}
+
+func Test031OwnerHistoryCommitSurvivesRefreshFailure(t *testing.T) {
+	for _, key := range []tea.KeyType{tea.KeyEsc, tea.KeyCtrlC} {
+		t.Run(key.String(), func(t *testing.T) {
+			m, base := app031Model(t)
+			base.rows = []dto.Document{app031Row(5, "spec", "retained version")}
+			base.detail = base.rows[0]
+			a := &pendingHistory031Client{docs031Client: base}
+			m.client = a
+			m, cmd := sendCommand(m, "/documents")
+			m = applyCommand(m, cmd)
+			m, cmd = sendKey(m, tea.KeyEnter)
+			next, render := m.Update(cmd())
+			m = applyCommand(next.(Model), render)
+			m, cmd = sendRune(m, ' ')
+			m = applyCommand(m, cmd)
+			committed := m.history.Committed
+			require.NotEmpty(t, committed)
+			m.client = &review031Client{docs031Client: base, activeErr: errors.New("owner refresh offline")}
+			m, cmd = sendKey(m, key)
+			require.Contains(t, m.status, committed, "pending refresh retains the write outcome")
+			m = applyCommand(m, cmd)
+			require.False(t, m.historyOpen)
+			require.Equal(t, DocumentState, m.state)
+			require.Contains(t, m.status, committed)
+			require.Contains(t, m.View(), committed)
+			require.Contains(t, m.status, "/retry reads only")
+			require.Contains(t, m.err, "owner refresh offline")
+			m, cmd = sendCommand(m, "/retry")
+			m = applyCommand(m, cmd)
+			require.Contains(t, m.status, committed, "repeated read failure retains the write outcome")
+			m.client = a
+			m, cmd = sendCommand(m, "/retry")
+			m = applyCommand(m, cmd)
+			require.Empty(t, m.err)
+			require.Contains(t, m.status, committed)
+			require.Equal(t, 5, m.document.Current[0].ID)
+			require.Equal(t, 5, m.document.Rows[m.document.Selected].ID)
+			require.Equal(t, []int{5}, a.writes, "refresh retries never replay activation")
+			require.Empty(t, base.insert)
+		})
+	}
+}
+
+func Test031DocumentConfirmationFilterMatchesRenderedSelection(t *testing.T) {
+	for _, filter := range []string{"n", "y", "unmatched"} {
+		t.Run(filter, func(t *testing.T) {
+			m, a := app031Model(t)
+			m = select031Row(t, m, "spec", 9)
+			m, _ = sendKey(m, tea.KeyDelete)
+			m, _ = sendKeyMsg(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(filter)})
+			view := ansi.Strip(m.dropdownView(80))
+			require.Contains(t, view, "Are you sure?")
+			switch filter {
+			case "n":
+				require.Contains(t, view, "  no")
+				require.NotContains(t, view, "  yes")
+				require.Equal(t, "/no", m.selectedOption().ID)
+			case "y":
+				require.Contains(t, view, "  yes")
+				require.NotContains(t, view, "  no")
+				require.Equal(t, "/yes", m.selectedOption().ID)
+			default:
+				require.NotContains(t, view, "  yes")
+				require.NotContains(t, view, "  no")
+				require.Empty(t, m.selectedOption().ID)
+			}
+			m, cmd := sendKey(m, tea.KeyEnter)
+			if filter == "y" {
+				m = applyCommand(m, cmd)
+				require.Equal(t, []int{9}, a.deletes)
+			} else {
+				require.Nil(t, cmd)
+				require.Empty(t, a.deletes)
+			}
+			require.Equal(t, filter == "unmatched", m.hasDropdown())
 		})
 	}
 }

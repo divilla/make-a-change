@@ -289,7 +289,7 @@ func (m Model) dropdownView(width int) string {
 	width = ui.NormalizeWidth(width)
 	if m.dropdown.kind == dropdownConfirm && m.deleteDocumentID > 0 {
 		lines := []string{lipgloss.NewStyle().Foreground(styles.AccentPurple).Render("Are you sure?")}
-		for i, option := range m.dropdown.options {
+		for i, option := range m.filteredOptions() {
 			line := "  " + option.Label
 			if i == m.dropdown.highlighted {
 				line = styles.Default.MenuSelected.Width(width).Render(line)

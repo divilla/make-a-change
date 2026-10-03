@@ -2181,3 +2181,90 @@ All campaign inputs matched their recorded hashes before these final checkpoint
 and implementation-log writes. Production, tests, tooling and the assertion
 ledger have not changed since verification. No backend, database or Git
 publication was used. The implementation log's final blank line is intentional.
+
+## 031 review fixes 04 — owner history feedback, confirmation filtering and Docker bat
+
+All three findings are valid under 031-09/14/18/19 and the documented Docker
+verification contract. Returning from `/documents` history now carries the
+committed activation outcome into the owner model. Pending, failed, cancelled
+and successful refreshes retain that outcome; `/retry` performs reads only.
+New owner/operation feedback replaces the previous outcome. The document delete
+confirmation renders the same filtered options used for selection. Docker
+`test_version` installs Python and Debian's bat package and supplies the `bat`
+executable name through its `batcat` alias. HTTP contracts are unchanged.
+
+Regressions: `Test031OwnerHistoryCommitSurvivesRefreshFailure` covers both exit
+keys, visible feedback, repeated refresh failure, recovery, restored selection
+and exactly one activation. `Test031OwnerHistoryCommitRefreshCancellationAndScopeReset`
+covers cancellation and new-owner/insert isolation.
+`Test031DocumentConfirmationFilterMatchesRenderedSelection` covers yes/no and
+unmatched filtering with exact deletion effects. The isolated
+`test_docker_provisions_bat_before_check` executes the real container recipe
+against a Debian-style batcat installation before permitting `make init check`.
+
+| Command | Exit | Evidence |
+| --- | ---: | --- |
+| Pre-fix focused app regressions | 1 | `/tmp/031-review04-repro.log`; lost commit feedback and mismatched rendered options reproduced. |
+| Pre-fix `python3 -B -m unittest discover -s scripts -p makefile_test.py` (CLI cwd) | 1 | `/tmp/031-review04-tooling-repro.log`; Docker recipe installs Python without bat. |
+| `make -C cli format` | 0 | `/tmp/031-review04-format.log`; only intended changes. |
+| `go test -count=1 -race ./internal/app ./internal/documents ./pkg/documentprocess` (CLI cwd) | 0 | `/tmp/031-review04-focused.log`; complete focused suites pass. |
+| `make -C cli tooling-test` | 0 | `/tmp/031-review04-tooling.log`; 37 Python tests plus architecture fixtures and PTY harness tests pass. |
+| `make -C cli check` | 0 | `/tmp/031-review04-check.log`; formatting, lint, vet, race, architecture and tooling pass. |
+| `make -C cli coverage` | 0 | `/tmp/031-review04-unit.log`; **5558/6398 (86.8709%)**, 80% integer gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/031-review04-deps.log`; no vulnerabilities. |
+| `make -C cli integration-coverage` | 0 | `/tmp/031-review04-integration.log`; **4923/6398 (76.9459%)**, 70% integer gate passes. |
+| `make -C cli test_version` | 2 | `/tmp/031-review04-docker.log`; bat installation succeeds, but the bind-mounted Makefile is unreadable. |
+| Exact `test_version` image/shell recipe with a tar-copied checkout | 0 | `/tmp/031-review04-docker-copy.log`; stock `golang:1.26.0`, pinned tooling, full check and the real bat test pass. |
+| `python3 -B -m unittest discover -s cli/scripts -p documentation_test.py` | 0 | `/tmp/031-review04-docs.log`; final command/link and route-ledger checks pass. |
+
+The direct Docker target remains blocked by this host's bind-mount permissions:
+a separate stock-image probe cannot read `/project/cli/Makefile` even as container
+root (`/tmp/031-review04-docker-mount.log`). Docker enables SELinux, and the
+checkout has `user_home_t` labels; this evidence points to an existing host
+labeling restriction. The copied-checkout verification uses the exact target's
+image and shell recipe without relabeling source or changing container security.
+It includes the tracked repository files and a temporary empty Git repository
+for tooling's ignore-rule check. It does not establish that the bind-mounted
+target passes on this host. The disposable container was removed on exit.
+
+Both independent host coverage campaigns report complete and exit 0. All 34
+program scenarios (including covered startup) and the real PTY scenario pass
+without skips, missing counters or cleanup failures. Tested base revision:
+`8493d27eee2f97f9b7b0415d4b7be96b89fe6528`, plus the recorded worktree diff.
+Both campaigns hash the same 77 production files; the sorted compact JSON source
+mapping has SHA-256
+`ddcde65705e56828f99b6b70371e4b15074cee0165315c09e45c3135a65ac390`.
+Terminal child binary SHA-256:
+`80a85c616f01a1330d4314a0236258b80ffdd1c5ed03925ce1d30ef38d62c065`.
+Host Go is `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1 and govulncheck 1.7.0.
+Raw profiles, provenance, command exits and exact uncovered statements/functions
+remain under `cli/.coverage/{unit,integration}`.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2518/3047 | 2329/3047 |
+| `cli/internal/changes` | 862/989 | 742/989 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 503/526 | 414/526 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 8/8 | 8/8 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining gaps include the main unit boundary, navigation fallbacks, agent/brief
+error paths, transport rejection branches and document/history failures; see the
+campaigns' `uncovered.txt` and `functions.log`. Campaign input hashes matched
+before these checkpoint/log writes; production, tests and tooling remain the
+verified sources. No backend/database use, Git commit/push or deployment occurred.
+Next action: caller review/publication; Docker bind-mount labeling remains a host
+verification limitation. The implementation log's final blank line is intentional.

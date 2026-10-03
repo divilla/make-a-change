@@ -190,6 +190,8 @@ func (m Model) returnHistory() (tea.Model, tea.Cmd) {
 		m.document = m.document.Back()
 		m.document = m.document.KeepSelectedVisible(m.documentViewportHeight())
 		if m.history.Committed != "" {
+			m.document.Committed = "returned from history; " + m.history.Committed
+			m.document.CommittedID = 0
 			return m.beginDocumentRefresh()
 		}
 	}

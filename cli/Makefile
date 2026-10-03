@@ -70,4 +70,4 @@ benchmark: ## Run benchmarks without ordinary tests
 	python3 -B scripts/verify.py benchmark
 
 test_version: ## Docker checks using go.mod version; override with goversion=X
-	docker run --rm -v "$(CURDIR)/..:/project" -w /project/cli "golang:$(goversion)" sh -eu -c 'command -v python3 >/dev/null || { apt-get update && apt-get install -y --no-install-recommends python3; }; go version; make init check'
+	docker run --rm -v "$(CURDIR)/..:/project" -w /project/cli "golang:$(goversion)" sh -eu -c 'apt-get update; apt-get install -y --no-install-recommends python3 bat; command -v bat >/dev/null || ln -s /usr/bin/batcat /usr/local/bin/bat; go version; make init check'

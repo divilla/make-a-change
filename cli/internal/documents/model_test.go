@@ -86,6 +86,35 @@ func TestP602OwnerCatalogsAndEmptyReadAccess(t *testing.T) {
 	require.ErrorContains(t, m.Err, "configured")
 }
 
+func Test031OwnerHistoryCommitRefreshCancellationAndScopeReset(t *testing.T) {
+	a := &docAPI{cfg: dto.ProjectConfig{ChangeDocs: []string{"spec"}}}
+	m := scoped(t, a, 7, 12, "change")
+	m.Committed = "committed active selection document #5"
+	ctx, cancel := context.WithCancel(context.Background())
+	m, cmd := m.BeginRefresh(ctx, a)
+	cancel()
+	m, ok := m.Apply(cmd().(Result))
+	require.True(t, ok)
+	require.ErrorIs(t, m.Err, context.Canceled)
+	require.Contains(t, m.Status, m.Committed)
+	require.Contains(t, m.Status, "/retry reads only")
+	// Opening another owner cannot inherit the previous owner's outcome.
+	m, cmd = m.BeginOpen(context.Background(), a, 7, 13, "change")
+	require.Empty(t, m.Committed)
+	m, ok = m.Apply(cmd().(Result))
+	require.True(t, ok)
+	require.NotContains(t, m.Status, "committed")
+	// A subsequent insert owns its own feedback, even if its write fails.
+	m.Committed = "committed active selection document #5"
+	a.insertErr = errors.New("write offline")
+	m, cmd = m.BeginInsert(context.Background(), a, "new version", false)
+	require.Empty(t, m.Committed)
+	m, ok = m.Apply(cmd().(Result))
+	require.True(t, ok)
+	require.ErrorIs(t, m.Err, a.insertErr)
+	require.NotContains(t, m.Status, "committed")
+}
+
 func TestP602HistorySelectionDetailsAndViewport(t *testing.T) {
 	a := &docAPI{cfg: dto.ProjectConfig{ChangeDocs: []string{"spec"}}, rows: []dto.Document{doc(91, 12, "change", true), doc(90, 12, "change", false)}, current: []dto.Document{doc(91, 12, "change", true)}}
 	m := scoped(t, a, 7, 12, "change")
