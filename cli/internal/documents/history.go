@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -271,7 +273,7 @@ func (h History) Metadata() string {
 	return line
 }
 
-// View clips visible cells while retaining bat's syntax ANSI sequences.
+// View clips visible cells while retaining only bat's syntax SGR sequences.
 func (h History) View(width, height int) string {
 	if height <= 0 {
 		return ""
@@ -288,7 +290,7 @@ func (h History) View(width, height int) string {
 		}
 		return ""
 	}
-	lines := strings.Split(strings.TrimSuffix(h.Output, "\n"), "\n")
+	lines := strings.Split(strings.TrimSuffix(historyText(h.Output), "\n"), "\n")
 	start := min(max(0, h.Offset), max(0, len(lines)-height))
 	end := min(len(lines), start+height)
 	clipped := make([]string, 0, end-start)
@@ -312,7 +314,7 @@ func (h History) View(width, height int) string {
 
 // Scroll advances the body only, without changing metadata or selected version.
 func (h History) Scroll(delta, height int) History {
-	total := len(strings.Split(strings.TrimSuffix(h.Output, "\n"), "\n"))
+	total := len(strings.Split(strings.TrimSuffix(historyText(h.Output), "\n"), "\n"))
 	h.Offset = max(0, min(max(0, total-max(1, height)), h.Offset+delta))
 	return h
 }
@@ -327,3 +329,27 @@ func (h History) Help() string {
 }
 
 var historySGR = regexp.MustCompile(`\x1b\[[0-9;:]*m`)
+
+// historyText allows text, layout whitespace and complete SGR controls only.
+// Decode whole output before splitting lines so multiline control-string payloads
+// cannot enter the viewport or affect its scroll bounds.
+func historyText(output string) string {
+	var safe strings.Builder
+	for len(output) > 0 {
+		seq, _, n, _ := ansi.DecodeSequence(output, ansi.NormalState, nil)
+		if n == 0 {
+			output = output[1:]
+			continue
+		}
+		output = output[n:]
+		if seq == "\n" || seq == "\t" || (strings.HasPrefix(seq, "\x1b[") && historySGR.FindString(seq) == seq) {
+			safe.WriteString(seq)
+			continue
+		}
+		r, _ := utf8.DecodeRuneInString(seq)
+		if utf8.ValidString(seq) && !unicode.IsControl(r) {
+			safe.WriteString(seq)
+		}
+	}
+	return safe.String()
+}

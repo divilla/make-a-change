@@ -918,3 +918,17 @@ busy-input deduplication and rejection of duplicate results.
 both same-ID writes and verifies the returned screen's committed feedback.
 `TestChangesCommandLoadsAndRendersBackendRows` derives both timestamp assertions
 from the active local timezone; UTC and Europe/Zagreb verification cover 031-24.
+
+031 review fixes 07: history rendering permits complete SGR syntax-color
+sequences and filters other terminal controls before clipping and scroll bounds.
+`Test031HistoryFiltersTerminalControlsPreservingSGR` covers OSC clipboard and
+hyperlink commands, CSI display/cursor/mode controls, ESC/DCS/SOS/PM/APC, C0/C1,
+malformed/incomplete sequences and invalid UTF-8 while retaining Unicode and
+bat colors. `Test031HistoryFiltersBeforeScrollingAndClipping` proves multiline
+control payloads cannot affect scrolling or clipping.
+`Test031HistoryRootViewFiltersDocumentAndCommentControls` checks the root view
+for both history types and preserves stored bodies. The existing manifest
+scenario `TestCLIProgram031DocumentCommentsAndHistory` now passes stored OSC 52
+and erase-scrollback controls through real bat and verifies filtered terminal
+output. Existing history color/resize/version tests and the real PTY scenario
+continue to cover syntax colors under 031-14/20. HTTP contracts are unchanged.

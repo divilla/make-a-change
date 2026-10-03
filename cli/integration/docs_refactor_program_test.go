@@ -155,6 +155,9 @@ func docs031Server(t *testing.T) (*docs031Backend, *httptest.Server) {
 
 func TestCLIProgram031DocumentCommentsAndHistory(t *testing.T) {
 	b, server := docs031Server(t)
+	// Stored controls must be filtered after bat without losing its syntax colors.
+	clipboard := "\x1b]52;c;YXR0YWNr\a"
+	b.rows[0]["body"] = "history-safe-before" + clipboard + "\x1b[3Jafter\n" + b.rows[0]["body"].(string)
 	root := t.TempDir()
 	writeProgramConfig(t, root, server.URL)
 	tmp := t.TempDir()
@@ -195,6 +198,9 @@ func TestCLIProgram031DocumentCommentsAndHistory(t *testing.T) {
 	// Spec slot navigation starts at the newest retained ID rather than the active ID.
 	s.send(t, strings.Repeat("\x1b[A", 2)+"\x08")
 	s.waitFor(t, "Newest retained")
+	s.waitFor(t, "history-safe-beforeafter")
+	require.NotContains(t, s.output.String(), clipboard)
+	require.NotContains(t, s.output.String(), "\x1b[3J")
 	s.waitFor(t, "created_at:")
 	s.waitFor(t, "deleted_at:")
 	s.navigate(t, "\x1b[C", "Selected active")

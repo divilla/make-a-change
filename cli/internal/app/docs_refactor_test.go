@@ -304,6 +304,38 @@ func Test031HistoryEscapeCtrlCAndSelectionRestoration(t *testing.T) {
 	}
 }
 
+func Test031HistoryRootViewFiltersDocumentAndCommentControls(t *testing.T) {
+	for _, kind := range []string{"spec", "comment"} {
+		t.Run(kind, func(t *testing.T) {
+			m, a := app031Model(t)
+			body := "before\x1b]52;c;YXR0YWNr\a\x1b[2Jafter\n" + strings.Repeat("safe line\n", 40)
+			row := app031Row(9, kind, body)
+			if kind == "comment" {
+				a.comments = []dto.Document{row}
+				m.changeList.Detail.Comments = slices.Clone(a.comments)
+			} else {
+				a.rows = []dto.Document{row}
+			}
+			m = select031Row(t, m, kind, 9)
+			m, cmd := sendKey(m, tea.KeyCtrlH)
+			m = applyCommand(m, cmd)
+			require.True(t, m.historyOpen)
+			view := m.View()
+			require.Contains(t, view, "beforeafter")
+			require.Contains(t, view, "\x1b[38;2;11;22;33m")
+			require.NotContains(t, view, "\x1b]52")
+			require.NotContains(t, view, "\x1b[2J")
+			require.NotContains(t, view, "YXR0YWNr")
+			require.Equal(t, body, m.history.Rows[0].Body)
+			m, _ = sendKey(m, tea.KeyPgDown)
+			view = m.View()
+			require.Contains(t, view, "\x1b[38;2;11;22;33m")
+			require.NotContains(t, view, "\x1b]52")
+			require.NotContains(t, view, "\x1b[2J")
+		})
+	}
+}
+
 func Test031DeletedCommentsHistoryAndEmptySectionAccess(t *testing.T) {
 	m, a := app031Model(t)
 	deleted := time.Now()

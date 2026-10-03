@@ -1,5 +1,71 @@
 # CLI rebuild checkpoint
 
+## 031 review fixes 07: history terminal-control filtering (2026-10-03)
+
+The P1 finding is valid and fixed. History decodes the complete captured bat
+output and permits printable Unicode, tabs/newlines and complete SGR syntax
+colors only. OSC clipboard/hyperlink commands, non-SGR CSI, other escape/string
+controls, C0/C1 and malformed/incomplete controls cannot reach the viewport.
+Filtering precedes line splitting, clipping and scroll bounds; stored document
+and comment bodies and captured output remain intact. HTTP contracts are unchanged.
+The assertion ledger records the feature/root regressions and the existing
+complete-program scenario extended with stored OSC 52 and erase-scrollback input
+passed through real bat. Retained color, resize, scrolling, version and PTY tests
+pass. No manifest change was needed because the existing scenario was extended.
+
+Tested base revision: `f246b6bf0c3f05facb688c716d7a305d0d329440` plus this
+uncommitted fix. Both campaigns recorded the same production source SHA-256 for
+`internal/documents/history.go`:
+`808af512ffa23a8e2b33ff7b06b3f7ee5144f7c0eb730da9455c7898e7bcce1c`.
+Full source/test hashes, tool versions, command exits, profiles, scenario inventory,
+package totals and uncovered functions/statements are in the independent
+`cli/.coverage/{unit,integration}/` artifacts. The covered child binary SHA-256 is
+`5fff35c4b0dd3cc70530d0054f8e228773336657fa37064cba697b0c8044484f`.
+Only this checkpoint and the implementation log changed after the campaigns.
+
+| Command | Exit and result |
+| --- | --- |
+| `make -C cli check` before edits | 0; baseline checks all pass. |
+| `go test -count=1 ./internal/documents -run '^Test031HistoryFilters'` from `cli/`, before fix | 1; intentionally reproduces controls leaking and incorrect multiline control scroll bounds; `/tmp/031-review-07-reproduction.log`. |
+| `golangci-lint fmt --no-config --enable gofumpt --enable goimports internal/documents/history.go internal/documents/history_test.go internal/app/docs_refactor_test.go integration/docs_refactor_program_test.go` from `cli/` | 0; formats only touched Go files. |
+| `go test -count=1 ./internal/documents ./internal/app -run '^Test031History'` from `cli/` | 0 on final source; initial run exposed an expected trailing SGR reset missing from the new clipping assertion, which was corrected. |
+| `go test -count=1 -timeout=1m ./integration -run '^TestCLIProgram031DocumentCommentsAndHistory$'` from `cli/` | 0; real bat and fake HTTP server, `/tmp/031-review-07-target-program.log`. |
+| `make -C cli check` | 0; formatting, lint, vet, unit race, architecture and tooling all pass; `/tmp/031-review-07-check.log`. |
+| `make -C cli coverage` | 0; **5593/6434 (86.9288%)**, independent 80% gate passes; `/tmp/031-review-07-coverage.log`. |
+| `make -C cli deps-audit` | 0; no vulnerabilities; `/tmp/031-review-07-deps-audit.log`. |
+| `make -C cli integration-coverage` | 0; **4943/6434 (76.8262%)**, independent 70% gate passes; all 34 complete-program/startup scenarios and the real PTY scenario pass; `/tmp/031-review-07-integration-coverage.log`. |
+
+Both coverage campaign statuses are complete with exit 0. No final failing,
+skipped or blocked scenarios. Go is `go1.26.8-X:nodwarf5`, golangci-lint is
+2.13.1 and govulncheck is v1.7.0. The new filter has 12/14 unit-covered statements;
+only its defensive decoder zero-progress fallback is unexercised. Remaining
+production gaps are reported below and detailed in each `uncovered.txt` and
+`functions.log`; zero-statement packages remain in the audited inventory.
+
+| Package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2541/3069 | 2337/3069 |
+| `cli/internal/changes` | 862/989 | 742/989 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 502/527 | 417/527 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 21/21 | 17/21 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Backend code is unchanged; backend suites were not rerun. No live backend or
+database access, Git publication, stage/production promotion or deployment.
+
 ## CLI check cleanup (2026-09-30)
 
 The CLI formatting and package-comment baseline is fixed. The formatter
