@@ -375,8 +375,7 @@ sub main {
 	@arguments && $arguments[0] !~ /\A-/ or fail('usage: codex-review-loop.pl SPECIFICATION [review options]');
 	my $specification = shift @arguments;
 	-f $specification or fail("specification file not found: $specification");
-	my $fix_prompt = '$change-fix-findings ' . $specification
-		. ' Do not commit or push; the caller handles commits.';
+	my $fix_prompt = '$change-fix-findings ' . $specification;
 
 	my $temp_root = select_temp_root($repo_root_physical);
 	defined $temp_root or fail('cannot find a writable temporary directory outside the repository');

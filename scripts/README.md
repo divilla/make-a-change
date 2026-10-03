@@ -312,7 +312,7 @@ Every findings pass redirects that file through standard input to a fresh
 `codex exec` invocation and explicitly invokes `$change-fix-findings` with the
 positional specification file. The skill validates the findings against the
 specification and repository contracts, implements valid fixes with tests and
-verification, and preserves unrelated changes. The prompt leaves commits and
+verification, and preserves unrelated changes. The skill leaves commits and
 pushes to the loop. Each review and fix command has a numbered heading, and the
 loop prints each captured final response after its progress line. If the fixer
 makes no repository changes, the response keeps protected-contract blockers and

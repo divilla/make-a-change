@@ -9,6 +9,8 @@ Treat the text after `$change-fix-findings` as the specification argument and
 the supplied findings as review feedback. Read the specification and all
 findings before editing.
 
+Do not commit or push; the caller handles commits.
+
 ## Validate
 
 1. Read `AGENTS.md`, `skeleton/`, `agent/prd.md`, the supplied specification,

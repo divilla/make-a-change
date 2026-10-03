@@ -218,7 +218,7 @@ output="$test_root/output"
 pinned_base=$(git -C "$repo" rev-parse origin/dev)
 [[ "$pinned_base" != $(git -C "$repo" rev-parse origin/stage) ]]
 [[ "$pinned_base" != $(git -C "$repo" rev-parse dev) ]]
-expected_fix_prompt="\$change-fix-findings $specification Do not commit or push; the caller handles commits."
+expected_fix_prompt="\$change-fix-findings $specification"
 (
 	cd "$repo"
 	PATH="$fake_bin:$PATH" \
