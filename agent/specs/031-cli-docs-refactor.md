@@ -15,7 +15,7 @@ project and epic document presentation in later changes.
 
 - In scope: CLI transport and DTO alignment with the changed and added HTTP
   contracts in backend commit `a34809f81647140ed0ae67289d667ec0233cc011`;
-  change details Brief / Docs / Comments presentation; immediate document and
+  change details Brief / Docs / Comments presentation; confirmed document and
   comment deletion; comment creation and editing; document history using `bat`;
   inactive-change list access; exclusion of inactive epics from the
   ChangeDetailsScreen Epic selection list; migration of affected tests and
@@ -153,12 +153,18 @@ to exist or pass. Program tests and PTY tests supplement those unit tests.
   existing editor cancellation, unchanged-content no-ops, nonblank body
   validation, and terminal restoration. Unit:
   `Test031DocumentSlotCreateEditCancelAndNoOp`.
-- **031-09 — Immediate document deletion.** Delete on an existing Docs slot
-  sends exactly one `doc/delete` for its active ID immediately, without a
-  confirmation dialog, then refreshes the active selection. The slot becomes
-  empty; the CLI must not select an older historical version automatically.
-  Delete on an empty slot sends no request and changes nothing. Unit:
-  `Test031ImmediateDocumentDeleteAndMissingSlotNoOp`.
+- **031-09 — Confirmed document deletion.** Delete on any existing document,
+  including Brief, Docs slots, and comments, opens a confirmation dialog at the
+  bottom of ChangeDetailsScreen. Display the exact prompt `Are you sure?` in
+  `AccentPurple`, with menu options `yes` / `no` below it. Opening the dialog
+  sends no delete request. Choosing `yes` sends exactly one `doc/delete` for the
+  selected document's ID, then refreshes the active selection or comments as
+  appropriate. Choosing `no`, Esc, or Ctrl+C dismisses the dialog without a
+  mutation. A deleted non-comment slot becomes empty; the CLI must not select
+  an older historical version automatically. Delete on an empty slot sends no
+  request and opens no dialog. Unit:
+  `Test031DocumentDeleteConfirmationLayoutAndColors`,
+  `Test031DocumentDeleteConfirmCancelAndMissingSlotNoOp`.
 - **031-10 — Comments presentation.** The change details screen uses the label
   `Comments` and displays multiple independent comment entries. Each preview
   has at most three body lines without wrapping long lines. For more than two
@@ -176,23 +182,28 @@ to exist or pass. Program tests and PTY tests supplement those unit tests.
 - **031-12 — Comment editing and deletion.** Return on any selected comment
   opens edit mode seeded with its entire body, including text beyond the
   preview. Save uses `doc/comment-update` on that same ID; clearing a comment
-  saves an explicit empty body. Delete sends one immediate `doc/delete` for
-  that ID without confirmation. Other comments retain their identities and
-  bodies. Remove deleted comments from the normal section, retaining them for
-  history browsing and undelete. Unit:
-  `Test031CommentEditEmptyBodyAndImmediateDelete`.
+  saves an explicit empty body. Delete opens the confirmation dialog specified
+  in031-09; only choosing `yes` sends one `doc/delete` for that comment ID.
+  Other comments retain their identities and bodies. Remove confirmed deleted
+  comments from the normal section, retaining them for history browsing and
+  undelete. Unit:
+  `Test031CommentEditEmptyBodyAndConfirmedDelete`.
 - **031-13 — History selection and navigation.** Ctrl+H on a particular
   non-comment document opens that type's history for the same change. Use
   `doc/list` and filter by owner and selected type; newest ID is shown first,
   even when another version is active. Right shows the next older version;
   Left shows the next newer version. Neither arrow wraps past the oldest or
   newest boundary. The history source includes soft-deleted versions. For each
-  displayed document or comment, show all three timestamp fields with their
-  labels: `created_at`, `updated_at`, and `deleted_at`. Format each non-null value
-  in local time as `yyyy-mm-dd hh:mm`; show a null `deleted_at` as absent rather
-  than inventing a date. Unit:
+  displayed document or comment, show `created_at` and `updated_at`, plus
+  `deleted_at` only when non-null, with their field labels on a single metadata
+  line at the top of the history screen, immediately below the app's first
+  (`mch`) line. Paint the `deleted_at` label and value in `AccentRed`. Format
+  each value in local time as `yyyy-mm-dd hh:mm`; omit the `deleted_at` field
+  entirely when null. Keep this metadata line above the scrolling body viewport
+  and update it when the selected history record changes. Unit:
   `Test031DocumentHistoryTypeScopeOrderAndArrowBounds`,
-  `Test031HistoryShowsCreatedUpdatedAndDeletedTimestamps`.
+  `Test031HistoryShowsCreatedUpdatedAndDeletedTimestamps`,
+  `Test031HistoryTimestampTopLineAndDeletedAccentRed`.
 - **031-14 — History printing.** Print the selected historical document using
   Linux `bat -pp --color=always <file>`, with its full body in an operation-owned
   Markdown file, capturing its colored output inside the CLI history viewport.
@@ -254,14 +265,18 @@ to exist or pass. Program tests and PTY tests supplement those unit tests.
   activation. Busy input cannot duplicate a write. Late HTTP/editor/process
   results cannot update another project, change, selected document, or revision.
   History/Delete/Space keys act on selected rows only when a text editor or menu
-  does not own the key; ordinary prompt Backspace/Delete remain text editing.
+  does not own the key; the delete confirmation menu owns input while open and
+  retains the target document ID until confirmation or cancellation. Ordinary
+  prompt Backspace/Delete remain text editing.
   Unit: `Test031MutationPartialSuccessAndReadOnlyRetry`,
   `Test031LateResultIsolationAndBusyDeduplication`,
   `Test031DocumentHistoryAndDeleteKeyFocus`.
 - **031-20 — Terminal acceptance.** Exercise configured slots, brief preview,
-  comment creation/edit/delete, immediate document delete, history order and
-  arrow boundaries, `bat` execution/failure, and inactive change activation
-  through keyboard-driven complete-program tests with fake HTTP collaborators
+  comment creation/edit/delete, document and comment delete confirmation and
+  cancellation, the bottom dialog's `AccentPurple` prompt and `yes` / `no`
+  options, history's top timestamp line and `AccentRed` deletion metadata,
+  history order and arrow boundaries, `bat` execution/failure, and inactive
+  change activation through keyboard-driven complete-program tests with fake HTTP collaborators
   and owned local processes. Extend the real PTY scenario to prove Ctrl+H,
   Left/Right/Space/Delete, footer feedback, redraw and restoration at the terminal
   boundary. Verify `bat` colors on highlighted Markdown in the real PTY, including
@@ -308,12 +323,13 @@ to exist or pass. Program tests and PTY tests supplement those unit tests.
 - **031-24 — Local timestamps.** Display all CLI dates/times in the user's local
   timezone, including document/comment rows, history metadata and retained entity
   screens, consistently formatted as `yyyy-mm-dd hh:mm` (24-hour time, no seconds
-  or timezone suffix; Go layout `2006-01-02 15:04`). On ChangeDetailsScreen,
-  `updated_at` is the only displayed timestamp field, including the change's own
+  or timezone suffix; Go layout `2006-01-02 15:04`). On the normal
+  ChangeDetailsScreen, `updated_at` is the only displayed timestamp field, including the change's own
   metadata and each document/comment row; do not show `created_at` or
-  `deleted_at` there. History browsing displays all three fields as specified
-  in031-13. Convert backend timestamps to local time before formatting; do not
-  merely print a UTC or server-offset timestamp unchanged. Test differing field
+  `deleted_at` there. History browsing displays `created_at`, `updated_at`, and
+  non-null `deleted_at` on its top metadata line as specified in031-13, with
+  `deleted_at` in `AccentRed`. Convert backend timestamps to local time before
+  formatting; do not merely print a UTC or server-offset timestamp unchanged. Test differing field
   values, different input offsets and local daylight-saving boundaries without
   changing saved timestamps. Unit: `Test031AllDisplayedTimestampsUseLocalTime`,
   `Test031ChangeDetailsShowsOnlyUpdatedAt`.
