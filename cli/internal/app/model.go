@@ -210,6 +210,7 @@ type Model struct {
 	testCase            testcases.Model
 	history             documents.History
 	historyOpen         bool
+	historyReturning    bool
 	historyPrinter      documents.Printer
 	changeDocuments     documents.ChangeModel
 	commentID           int

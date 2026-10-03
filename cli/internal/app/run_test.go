@@ -1243,6 +1243,9 @@ func TestProjectCancelDoesNotCallPersistence(t *testing.T) {
 }
 
 func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
+	modified, err := time.Parse(time.RFC3339, "2026-06-29T10:45:00Z")
+	require.NoError(t, err)
+	expectedModified := modified.In(time.Local).Format("2006-01-02 15:04")
 	client := &fakeClient{
 		changeRows: []dto.ChangeView{
 			{
@@ -1314,7 +1317,7 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 	assert.Contains(t, view, "  2")
 	assert.Contains(t, view, "  5")
 	assert.Contains(t, view, " 40")
-	assert.Contains(t, view, "2026-06-29 12:45")
+	assert.Contains(t, view, expectedModified)
 
 	got, cmd = sendKey(got, tea.KeyEnter)
 	require.NotNil(t, cmd)
@@ -1365,7 +1368,7 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 	view = stripANSI(got.View())
 	assert.Contains(t, view, "Active │ ✅")
 	assert.Contains(t, view, "Comments")
-	assert.Contains(t, view, "Modified │ 2026-06-29 12:45")
+	assert.Contains(t, view, "Modified │ "+expectedModified)
 }
 
 func TestChangesTableTruncatesEpicAndTitleAtMaxWidth(t *testing.T) {

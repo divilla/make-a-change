@@ -16,12 +16,14 @@ import (
 )
 
 type docs031Backend struct {
-	mu       sync.Mutex
-	rows     []map[string]any
-	active   map[string]int
-	calls    map[string]int
-	writes   []map[string]any
-	inactive bool
+	mu                 sync.Mutex
+	rows               []map[string]any
+	active             map[string]int
+	calls              map[string]int
+	writes             []map[string]any
+	inactive           bool
+	pendingHistoryPath string
+	historyReadStarted chan struct{}
 }
 
 func docs031Server(t *testing.T) (*docs031Backend, *httptest.Server) {
@@ -36,6 +38,15 @@ func docs031Server(t *testing.T) (*docs031Backend, *httptest.Server) {
 		b.calls[r.URL.Path]++
 		var in map[string]any
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&in))
+		if r.URL.Path == b.pendingHistoryPath && b.historyReadStarted != nil {
+			started := b.historyReadStarted
+			b.historyReadStarted = nil
+			close(started)
+			b.mu.Unlock()
+			<-r.Context().Done()
+			b.mu.Lock()
+			return
+		}
 		switch r.URL.Path {
 		case "/api/v1/project/details":
 			writeProgramJSON(w, programProject(7, "Program Project"))
@@ -180,8 +191,7 @@ func TestCLIProgram031DocumentCommentsAndHistory(t *testing.T) {
 	s.send(t, "\x1b[A\x08")
 	s.waitFor(t, "Space undelete comment")
 	s.waitFor(t, "deleted_at:")
-	s.navigate(t, " ", "committed undelete document #100")
-	s.navigate(t, "\x03", "returned from history")
+	exit031PendingHistory(t, s, b, "/api/v1/doc/comment-list", "\x03", "committed undelete document #100")
 	// Spec slot navigation starts at the newest retained ID rather than the active ID.
 	s.send(t, strings.Repeat("\x1b[A", 2)+"\x08")
 	s.waitFor(t, "Newest retained")
@@ -190,8 +200,7 @@ func TestCLIProgram031DocumentCommentsAndHistory(t *testing.T) {
 	s.navigate(t, "\x1b[C", "Selected active")
 	s.navigate(t, "\x1b[D", "Newest retained")
 	s.navigate(t, "\x1b[6~", "newest body line")
-	s.navigate(t, " ", "committed active selection document #10")
-	s.navigate(t, "\x1b", "returned from history")
+	exit031PendingHistory(t, s, b, "/api/v1/doc/list", "\x1b", "committed active selection document #10")
 	// Confirmed deletion empties the slot; no historical fallback is selected.
 	s.navigate(t, "\x1b[3~", "Are you sure?")
 	s.navigate(t, "\r", "committed delete document #10")
@@ -213,6 +222,21 @@ func TestCLIProgram031DocumentCommentsAndHistory(t *testing.T) {
 	for _, e := range entries {
 		require.NotContains(t, e.Name(), "mch-history-")
 	}
+}
+
+func exit031PendingHistory(t *testing.T, s *programSession, b *docs031Backend, path, key, committed string) {
+	t.Helper()
+	started := make(chan struct{})
+	b.mu.Lock()
+	b.pendingHistoryPath, b.historyReadStarted = path, started
+	b.mu.Unlock()
+	s.send(t, " ")
+	select {
+	case <-started:
+	case <-time.After(3 * time.Second):
+		t.Fatal("committed history mutation did not reach its pending read")
+	}
+	s.navigate(t, key, "returned from history; "+committed)
 }
 
 func TestCLIProgram031InactiveChangesAndEpicSelection(t *testing.T) {

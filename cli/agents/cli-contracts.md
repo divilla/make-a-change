@@ -906,3 +906,15 @@ proves 031-15/19 by pausing `/retry` after its old active-document read, opening
 history with Ctrl+H, activating an older version and refreshing on Esc/Ctrl+C.
 History entry cancels the originating read; a collaborator that returns its old
 snapshot despite cancellation cannot overwrite the refreshed document or feedback.
+
+031 review fixes 03: `Test031HistoryExitReconcilesPendingMutation` proves
+031-14/15/19 for Esc/Ctrl+C during activation and comment restoration, pausing
+the write, retained-history read, active-selection read or printer. It checks
+committed feedback, owner refresh, read-only recovery after refresh failure,
+busy-input deduplication and rejection of duplicate results.
+`Test031OwnerHistoryExitDrainsQueuedMutationResult` checks the retained
+`/documents` return path when the mutation result is queued behind the exit key.
+`TestCLIProgram031DocumentCommentsAndHistory` now cancels pending reads after
+both same-ID writes and verifies the returned screen's committed feedback.
+`TestChangesCommandLoadsAndRendersBackendRows` derives both timestamp assertions
+from the active local timezone; UTC and Europe/Zagreb verification cover 031-24.

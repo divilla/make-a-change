@@ -31,6 +31,7 @@ type History struct {
 	Output, Status, Committed string
 	Err                       error
 	cancel                    context.CancelFunc
+	mutating                  bool
 }
 
 // HistoryResult carries reads, mutations and printing tied to the selected record.
@@ -52,7 +53,20 @@ func (h History) Invalidate() History {
 	h.cancel = nil
 	h.Revision++
 	h.Busy = false
+	h.mutating = false
 	return h
+}
+
+// CancelMutation cancels pending work while retaining its mutation result for reconciliation.
+// It reports whether the caller must wait for that result before leaving history.
+func (h History) CancelMutation() (History, bool) {
+	if !h.Busy || !h.mutating {
+		return h, false
+	}
+	if h.cancel != nil {
+		h.cancel()
+	}
+	return h, true
 }
 
 // Current identifies the displayed historical document without inferring active state.
@@ -135,6 +149,7 @@ func (h History) begin(ctx context.Context, api MutationAPI, printer Printer, re
 	h = h.Invalidate()
 	h.Selected, h.Offset, h.Output = selected, 0, ""
 	h.Busy, h.Err, h.Status = true, nil, "loading history"
+	h.mutating = mutate
 	work, cancel := context.WithCancel(ctx)
 	h.cancel = cancel
 	project, owner, table, kind, revision := h.ProjectID, h.OwnerID, h.Table, h.Type, h.Revision

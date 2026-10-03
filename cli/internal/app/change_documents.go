@@ -123,6 +123,9 @@ func (m Model) applyHistoryResult(r documents.HistoryResult) (tea.Model, tea.Cmd
 		return m, nil
 	}
 	m.history = next
+	if m.historyReturning {
+		return m.returnHistory()
+	}
 	m.status, m.err = next.Status, ""
 	if next.Err != nil {
 		m.err = next.Err.Error()
@@ -133,23 +136,14 @@ func (m Model) applyHistoryResult(r documents.HistoryResult) (tea.Model, tea.Cmd
 func (m Model) historyKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 	if key == "esc" || key == "ctrl+c" {
-		m.history = m.history.Invalidate()
-		m.historyOpen = false
-		m = m.setPromptValue("")
-		m.status, m.err = "returned from history", ""
-		if m.state == ChangeDetailsState && m.history.Committed != "" {
-			m.changeDocuments.ProjectID, m.changeDocuments.OwnerID = m.history.ProjectID, m.history.OwnerID
-			m.changeDocuments.Committed = "returned from history; " + m.history.Committed
-			return m.beginChangeDocumentMutation(documents.Read, 0, "")
+		var pending bool
+		m.history, pending = m.history.CancelMutation()
+		if pending {
+			m.historyReturning = true
+			m.status = "returning from history; waiting for document update"
+			return m, nil
 		}
-		if m.state == DocumentState {
-			m.document = m.document.Back()
-			m.document = m.document.KeepSelectedVisible(m.documentViewportHeight())
-			if m.history.Committed != "" {
-				return m.beginDocumentRefresh()
-			}
-		}
-		return m, tea.ClearScreen
+		return m.returnHistory()
 	}
 	if m.history.Busy {
 		return m, nil
@@ -180,6 +174,26 @@ func (m Model) historyKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.dropdown = dropdownModel{kind: dropdownCommand, previous: m.state, onSelect: m.state, options: []dto.Option{{ID: "/retry", Label: "/retry"}, {ID: "/return", Label: "/return"}}}
 	}
 	return m, cmd
+}
+
+func (m Model) returnHistory() (tea.Model, tea.Cmd) {
+	m.history = m.history.Invalidate()
+	m.historyOpen, m.historyReturning = false, false
+	m = m.setPromptValue("")
+	m.status, m.err = "returned from history", ""
+	if m.state == ChangeDetailsState && m.history.Committed != "" {
+		m.changeDocuments.ProjectID, m.changeDocuments.OwnerID = m.history.ProjectID, m.history.OwnerID
+		m.changeDocuments.Committed = "returned from history; " + m.history.Committed
+		return m.beginChangeDocumentMutation(documents.Read, 0, "")
+	}
+	if m.state == DocumentState {
+		m.document = m.document.Back()
+		m.document = m.document.KeepSelectedVisible(m.documentViewportHeight())
+		if m.history.Committed != "" {
+			return m.beginDocumentRefresh()
+		}
+	}
+	return m, tea.ClearScreen
 }
 
 func (m Model) historyViewportHeight() int {

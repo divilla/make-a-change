@@ -718,7 +718,7 @@ func (m Model) requestQuit() (tea.Model, tea.Cmd) {
 	m.health = m.health.Invalidate()
 	m.testCase = m.testCase.Invalidate()
 	m.history = m.history.Invalidate()
-	m.historyOpen = false
+	m.historyOpen, m.historyReturning = false, false
 	m.changeDocuments = m.changeDocuments.Invalidate()
 	m.document = m.document.Invalidate()
 	m.changeList = m.changeList.Invalidate()

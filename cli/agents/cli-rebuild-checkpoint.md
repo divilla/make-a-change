@@ -2105,3 +2105,79 @@ exact locations remain in each campaign's `uncovered.txt` and `functions.log`.
 No required scenario failed or was skipped in final verification. No backend,
 database or Git publication was used. The skill-required final blank line in
 `cli/implementation-log.md` remains intentional.
+
+## 031 review fixes 03 — history exit reconciliation and portable timestamps
+
+Both findings are valid under 031-14/15/19 and 031-24. Esc/Ctrl+C now cancels
+the pending history mutation's HTTP/process work while retaining its revision
+and busy state until the result arrives. The application then refreshes the
+originating owner using reads only, retaining committed feedback and selection.
+Read/print-only history operations still cancel immediately. Timestamp
+assertions in the change list/detail rendering test use the active local
+timezone rather than assuming Zagreb summer time. HTTP contracts are unchanged.
+
+`Test031HistoryExitReconcilesPendingMutation` pauses activation and comment
+restoration at the write, retained-history read, active-selection read and
+printing boundaries, with both exit keys. It verifies committed feedback,
+owner refresh, failed-refresh/read-only retry, no duplicate Space write and
+rejection of duplicate results. `Test031OwnerHistoryExitDrainsQueuedMutationResult`
+checks the `/documents` return path with a result queued behind the exit key.
+The existing complete-program document/comment scenario now cancels a pending
+history read after each successful mutation and verifies returned committed
+feedback and the refreshed delete target.
+
+| Command | Exit | Evidence |
+| --- | ---: | --- |
+| Baseline `make -C cli check` | 0 | `/tmp/031-review03-baseline-check.log`; clean baseline in the host timezone. |
+| Baseline `TZ=UTC go test -count=1 ./internal/app -run '^TestChangesCommandLoadsAndRendersBackendRows$'` (CLI cwd) | 1 | Both reported assertions fail: rendered `10:45`, expected `12:45`. |
+| Initial history regression before production fixes | 1 | `/tmp/031-review03-history-repro.log`; committed feedback is lost for both mutation kinds. Two spec/print cases also timed out because the initial fake activation failed to clear deletion metadata; that fixture was repaired before final verification. |
+| `make -C cli format` | 0 | `/tmp/031-review03-format.log`; only intended source/test edits. |
+| `TZ=UTC go test -count=1 -race ./internal/app ./internal/documents` (CLI cwd) | 0 | `/tmp/031-review03-utc-focused.log`; complete app/document suites, including new regressions. |
+| `TZ=Europe/Zagreb go test -count=1 ./internal/app -run '^TestChangesCommandLoadsAndRendersBackendRows$'` (CLI cwd) | 0 | `/tmp/031-review03-zagreb.log`; list/detail assertions also pass in Zagreb. |
+| `go test -count=1 -race -timeout=60s ./integration -run '^TestCLIProgram031DocumentCommentsAndHistory$'` (CLI cwd) | 0 | `/tmp/031-review03-program-focused.log`; keyboard-driven pending-read cancellation passes for both mutations. |
+| Final `make -C cli check` | 0 | `/tmp/031-review03-check.log`; format, lint, vet, race, architecture and tooling pass. |
+| `make -C cli coverage` | 0 | `/tmp/031-review03-unit.log`; **5546/6386 (86.8462%)**, 80% integer gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/031-review03-deps.log`; no vulnerabilities. |
+| `make -C cli integration-coverage` | 0 | `/tmp/031-review03-integration.log`; **4917/6386 (76.9966%)**, 70% integer gate passes. |
+
+Both independent campaigns report complete and exit 0. All 34 program scenarios,
+including the covered standalone startup child, and the real PTY scenario pass
+without skips, missing counters, assertion failures or cleanup failures.
+The tested base revision is `51f42539c6366613d3c994027fe83248819e1bc4`, plus
+the recorded worktree diff. Both campaigns hash the same 77 production files;
+the sorted compact JSON source mapping has SHA-256
+`901cbabee6bd1a8728eb2dce1e8112a99373b8448b25d7abf3ba90757e21e991`.
+The terminal child binary SHA-256 is
+`cba66a536c72f058e7a80054ee1aa1b74b9b46d9003c940dd0d625d4161d0814`.
+Go is `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1 and govulncheck 1.7.0.
+Profiles, exact package totals, source provenance, commands/exits and uncovered
+statements/functions remain under `cli/.coverage/{unit,integration}`.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2516/3045 | 2329/3045 |
+| `cli/internal/changes` | 862/989 | 742/989 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 493/516 | 408/516 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 8/8 | 8/8 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining gaps include the main unit boundary, navigation fallbacks, agent/brief
+error paths, transport rejection branches and document/history failures; exact
+locations remain in each campaign's `uncovered.txt` and `functions.log`.
+All campaign inputs matched their recorded hashes before these final checkpoint
+and implementation-log writes. Production, tests, tooling and the assertion
+ledger have not changed since verification. No backend, database or Git
+publication was used. The implementation log's final blank line is intentional.
