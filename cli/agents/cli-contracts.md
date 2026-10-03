@@ -932,3 +932,11 @@ scenario `TestCLIProgram031DocumentCommentsAndHistory` now passes stored OSC 52
 and erase-scrollback controls through real bat and verifies filtered terminal
 output. Existing history color/resize/version tests and the real PTY scenario
 continue to cover syntax colors under 031-14/20. HTTP contracts are unchanged.
+
+031 review fixes 08: `Test031HistoryExpandsTabsBeforeClipping` proves 031-14
+for repeated/leading tabs, clipping inside a tab, wide/combining text and SGR
+changes around tabs, including inherited colors after scrolling. Tab expansion
+matches the root Lip Gloss surface's four-space default and affects display text
+only. `Test031HistoryTabsKeepFooterWithinTerminal` verifies document/comment
+history fits the terminal at widths 20/40/80 after resize and paging, keeps the
+footer visible, and preserves syntax colors, stored bodies and captured output.

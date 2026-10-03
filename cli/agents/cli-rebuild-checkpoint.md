@@ -2499,3 +2499,76 @@ not rerun because tooling and toolchain compatibility are unchanged.
 Documentation command/link checks also pass:
 `python3 -B -m unittest discover -s cli/scripts -p documentation_test.py`
 exits 0 (`/tmp/031-review06-docs.log`). Final diff has no whitespace errors.
+
+## 031 review fixes 08 — expand history tabs before clipping
+
+The P2 finding is valid under 031-14: ANSI width measurement treats tabs as
+zero-width, while the root Lip Gloss surface expands each to four spaces.
+History now performs that expansion on sanitized display lines before clipping.
+Stored document/comment bodies, captured bat output and syntax SGR colors remain
+intact. No HTTP or process contract changes.
+
+`Test031HistoryExpandsTabsBeforeClipping` covers the reported width-20 case,
+leading/repeated tabs, clipping within tab spaces, Unicode cell widths, SGR
+changes and inherited colors after scrolling. The root-model regression
+`Test031HistoryTabsKeepFooterWithinTerminal` opens both document and comment
+history with keyboard input, resizes to widths 20/40/80 and pages both ways,
+asserting the viewport/footer fit within 24 terminal rows and raw bodies/output
+remain intact. Existing bat color, version-navigation and PTY checks are retained.
+
+| Command | Exit | Evidence |
+| --- | ---: | --- |
+| Pre-fix targeted new regressions (CLI cwd) | 1 | `/tmp/031-review08-repro.log`; all five tab cases fail and both root views render 32 rows in a 24-row terminal. |
+| `make -C cli format` | 0 | `/tmp/031-review08-format.log`; intended files only. |
+| `go test -count=1 -race ./internal/documents ./internal/app` (CLI cwd) | 0 | `/tmp/031-review08-focused.log`; final focused suites pass. |
+| `make -C cli check` | 0 | `/tmp/031-review08-check.log`; formatting, lint, vet, unit race, architecture and tooling checks pass. |
+| `make -C cli coverage` | 0 | `/tmp/031-review08-coverage.log`; **5595/6435 (86.9464%)**, 80% integer gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/031-review08-deps-audit.log`; no vulnerabilities. |
+| `make -C cli integration-coverage` | 0 | `/tmp/031-review08-integration-coverage.log`; **4944/6435 (76.8298%)**, 70% integer gate passes. |
+| `python3 -B -m unittest discover -s cli/scripts -p documentation_test.py` | 0 | `/tmp/031-review08-docs.log`; documented commands and links pass after evidence updates. |
+
+The first post-fix focused run exited 1 because Lip Gloss's GetTabWidth returns
+zero for an unset style despite its documented default; the replacement now
+uses the verified four-space rendering default. Final tests and campaigns ran
+on the corrected source. Both independent campaigns are complete and exit 0;
+all 34 selected program scenarios (including covered startup) and the real PTY
+scenario pass with no skips, missing counters or cleanup failures.
+
+Tested source: `2e566dcde9eadf6e3f7b74163b0d92c323acc9bc` plus the worktree diff
+captured in both provenance files. All campaign input hashes matched each other
+and current files before this checkpoint and implementation-log write. The sorted
+compact input-hash mapping SHA-256 is
+`375fb991bbf95f05b26cfefa9c35caa864fc4e93c8f9876fbd01786db338f4fb`.
+The terminal child binary SHA-256 is
+`9a6fd24f35b5ba373c118650c655ccfe521a24661b68cf2dd4d44d3629aeb111`.
+Tools: Go `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0.
+Fresh profiles, command exits, scenario inventory, provenance, package counts and
+uncovered statements/functions are in `cli/.coverage/{unit,integration}`.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2542/3069 | 2337/3069 |
+| `cli/internal/changes` | 862/989 | 742/989 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 503/528 | 418/528 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 21/21 | 17/21 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining coverage gaps include main, navigation fallbacks, agent/brief failures,
+HTTP rejection branches and history/document failure paths; exact locations remain
+in each campaign's `uncovered.txt` and `functions.log`. The new display statement
+is covered by both campaigns. Backend and Docker checks are outside this fix's
+scope; no backend source, tools or toolchain compatibility changed. No baseline
+check failures or blockers remain. Next action: caller review/publication.

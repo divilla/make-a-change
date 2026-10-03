@@ -297,6 +297,8 @@ func (h History) View(width, height int) string {
 	style := ""
 	for i, line := range lines[:end] {
 		if i >= start {
+			// Match Lip Gloss's default four-space tab expansion before clipping.
+			line = strings.ReplaceAll(line, "\t", "    ")
 			clipped = append(clipped, ansi.Truncate(style+line, max(1, width), "")+ansi.ResetStyle)
 		}
 		for _, sgr := range historySGR.FindAllString(line, -1) {

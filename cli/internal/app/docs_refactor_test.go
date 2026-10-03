@@ -336,6 +336,40 @@ func Test031HistoryRootViewFiltersDocumentAndCommentControls(t *testing.T) {
 	}
 }
 
+func Test031HistoryTabsKeepFooterWithinTerminal(t *testing.T) {
+	for _, kind := range []string{"spec", "comment"} {
+		t.Run(kind, func(t *testing.T) {
+			m, a := app031Model(t)
+			body := strings.Repeat("123456789012345\t12345\n", 40)
+			row := app031Row(9, kind, body)
+			if kind == "comment" {
+				a.comments = []dto.Document{row}
+				m.changeList.Detail.Comments = slices.Clone(a.comments)
+			} else {
+				a.rows = []dto.Document{row}
+			}
+			m = select031Row(t, m, kind, 9)
+			m, cmd := sendKey(m, tea.KeyCtrlH)
+			m = applyCommand(m, cmd)
+			require.True(t, m.historyOpen)
+			output := m.history.Output
+			for _, width := range []int{20, 40, 80} {
+				updated, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
+				m = updated.(Model)
+				for _, key := range []tea.KeyType{tea.KeyPgDown, tea.KeyPgUp} {
+					m, _ = sendKey(m, key)
+					view := m.View()
+					require.LessOrEqual(t, lipgloss.Height(view), m.height, "history and footer fit at width %d", width)
+					require.Contains(t, view, "\x1b[38;2;11;22;33m")
+					require.True(t, strings.HasSuffix(view, styles.Default.Footer.Width(width).Render(m.footerText())))
+				}
+			}
+			require.Equal(t, body, m.history.Rows[0].Body)
+			require.Equal(t, output, m.history.Output)
+		})
+	}
+}
+
 func Test031DeletedCommentsHistoryAndEmptySectionAccess(t *testing.T) {
 	m, a := app031Model(t)
 	deleted := time.Now()

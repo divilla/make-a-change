@@ -1,9 +1,11 @@
 package documents
 
 import (
+	"cli/internal/styles"
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 )
@@ -27,13 +29,39 @@ func Test031HistoryFiltersTerminalControlsPreservingSGR(t *testing.T) {
 		{"incomplete ESC", "a\x1b", "a"},
 		{"malformed CSI", "a\x1b[\a\x1b[2Jb", "ab"},
 		{"invalid UTF8", "a\xff\xc0b", "ab"},
-		{"Unicode and tab", "\u0301漢字 e\u0301 👩‍💻\tend", "\u0301漢字 e\u0301 👩‍💻\tend"},
+		{"Unicode and tab", "\u0301漢字 e\u0301 👩‍💻\tend", "\u0301漢字 e\u0301 👩‍💻    end"},
 		{"SGR colors and attributes", "\x1b[1;38;2;11;22;33mcolored\x1b[38:2::44:55:66mtext\x1b[m", "\x1b[1;38;2;11;22;33mcolored\x1b[38:2::44:55:66mtext\x1b[m"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := History{Output: tc.input}
 			require.Equal(t, tc.want+ansi.ResetStyle, h.View(100, 1))
 			require.Equal(t, tc.input, h.Output, "rendering leaves captured output intact")
+		})
+	}
+}
+
+func Test031HistoryExpandsTabsBeforeClipping(t *testing.T) {
+	color := "\x1b[38;2;11;22;33m"
+	for _, tc := range []struct {
+		name, input, want string
+		width             int
+	}{
+		{"reported overflow", "123456789012345\t12345", "123456789012345    1", 20},
+		{"leading repeated tabs", "\t\tabc", "        ab", 10},
+		{"clip inside tab", "abc\tdef", "abc  ", 5},
+		{"wide and combining text", "漢e\u0301\tend", "漢e\u0301    e", 8},
+		{"color across tab", "abc\t\x1b[1mdef", "abc    \x1b[1md", 8},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := History{Output: color + "first\n" + tc.input + "\nlast"}
+			output := h.Output
+			h = h.Scroll(1, 1)
+			view := h.View(tc.width, 1)
+			require.Equal(t, color+tc.want+ansi.ResetStyle, view)
+			require.NotContains(t, view, "\t")
+			require.LessOrEqual(t, ansi.StringWidth(view), tc.width)
+			require.Equal(t, 1, lipgloss.Height(styles.Default.Surface.Width(tc.width).Render(view)))
+			require.Equal(t, output, h.Output, "tab expansion only changes display text")
 		})
 	}
 }
