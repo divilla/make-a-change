@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
@@ -272,6 +273,84 @@ func TestP405CommittedStepsSurviveLaterFailureAndRetryOnlyReads(t *testing.T) {
 			m = finish(t, m, cmd)
 			require.NotContains(t, m.Status, tt.step)
 		})
+	}
+}
+
+type savedSlotDocuments struct {
+	api *changeAPI
+	row dto.Document
+}
+
+func (d *savedSlotDocuments) Save(ctx context.Context, id int, kind, body string) (int, error) {
+	d.row.ID, d.row.RefID, d.row.RefTable = 91, id, "change"
+	d.row.DocType, d.row.Body = kind, body
+	return d.row.ID, d.api.call(ctx, "document")
+}
+
+func (d *savedSlotDocuments) Load(ctx context.Context, _ int) ([]dto.Document, error) {
+	return []dto.Document{d.row}, d.api.call(ctx, "documents")
+}
+
+func Test031DocumentSlotTimestampUnavailableUntilRefresh(t *testing.T) {
+	oldTime := time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC)
+	newTime := oldTime.Add(48 * time.Hour)
+	for _, existing := range []bool{false, true} {
+		for _, failure := range []string{"types", "details", "documents", "testcases"} {
+			t.Run(fmt.Sprintf("existing=%t/failure=%s", existing, failure), func(t *testing.T) {
+				m, api := changeSetup()
+				m.Detail.DocumentTypes = []string{"spec"}
+				if existing {
+					m.Detail.Spec = "old body"
+					m.Detail.Documents = []dto.Document{{ID: 9, RefID: 12, RefTable: "change", DocType: "spec", Body: "old body", UpdatedAt: oldTime}}
+				}
+				prior := m.Detail.Documents
+				docs := &savedSlotDocuments{api: api, row: dto.Document{UpdatedAt: newTime}}
+				api.fail = failure
+				input := Input{DocumentType: "spec", Value: "Types: feature\nnew body"}
+				m, cmd := m.Begin(context.Background(), api, docs, Document, 7, 12, input, changeCatalog())
+				m = finish(t, m, cmd)
+				require.Error(t, m.Err)
+				require.Contains(t, m.Status, "saved spec document #91")
+				require.Contains(t, m.Status, "/retry reads only")
+				require.Len(t, m.Detail.Documents, 1)
+				require.Equal(t, 91, m.Detail.Documents[0].ID)
+				require.Equal(t, input.Value, m.Detail.Documents[0].Body)
+				require.True(t, m.Detail.Documents[0].UpdatedAt.IsZero())
+				if existing {
+					require.Equal(t, 9, prior[0].ID)
+					require.Equal(t, oldTime, prior[0].UpdatedAt)
+				}
+				for _, retryFails := range []bool{true, false} {
+					m.Detail.DocumentTypes = []string{"spec"} // The shell restores the project catalog after reads.
+					var slot DetailRow
+					for _, row := range DetailRows(m.Detail) {
+						if row.DocumentType == "spec" {
+							slot = row
+						}
+					}
+					require.Equal(t, 91, slot.DocumentID)
+					require.Equal(t, "spec [✓]", slot.Text)
+					api.fail = ""
+					if retryFails {
+						api.fail = "details"
+					}
+					before := len(api.calls)
+					m, cmd = m.Begin(context.Background(), api, docs, Details, 7, 12, Input{}, changeCatalog())
+					m = finish(t, m, cmd)
+					for _, call := range api.calls[before:] {
+						require.Contains(t, []string{"details", "documents", "testcases"}, call)
+					}
+				}
+				require.NoError(t, m.Err)
+				require.Equal(t, newTime, m.Detail.Documents[0].UpdatedAt)
+				m.Detail.DocumentTypes = []string{"spec"}
+				for _, row := range DetailRows(m.Detail) {
+					if row.DocumentType == "spec" {
+						require.Equal(t, "spec [✓] "+newTime.Local().Format("2006-01-02 15:04"), row.Text)
+					}
+				}
+			})
+		}
 	}
 }
 

@@ -191,6 +191,8 @@ func (m Model) Begin(ctx context.Context, api API, docs Documents, op Operation,
 					if r.Detail.Documents[i].DocType == in.DocumentType {
 						r.Detail.Documents[i].Body = in.Value
 						r.Detail.Documents[i].ID = docID
+						// Insert returns only an ID; the new version's timestamp needs a read.
+						r.Detail.Documents[i].UpdatedAt = time.Time{}
 						found = true
 					}
 				}

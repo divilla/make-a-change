@@ -280,7 +280,10 @@ func DetailRows(change dto.ChangeView) []DetailRow {
 		for _, d := range change.Documents {
 			if d.DocType == kind {
 				row.DocumentID = d.ID
-				row.Text = kind + " [✓] " + d.UpdatedAt.Local().Format("2006-01-02 15:04")
+				row.Text = kind + " [✓]"
+				if !d.UpdatedAt.IsZero() {
+					row.Text += " " + d.UpdatedAt.Local().Format("2006-01-02 15:04")
+				}
 			}
 		}
 		rows = append(rows, row)

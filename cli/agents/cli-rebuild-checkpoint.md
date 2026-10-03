@@ -2572,3 +2572,72 @@ in each campaign's `uncovered.txt` and `functions.log`. The new display statemen
 is covered by both campaigns. Backend and Docker checks are outside this fix's
 scope; no backend source, tools or toolchain compatibility changed. No baseline
 check failures or blockers remain. Next action: caller review/publication.
+
+## 031 review fixes 09 — omit unverified document-slot timestamps
+
+The P2 finding is valid under 031-07 and 031-19. Document insertion returns
+only the new ID. The optimistic row now clears the previous version's UpdatedAt
+and renders its checked slot without a date until a successful detail read
+supplies the saved version's timestamp. New slots also omit their zero timestamp.
+The committed ID/body and read-only retry feedback remain available. Successful
+reads retain the specified local timestamp format. No HTTP contract changed.
+
+`Test031DocumentSlotTimestampUnavailableUntilRefresh` covers both new and
+existing slots when the optional type update, change detail read, document read,
+or testcase read fails after insertion. It proves the new ID/body survive,
+prior captured metadata remains untouched, a failed retry keeps the date absent,
+and successful recovery displays the backend timestamp without another write.
+All eight cases failed before the fix (year 0001 or the previous timestamp).
+Existing slot rendering, timestamp/timezone and shell tests remain retained.
+
+| Command | Exit | Evidence |
+| --- | ---: | --- |
+| `go test -count=1 ./internal/changes -run '^Test031DocumentSlotTimestampUnavailableUntilRefresh$'` (CLI cwd, before fix) | 1 | `/tmp/031-review09-repro.log`; all eight cases reproduce the defect. |
+| `make -C cli format` | 0 | `/tmp/031-review09-format.log`; intended files only. |
+| `go test -count=1 -race ./internal/changes ./internal/app` (CLI cwd) | 0 | `/tmp/031-review09-focused.log`. |
+| `make -C cli check` | 0 | `/tmp/031-review09-check.log`; formatting, lint, vet, unit race, architecture and tooling pass. |
+| `make -C cli coverage` | 0 | `/tmp/031-review09-coverage.log`; **5601/6438 (86.9991%)**, 80% integer gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/031-review09-deps-audit.log`; no vulnerabilities. |
+| `make -C cli integration-coverage` | 0 | `/tmp/031-review09-integration-coverage.log`; **4947/6438 (76.8406%)**, 70% integer gate passes. |
+| `python3 -B -m unittest discover -s cli/scripts -p documentation_test.py` | 0 | `/tmp/031-review09-docs.log`; commands and links pass after evidence updates. |
+
+Both independent campaigns completed with all 34 selected program scenarios
+(including the covered startup child) and the real PTY scenario passing; no skips,
+missing counters, assertion failures, timeouts or cleanup failures occurred.
+Tested source: `03b7d7bbc17594dc77d3174f4eb97db90d4f4b61` plus the three-file
+source/test diff captured by both provenance files. All input hashes matched
+between campaigns and current files before the checkpoint/log write. The sorted
+compact input-hash mapping SHA-256 is
+`a92f7b39ceea64da32f1f41e9faa2bb01a5c6f4fa639ca13e9456ac06c113eae`.
+Terminal child binary SHA-256: `a89c22dd0f813d6d619ddb826ae51de9e5ec7b37f819b8f9ccfed346768ba528`.
+Tools: Go `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0.
+Fresh profiles, command exits, scenario inventory, package counts and uncovered
+statements/functions are in `cli/.coverage/{unit,integration}`.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2542/3069 | 2337/3069 |
+| `cli/internal/changes` | 868/992 | 745/992 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 503/528 | 418/528 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 21/21 | 17/21 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining gaps include main, navigation fallbacks, agent/brief failures, HTTP
+rejection branches and history/document failure paths; exact locations remain
+in each campaign's `uncovered.txt` and `functions.log`. No baseline failures or
+blockers remain. Backend and Docker validation are outside this CLI fix's scope;
+no backend code or toolchain changed. No Git publication or deployment occurred.
+Next action: caller review/publication.
