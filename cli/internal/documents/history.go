@@ -205,19 +205,19 @@ func (h History) begin(ctx context.Context, api MutationAPI, printer Printer, re
 				}
 				return 0
 			})
-			r.Active, r.Err = api.ActiveDocuments(work, owner, table)
-			if r.Err == nil {
-				r.Err = ValidateActive(r.Active, owner, table)
-			}
-			if r.Err != nil {
-				return r
-			}
 			r.Selected = 0
 			for i, d := range r.Rows {
 				if d.ID == id {
 					r.Selected = i
 					break
 				}
+			}
+			r.Active, r.Err = api.ActiveDocuments(work, owner, table)
+			if r.Err == nil {
+				r.Err = ValidateActive(r.Active, owner, table)
+			}
+			if r.Err != nil {
+				return r
 			}
 		}
 		if len(r.Rows) == 0 {

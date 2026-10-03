@@ -1,10 +1,9 @@
 package documents
 
 import (
+	"cli/internal/ui"
 	"fmt"
-	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/charmbracelet/x/ansi"
 )
@@ -106,34 +105,14 @@ func viewLines(m Model, width int) []string {
 }
 
 func appendWrapped(lines []string, raw string, width int) []string {
-	for _, line := range strings.Split(safeText(raw), "\n") {
+	for _, line := range strings.Split(ui.SafeText(raw), "\n") {
 		lines = append(lines, strings.Split(ansi.Hardwrap(line, width, true), "\n")...)
 	}
 	return lines
 }
 
 // SafeText escapes raw control bytes for display without changing stored data.
-func SafeText(raw string) string { return safeText(raw) }
+func SafeText(raw string) string { return ui.SafeText(raw) }
 
 // SafeLine renders untrusted text within one terminal line.
-func SafeLine(raw string) string { return strings.ReplaceAll(safeText(raw), "\n", `\n`) }
-
-func safeText(raw string) string {
-	var b strings.Builder
-	for _, r := range raw {
-		if r == '\n' {
-			b.WriteRune(r)
-			continue
-		}
-		if r == '\t' {
-			b.WriteString("    ")
-			continue
-		}
-		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
-			b.WriteString(strconv.QuoteRune(r)[1 : len(strconv.QuoteRune(r))-1])
-			continue
-		}
-		b.WriteRune(r)
-	}
-	return b.String()
-}
+func SafeLine(raw string) string { return strings.ReplaceAll(ui.SafeText(raw), "\n", `\n`) }

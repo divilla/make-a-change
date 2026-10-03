@@ -2351,3 +2351,85 @@ bind-mount limitation remains historical evidence; Docker was not rerun because
 this pass changes neither tooling nor toolchain compatibility. No backend or
 database access, Git publication or deployment occurred. The implementation log's
 final blank line is intentional.
+
+## 031 review fixes 06 — safe comment previews and stable history error selection
+
+Both findings are valid under 031-10/12/14/19. Comment previews now escape
+terminal controls before preview clipping through the existing document-screen
+escaping implementation, moved to shared `internal/ui`. The document helpers
+retain their behavior and exported contracts; feature import boundaries stay
+intact. OSC 52, CSI display/style sequences, C1 controls and format controls are
+shown as escaped text. Raw comment bodies, including tabs, CRLF and content
+beyond the preview, remain the exact external-editor seed and recovery draft.
+History now reconciles refreshed, sorted rows by selected ID before reading and
+validating the active set, retaining #8 when [9,8] becomes [10,9,8] even if that
+second read fails. Committed activation/undelete feedback and read-only retry
+remain intact. Backend HTTP contracts are unchanged.
+
+Regressions: `Test031CommentPreviewEscapesTerminalControls` proves escaped rows
+and final DetailsView output at narrow/wide widths, unchanged raw bodies and
+three-line previews. `Test031CommentControlEscapingRetainsRawEditorSeed` proves
+the shell's displayed preview is safe and the actual editor file/draft is exact.
+`Test031HistoryRetainsSelectionAfterPartialReadFailure` exercises spec/comment,
+refresh/activation and active-read/validation failures, retaining selected ID,
+avoiding printing on failed reads and avoiding mutation replay on retry.
+
+| Command | Exit | Evidence |
+| --- | ---: | --- |
+| Pre-fix `make -C cli check` | 0 | `/tmp/031-review06-baseline-check.log`; clean baseline. |
+| Pre-fix targeted regressions (CLI cwd) | 1 | `/tmp/031-review06-repro.log`; controls remain raw and all eight history cases select #9 instead of #8. |
+| `make -C cli format` | 0 | `/tmp/031-review06-format.log`; intended files only. |
+| `go test -count=1 -race ./internal/changes ./internal/documents ./internal/app ./internal/ui` (CLI cwd) | 0 | `/tmp/031-review06-focused.log`; final focused suites pass. |
+| `make -C cli check` | 0 | `/tmp/031-review06-check.log`; format, lint, vet, unit race, architecture and tooling checks pass. |
+| `make -C cli coverage` | 0 | `/tmp/031-review06-coverage.log`; **5581/6420 (86.9315%)**, 80% integer gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/031-review06-deps-audit.log`; no vulnerabilities. |
+| `make -C cli integration-coverage` | 0 | `/tmp/031-review06-integration-coverage.log`; **4931/6420 (76.8069%)**, 70% integer gate passes. |
+
+An initial focused run failed compilation because the new test treated
+`editorDraft` as a struct instead of a string pointer. The assertion was fixed
+before the final focused suites and required checks. No failed run establishes
+coverage. Final campaigns are complete, independent and exit 0; all 34 selected
+program scenarios (including covered startup) and the real PTY scenario pass
+without skips, missing counters, assertion failures, crashes, timeouts or cleanup
+failures. Source base: `acf0c620f8c3e5ddd5b950ba872919ef1b35e64a` plus worktree
+diff and the untracked shared helper, whose hash is recorded in both campaigns.
+All input hashes matched each other and the final source before checkpoint/log
+writes. The 78-file production mapping's sorted compact JSON SHA-256 is
+`86eaa19c7ab26e9b34de5ca65bc492a499b9b8b017e94a2eb0701fb0cef301d4`.
+Terminal child binary SHA-256:
+`b0730fcc54b958f7ab07f5553997104f38685dec0d7588b2296e30e5b5ba4195`.
+Tools: Go `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0.
+Raw profiles, commands/exits, scenarios, provenance, exact package counts and
+uncovered statements/functions remain in `cli/.coverage/{unit,integration}`.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2541/3069 | 2337/3069 |
+| `cli/internal/changes` | 862/989 | 742/989 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 490/513 | 405/513 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 21/21 | 17/21 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining gaps include the main unit boundary, navigation fallbacks, agent/brief
+error paths, HTTP rejection branches and document/history failures; exact
+locations are in each campaign's `uncovered.txt` and `functions.log`. Moving
+escaping to `ui` moves its 13 statements from documents into the shared package;
+the production denominator and aggregate covered counts are unchanged.
+No backend/database access, Git publication or deployment occurred. Docker was
+not rerun because tooling and toolchain compatibility are unchanged.
+Documentation command/link checks also pass:
+`python3 -B -m unittest discover -s cli/scripts -p documentation_test.py`
+exits 0 (`/tmp/031-review06-docs.log`). Final diff has no whitespace errors.

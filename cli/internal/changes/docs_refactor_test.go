@@ -81,6 +81,37 @@ func Test031CommentPreviewNoWrapAndFullBody(t *testing.T) {
 	require.Equal(t, body, v.Comments[0].Body)
 }
 
+func Test031CommentPreviewEscapesTerminalControls(t *testing.T) {
+	for _, tc := range []struct{ name, raw, escaped string }{
+		{"clipboard", "\x1b]52;c;cGF5bG9hZA==\a", `\x1b]52;c;cGF5bG9hZA==\a`},
+		{"display", "\x1b[2J\x1b[31m", `\x1b[2J\x1b[31m`},
+		{"C1", "\u009d52;c;payload\u009c", `\u009d52;c;payload\u009c`},
+		{"controls", "\b\x00\u202e", `\b\x00\u202e`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := "before " + tc.raw + " after\nsecond\nthird\nraw editor tail"
+			v := dto.ChangeView{ID: "12", Comments: []dto.Document{{ID: 9, DocType: "comment", Body: body}}}
+			var preview DetailRow
+			for _, row := range DetailRows(v) {
+				if row.DocumentID == 9 {
+					preview = row
+				}
+			}
+			require.Contains(t, preview.Text, "before "+tc.escaped+" after")
+			require.NotContains(t, preview.Text, tc.raw)
+			require.Len(t, detailRowTextLines(preview, 10), 4)
+			for _, width := range []int{40, 160} {
+				view := DetailsView(Model{Detail: v}, width, 40)
+				require.NotContains(t, view, tc.raw)
+				if width == 160 {
+					require.Contains(t, stripANSI(view), tc.escaped)
+				}
+			}
+			require.Equal(t, body, v.Comments[0].Body)
+		})
+	}
+}
+
 func Test031CommentTimestampLayout(t *testing.T) {
 	when := time.Date(2026, 9, 28, 11, 30, 0, 0, time.UTC)
 	for _, n := range []int{1, 2, 3, 6} {

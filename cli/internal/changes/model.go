@@ -2,6 +2,7 @@ package changes
 
 import (
 	"cli/internal/dto"
+	"cli/internal/ui"
 	"context"
 	"fmt"
 	"regexp"
@@ -289,7 +290,7 @@ func DetailRows(change dto.ChangeView) []DetailRow {
 		if d.DeletedAt != nil {
 			continue
 		}
-		lines := strings.Split(normalizeNewlines(d.Body), "\n")
+		lines := strings.Split(ui.SafeText(normalizeNewlines(d.Body)), "\n")
 		if len(lines) > 3 {
 			lines = lines[:3]
 		}

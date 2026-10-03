@@ -370,6 +370,80 @@ func Test031HistoryPrintingFailureAndReadOnlyRetry(t *testing.T) {
 	require.Len(t, a.ids, before)
 }
 
+type historyActiveReadAPI struct {
+	*refactorAPI
+	activeErr     error
+	invalidActive bool
+}
+
+func (a *historyActiveReadAPI) ActiveDocuments(ctx context.Context, owner int, table string) ([]dto.Document, error) {
+	rows, err := a.refactorAPI.ActiveDocuments(ctx, owner, table)
+	if a.activeErr != nil {
+		return nil, a.activeErr
+	}
+	if a.invalidActive {
+		invalid := refactorRow(11, "brief", "invalid owner")
+		invalid.RefID = 13
+		return []dto.Document{invalid}, nil
+	}
+	return rows, err
+}
+
+func Test031HistoryRetainsSelectionAfterPartialReadFailure(t *testing.T) {
+	for _, kind := range []string{"spec", "comment"} {
+		for _, operation := range []string{"refresh", "activate"} {
+			for _, failure := range []string{"read", "validation"} {
+				t.Run(kind+"/"+operation+"/"+failure, func(t *testing.T) {
+					older := refactorRow(8, kind, "selected older body")
+					deleted := older.UpdatedAt
+					older.DeletedAt = &deleted
+					a := &historyActiveReadAPI{refactorAPI: &refactorAPI{
+						rows: []dto.Document{refactorRow(9, kind, "newer"), older},
+					}}
+					a.comments = slices.Clone(a.rows)
+					p := &coloredPrinter{}
+					h, cmd := (History{}).Open(context.Background(), a, p, 7, 12, "change", kind)
+					h = finishHistory(t, h, cmd)
+					h, cmd = h.Move(context.Background(), a, p, 1)
+					h = finishHistory(t, h, cmd)
+					a.rows = append(a.rows, refactorRow(10, kind, "new arrival"))
+					a.comments = slices.Clone(a.rows)
+					if failure == "read" {
+						a.activeErr = errors.New("active read failed")
+					} else {
+						a.invalidActive = true
+					}
+					if operation == "activate" {
+						h, cmd = h.Activate(context.Background(), a, p)
+					} else {
+						h, cmd = h.Refresh(context.Background(), a, p)
+					}
+					h = finishHistory(t, h, cmd)
+					require.Error(t, h.Err)
+					current, ok := h.Current()
+					require.True(t, ok)
+					require.Equal(t, 8, current.ID)
+					require.Len(t, p.bodies, 2, "failed reads must not print another version")
+					writes := len(a.ids)
+					if operation == "activate" {
+						require.Equal(t, []int{8}, a.ids)
+						require.NotEmpty(t, h.Committed)
+					}
+					a.activeErr, a.invalidActive = nil, false
+					h, cmd = h.Refresh(context.Background(), a, p)
+					h = finishHistory(t, h, cmd)
+					require.NoError(t, h.Err)
+					current, ok = h.Current()
+					require.True(t, ok)
+					require.Equal(t, 8, current.ID)
+					require.Equal(t, older.Body, p.bodies[len(p.bodies)-1])
+					require.Len(t, a.ids, writes, "retry must remain read only")
+				})
+			}
+		}
+	}
+}
+
 func Test031HistoryRefreshClearsAnEmptyRetainedList(t *testing.T) {
 	a := &refactorAPI{rows: []dto.Document{refactorRow(9, "spec", "body")}}
 	p := &coloredPrinter{}

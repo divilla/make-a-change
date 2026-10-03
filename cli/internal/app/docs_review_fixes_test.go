@@ -394,6 +394,26 @@ func Test031HistoryActivationRejectsPendingDetailSnapshot(t *testing.T) {
 	}
 }
 
+func Test031CommentControlEscapingRetainsRawEditorSeed(t *testing.T) {
+	m, a := app031Model(t)
+	raw := "\x1b]52;c;cGF5bG9hZA==\a\tcomment\r\nsecond\nthird\nfull editor tail"
+	a.comments[0].Body = raw
+	m.changeList.Detail.Comments = slices.Clone(a.comments)
+	m = select031Row(t, m, "comment", 7)
+	require.NotContains(t, m.View(), "\x1b]52;")
+	m, cmd := sendKey(m, tea.KeyEnter)
+	require.NotNil(t, cmd)
+	files, err := filepath.Glob(filepath.Join(os.TempDir(), "mch-project-*.md"))
+	require.NoError(t, err)
+	require.Len(t, files, 1)
+	body, err := os.ReadFile(files[0])
+	require.NoError(t, err)
+	require.Equal(t, raw, string(body))
+	require.NotNil(t, m.editorDraft)
+	require.Equal(t, raw, *m.editorDraft)
+	require.Empty(t, a.commentUpdates)
+}
+
 func Test031CommentEditorFailureRetainsRawDraft(t *testing.T) {
 	for _, retryEditor := range []bool{false, true} {
 		t.Run(strconv.FormatBool(retryEditor), func(t *testing.T) {
