@@ -38,6 +38,43 @@ func (r *fakeRepo) ListActive(ctx context.Context, q domain.DocListRequest) ([]d
 	return r.docs, r.record(ctx, "ListActive", q)
 }
 
+func (r *fakeRepo) ActiveSet(ctx context.Context, q domain.Doc) error {
+	return r.record(ctx, "ActiveSet", q)
+}
+
+func TestActiveSetUsesStoredOwnerAndRejectsComments(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	q := domain.DocIDRequest{ID: 8}
+	for _, id := range []int{0, -1} {
+		r := &fakeRepo{}
+		require.ErrorIs(t, NewService(r, Renderer{}, nil).ActiveSet(ctx, domain.DocIDRequest{ID: id}), app.ErrDocInvalidInput)
+		require.Empty(t, r.calls)
+	}
+	for _, table := range []string{"project", "epic", "change"} {
+		d := domain.Doc{ID: 8, RefID: 7, RefTable: table, DocType: "spec", Body: "retained"}
+		r := &fakeRepo{docs: []domain.Doc{d}}
+		require.NoError(t, NewService(r, Renderer{}, nil).ActiveSet(ctx, q))
+		require.Equal(t, []string{"Details", "ActiveSet"}, r.calls)
+		require.Equal(t, d, r.req)
+		for _, got := range r.contexts {
+			require.Same(t, ctx, got)
+		}
+	}
+	for _, op := range []string{"Details", "ActiveSet"} {
+		for _, cause := range []error{app.ErrDocNotFound, context.Canceled, errors.New("database error")} {
+			r := &fakeRepo{docs: []domain.Doc{{ID: 8, RefID: 7, RefTable: "change", DocType: "brief"}}, err: cause, fail: op}
+			require.ErrorIs(t, NewService(r, Renderer{}, nil).ActiveSet(ctx, q), cause)
+			if op == "Details" {
+				require.Equal(t, []string{"Details"}, r.calls)
+			}
+		}
+	}
+	r := &fakeRepo{docs: []domain.Doc{{ID: 8, DocType: "comment"}}}
+	require.ErrorIs(t, NewService(r, Renderer{}, nil).ActiveSet(ctx, q), app.ErrDocInvalidReference)
+	require.Equal(t, []string{"Details"}, r.calls)
+}
+
 func (r *fakeRepo) Details(ctx context.Context, q domain.DocIDRequest) (domain.Doc, error) {
 	d := domain.Doc{}
 	if len(r.docs) > 0 {
@@ -177,4 +214,28 @@ func (r *fakeRepo) CommentUpdate(ctx context.Context, q domain.DocCommentUpdateR
 
 func (r *fakeRepo) Delete(ctx context.Context, q domain.DocIDRequest) error {
 	return r.record(ctx, "Delete", q)
+}
+
+func (r *fakeRepo) CommentUndelete(ctx context.Context, q domain.DocIDRequest) error {
+	return r.record(ctx, "CommentUndelete", q)
+}
+
+func TestCommentUndeleteValidationAndRepositoryErrors(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	for _, id := range []int{0, -1} {
+		r := &fakeRepo{}
+		err := NewService(r, Renderer{}, nil).CommentUndelete(ctx, domain.DocIDRequest{ID: id})
+		require.ErrorIs(t, err, app.ErrDocInvalidInput)
+		require.Empty(t, r.calls)
+	}
+	for _, cause := range []error{nil, app.ErrDocNotFound, context.Canceled, errors.New("database unavailable")} {
+		r := &fakeRepo{err: cause}
+		q := domain.DocIDRequest{ID: 8}
+		err := NewService(r, Renderer{}, nil).CommentUndelete(ctx, q)
+		require.ErrorIs(t, err, cause)
+		require.Equal(t, q, r.req)
+		require.Equal(t, []string{"CommentUndelete"}, r.calls)
+		require.Same(t, ctx, r.contexts[0])
+	}
 }

@@ -3,6 +3,7 @@ package doc
 import (
 	"errors"
 	"mch_api/internal/app"
+	"mch_api/internal/domain"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -61,5 +62,41 @@ func TestAPIContracts(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestActiveSetAPIContract(t *testing.T) {
+	for _, tc := range []struct {
+		body   string
+		kind   string
+		err    error
+		status int
+	}{
+		{`{"id":8}`, "spec", nil, 204},
+		{`{"id":8}`, "comment", nil, 400},
+		{`{"id":8}`, "spec", app.ErrDocNotFound, 404},
+		{`{"id":8}`, "spec", errors.New("private failure"), 500},
+		{`{`, "spec", nil, 400},
+		{`{}`, "spec", nil, 400},
+		{`{"id":0}`, "spec", nil, 400},
+		{`{"id":-1}`, "spec", nil, 400},
+		{`{"id":null}`, "spec", nil, 400},
+		{`{"id":"bad"}`, "spec", nil, 400},
+	} {
+		r := &fakeRepo{docs: []domain.Doc{{ID: 8, RefID: 7, RefTable: "change", DocType: tc.kind}}, err: tc.err}
+		e := echo.New()
+		NewAPI(e, NewService(r, Renderer{}, nil))
+		req := httptest.NewRequest("POST", "/api/v1/doc/active-set", strings.NewReader(tc.body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, tc.status, rec.Code, rec.Body.String())
+		if tc.status == 204 {
+			require.Empty(t, rec.Body.String())
+		}
+		if tc.status == 400 && tc.kind != "comment" {
+			require.Empty(t, r.calls)
+		}
+		require.NotContains(t, rec.Body.String(), "private")
 	}
 }

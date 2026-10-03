@@ -19,7 +19,7 @@ import (
 func textPtr(v string) *string { return &v }
 
 func TestCommentAndDeleteAPIContracts(t *testing.T) {
-	for _, op := range []string{"comment-list", "comment-insert", "comment-update", "delete"} {
+	for _, op := range []string{"comment-list", "comment-insert", "comment-update", "comment-undelete", "delete"} {
 		for _, scenario := range []string{"success", "malformed", "wrong-type", "invalid", "failure", "missing"} {
 			t.Run(op+"/"+scenario, func(t *testing.T) {
 				r := &fakeRepo{docs: []domain.Doc{}}
@@ -30,7 +30,7 @@ func TestCommentAndDeleteAPIContracts(t *testing.T) {
 				switch op {
 				case "comment-insert":
 					status = 201
-				case "comment-update", "delete":
+				case "comment-update", "comment-undelete", "delete":
 					status = 204
 				}
 				switch scenario {
@@ -76,6 +76,20 @@ func TestCommentAndDeleteAPIContracts(t *testing.T) {
 				require.NotContains(t, rec.Body.String(), "private")
 			})
 		}
+	}
+}
+
+func TestCommentUndeleteAPIRequiresPositiveID(t *testing.T) {
+	for _, body := range []string{`{"id":0}`, `{"id":-1}`, `{"id":null}`, `{"id":[]}`} {
+		r := &fakeRepo{}
+		e := echo.New()
+		NewAPI(e, NewService(r, Renderer{}, nil))
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/api/v1/doc/comment-undelete", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		e.ServeHTTP(rec, req)
+		require.Equal(t, 400, rec.Code, rec.Body.String())
+		require.Empty(t, r.calls)
 	}
 }
 

@@ -6,12 +6,14 @@ import (
 	"mch_api/internal/domain"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type docPool interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
 	QueryRow(context.Context, string, ...any) pgx.Row
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
 }
 
 // Repo executes PostgreSQL doc queries.
@@ -62,6 +64,12 @@ func scanDoc(row pgx.Row) (domain.Doc, error) {
 	var d domain.Doc
 	err := row.Scan(&d.ID, &d.RefID, &d.RefTable, &d.DocType, &d.Body, &d.AgentEdit, &d.CreatedAt, &d.UpdatedAt, &d.DeletedAt)
 	return d, app.DatabaseError(err, nil, nil)
+}
+
+// ActiveSet delegates selection and restoration to the existing database procedure.
+func (r *Repo) ActiveSet(ctx context.Context, d domain.Doc) error {
+	_, err := r.pool.Exec(ctx, `call public.sp_doc_active_set($1::text,$2::bigint,$3::text,$4::bigint)`, d.RefTable, d.RefID, d.DocType, d.ID)
+	return app.DatabaseError(err, nil, nil)
 }
 
 // Details filters solely by the doc's primary key.
@@ -122,6 +130,14 @@ func (r *Repo) CommentUpdate(ctx context.Context, req domain.DocCommentUpdateReq
 		return app.ErrDocNotFound
 	}
 	return nil
+}
+
+// CommentUndelete clears deletion metadata only for comments, including already live comments.
+func (r *Repo) CommentUndelete(ctx context.Context, req domain.DocIDRequest) error {
+	var id int
+	err := r.pool.QueryRow(ctx, `update public.doc set deleted_by = null, deleted_at = null
+ where id = $1 and doc_type = 'comment' returning id`, req.ID).Scan(&id)
+	return app.DatabaseError(err, app.ErrDocNotFound, nil)
 }
 
 // Delete delegates soft deletion and removal of active selections to PostgreSQL.
