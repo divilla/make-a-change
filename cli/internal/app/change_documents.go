@@ -24,6 +24,7 @@ func (m Model) beginComment(id int) (tea.Model, tea.Cmd) {
 		}
 	}
 	m = m.setPromptValue(body)
+	m.editorDraft = &body
 	return m.openTextEditor(ChangeDetailsState, body)
 }
 
@@ -106,6 +107,7 @@ func (m Model) openHistory(kind string) (tea.Model, tea.Cmd) {
 	m.history, cmd = m.history.Open(m.ctx, m.client, m.historyPrinter, project, owner, table, kind)
 	m.historyOpen = cmd != nil
 	if m.historyOpen && m.state == ChangeDetailsState {
+		m.historyDetailReload = m.historyDetailReload || (m.changeList.Loading && m.changeList.Operation == changes.Details)
 		m.changeList = m.changeList.Invalidate()
 	}
 	if m.history.Err != nil {
@@ -181,6 +183,18 @@ func (m Model) returnHistory() (tea.Model, tea.Cmd) {
 	m.historyOpen, m.historyReturning = false, false
 	m = m.setPromptValue("")
 	m.status, m.err = "returned from history", ""
+	if m.state == ChangeDetailsState && m.historyDetailReload {
+		m.changeDocuments = m.changeDocuments.Invalidate()
+		m.changeDocuments.Committed, m.changeDocuments.Err = "", nil
+		id, _ := changeNumericID(m.changeList.Detail)
+		next, cmd := m.beginChange(changes.Details, id, changes.Input{})
+		m = next.(Model)
+		m.status = "returned from history; " + m.status
+		if m.history.Committed != "" {
+			m.status = m.history.Committed + "; " + m.status
+		}
+		return m, cmd
+	}
 	if m.state == ChangeDetailsState && m.history.Committed != "" {
 		m.changeDocuments.ProjectID, m.changeDocuments.OwnerID = m.history.ProjectID, m.history.OwnerID
 		m.changeDocuments.Committed = "returned from history; " + m.history.Committed

@@ -6,6 +6,8 @@ import (
 	"cli/internal/dto"
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"testing"
@@ -368,6 +370,9 @@ func Test031HistoryActivationRejectsPendingDetailSnapshot(t *testing.T) {
 			m, cmd = sendKey(m, key)
 			m = applyCommand(m, cmd)
 			require.False(t, m.historyOpen)
+			require.True(t, m.changeDetailLoaded, "return must restart the canceled detail read")
+			require.Contains(t, m.status, "committed active selection document #5")
+			require.False(t, m.historyDetailReload)
 			require.Equal(t, 5, m.changeList.Detail.Documents[0].ID)
 			// Release explicitly, leaving cleanup's close safe on early failures.
 			a.releaseComments <- struct{}{}
@@ -387,6 +392,140 @@ func Test031HistoryActivationRejectsPendingDetailSnapshot(t *testing.T) {
 			require.Equal(t, before.err, m.err)
 		})
 	}
+}
+
+func Test031CommentEditorFailureRetainsRawDraft(t *testing.T) {
+	for _, retryEditor := range []bool{false, true} {
+		t.Run(strconv.FormatBool(retryEditor), func(t *testing.T) {
+			m, a := app031Model(t)
+			raw := "one\tcolumn\r\ntwo\tcolumns\r\nfull comment tail\r\n"
+			a.comments[0].Body = raw
+			m.changeList.Detail.Comments = slices.Clone(a.comments)
+			m = select031Row(t, m, "comment", 7)
+			m, cmd := sendKey(m, tea.KeyEnter)
+			require.NotNil(t, cmd)
+			m = applyMsg(m, editorFinishedMsg{source: ChangeDetailsState, generation: m.editorGeneration, projectID: "7", ownerID: "12", field: detailEditComment, commentID: 7, err: errors.New("editor failed to start")})
+			require.Contains(t, m.err, "editor failed to start")
+			require.Equal(t, raw, m.promptValue())
+			require.NotEqual(t, raw, m.input.Value(), "textarea cannot represent the original bytes")
+			require.Empty(t, a.commentUpdates)
+			if retryEditor {
+				m, cmd = sendKey(m, tea.KeyCtrlE)
+				require.NotNil(t, cmd)
+				files, err := filepath.Glob(filepath.Join(os.TempDir(), "mch-project-*.md"))
+				require.NoError(t, err)
+				require.Len(t, files, 2)
+				for _, file := range files {
+					body, err := os.ReadFile(file)
+					require.NoError(t, err)
+					require.Equal(t, raw, string(body))
+				}
+				m = applyMsg(m, editorFinishedMsg{source: ChangeDetailsState, generation: m.editorGeneration, projectID: "7", ownerID: "12", field: detailEditComment, commentID: 7, err: errors.New("editor failed again")})
+			}
+			m, cmd = sendKey(m, tea.KeyEnter)
+			m = applyCommand(m, cmd)
+			require.Equal(t, []int{7}, a.commentUpdates)
+			require.Equal(t, []string{raw}, a.commentBodies)
+			require.Equal(t, raw, a.comments[0].Body)
+			require.Equal(t, "independent", a.comments[1].Body)
+			require.Empty(t, a.commentInserts)
+		})
+	}
+}
+
+func Test031HistoryReturnRestartsCanceledDetailRead(t *testing.T) {
+	for _, key := range []tea.KeyType{tea.KeyEsc, tea.KeyCtrlC} {
+		for _, refreshFails := range []bool{false, true} {
+			t.Run(key.String()+"/"+strconv.FormatBool(refreshFails), func(t *testing.T) {
+				m, a := app031Model(t)
+				a.gotChange = dto.ChangeView{ID: "12", ProjectID: "7", Title: "Refreshed change", Active: true}
+				a.rows = slices.Clone(a.current)
+				m = select031Row(t, m, "spec", 9)
+				selected := m.changeList.DetailSelected
+				m, pending := sendCommand(m, "/retry")
+				require.NotNil(t, pending)
+				require.False(t, m.changeDetailLoaded)
+				m, cmd := sendKey(m, tea.KeyCtrlH)
+				m = applyCommand(m, cmd)
+				require.True(t, m.historyOpen)
+				if refreshFails {
+					a.changeGetErr = errors.New("detail refresh unavailable")
+				}
+				m, cmd = sendKey(m, key)
+				require.NotNil(t, cmd)
+				result := cmd()
+				require.IsType(t, changes.Result{}, result, "return must reload full details")
+				m = applyMsg(m, result)
+				require.False(t, m.historyOpen)
+				require.Equal(t, selected, m.changeList.DetailSelected)
+				if refreshFails {
+					require.False(t, m.changeDetailLoaded)
+					require.Contains(t, m.err, "detail refresh unavailable")
+					a.changeGetErr = nil
+					m, cmd = sendCommand(m, "/retry")
+					m = applyCommand(m, cmd)
+				}
+				require.True(t, m.changeDetailLoaded)
+				require.True(t, m.changeList.DetailLoaded)
+				require.True(t, m.testCase.Loaded)
+				require.Equal(t, "Refreshed change", m.changeList.Detail.Title)
+				require.False(t, m.historyDetailReload)
+				before := m.changeList.Detail
+				m = applyMsg(m, pending())
+				require.Equal(t, before, m.changeList.Detail, "canceled result remains stale")
+				m = select031Row(t, m, "spec", 9)
+				m, cmd = sendKey(m, tea.KeyDelete)
+				require.Nil(t, cmd)
+				require.Equal(t, 9, m.deleteDocumentID)
+				m, _ = sendKey(m, tea.KeyEsc)
+				m, cmd = sendKey(m, tea.KeyEnter)
+				require.NotNil(t, cmd, "detail editing works after return")
+				m, _ = sendKey(m, tea.KeyEsc)
+				for i, row := range changes.DetailRows(m.changeList.Detail) {
+					if row.Label == "Active" {
+						m.changeList.DetailSelected = i
+					}
+				}
+				_, cmd = sendRune(m, ' ')
+				require.NotNil(t, cmd, "Space editing works after return")
+				require.Empty(t, a.commentUpdates)
+				require.Empty(t, a.deletes)
+			})
+		}
+	}
+}
+
+func Test031HistoryDetailReloadRetainsCommittedActivation(t *testing.T) {
+	m, base := app031Model(t)
+	base.gotChange = dto.ChangeView{ID: "12", ProjectID: "7", Title: "Change"}
+	base.rows = []dto.Document{app031Row(9, "spec", "old active"), app031Row(5, "spec", "selected historical body")}
+	base.current = []dto.Document{base.rows[0]}
+	a := &pendingDetail031Client{docs031Client: base}
+	m.client = a
+	m = select031Row(t, m, "spec", 9)
+	m, _ = sendCommand(m, "/retry")
+	m, cmd := sendKey(m, tea.KeyCtrlH)
+	m = applyCommand(m, cmd)
+	m, cmd = sendKey(m, tea.KeyRight)
+	m = applyCommand(m, cmd)
+	m, cmd = sendRune(m, ' ')
+	m = applyCommand(m, cmd)
+	require.Equal(t, []int{5}, a.activated)
+	a.changeGetErr = errors.New("details unavailable")
+	m, cmd = sendKey(m, tea.KeyEsc)
+	const outcome = "committed active selection document #5"
+	require.Contains(t, m.status, outcome, "committed feedback survives pending reload")
+	m = applyCommand(m, cmd)
+	require.Contains(t, m.status, outcome)
+	require.Contains(t, m.err, "details unavailable")
+	require.False(t, m.changeDetailLoaded)
+	a.changeGetErr = nil
+	m, cmd = sendCommand(m, "/retry")
+	m = applyCommand(m, cmd)
+	require.True(t, m.changeDetailLoaded)
+	require.Contains(t, m.status, outcome)
+	require.Equal(t, 5, m.changeList.Detail.Documents[0].ID)
+	require.Equal(t, []int{5}, a.activated, "retry only reads")
 }
 
 func (a *review031Client) ActiveDocuments(ctx context.Context, id int, table string) ([]dto.Document, error) {

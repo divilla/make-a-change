@@ -2268,3 +2268,86 @@ before these checkpoint/log writes; production, tests and tooling remain the
 verified sources. No backend/database use, Git commit/push or deployment occurred.
 Next action: caller review/publication; Docker bind-mount labeling remains a host
 verification limitation. The implementation log's final blank line is intentional.
+
+## 031 review fixes 05 — lossless comment recovery and history detail reload
+
+Both findings are valid under 031-12/14/19. Comment editing now saves the full
+raw body in `editorDraft` before launching the external editor. Editor startup
+failure leaves tabs and CRLF intact for Enter submission and Ctrl+E retry.
+History records when it cancels an in-flight change/details read and starts a
+fresh full detail read on return, including after history activation. Successful
+reload restores editing, testcase readiness and the originating selection;
+failed reload remains visible and permits read-only retry. Committed activation
+feedback survives pending, failed and successful reads. Canceled results remain
+stale. Navigation away clears the pending reload attribution. HTTP contracts and
+feature boundaries are unchanged.
+
+Regressions in `cli/internal/app/docs_review_fixes_test.go`:
+`Test031CommentEditorFailureRetainsRawDraft` covers failed startup, exact retry
+files, same-ID Enter update and independent comment preservation.
+`Test031HistoryReturnRestartsCanceledDetailRead` covers Esc/Ctrl+C, successful
+and failed reload, retry, selection, late results, and Enter/Delete/Space access.
+`Test031HistoryActivationRejectsPendingDetailSnapshot` now also proves detail
+readiness and retained activation feedback after canceling a real pending read.
+`Test031HistoryDetailReloadRetainsCommittedActivation` proves the committed
+outcome survives failure and retry without repeating activation.
+
+| Command | Exit | Evidence |
+| --- | ---: | --- |
+| Pre-fix focused regressions (CLI cwd) | 1 | `/tmp/031-review05-repro.log`; both findings reproduced, including return after activation. |
+| `make -C cli format` | 0 | `/tmp/031-review05-format.log`; only intended source changes. |
+| `go test -count=1 -race ./internal/app ./internal/documents ./pkg/documentprocess` (CLI cwd) | 0 | `/tmp/031-review05-focused.log`; complete focused suites on final source. |
+| `make -C cli check` | 0 | `/tmp/031-review05-check.log`; formatting, lint, vet, race, architecture and tooling pass. |
+| `make -C cli coverage` | 0 | `/tmp/031-review05-unit.log`; **5581/6420 (86.9315%)**, 80% integer gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/031-review05-deps.log`; no vulnerabilities. |
+| `make -C cli integration-coverage` | 0 | `/tmp/031-review05-integration.log`; **4931/6420 (76.8069%)**, 70% integer gate passes. |
+| `python3 -B -m unittest discover -s cli/scripts -p documentation_test.py` | 0 | `/tmp/031-review05-docs.log`; command/link and route-ledger checks pass. |
+
+During editing, one focused run failed compilation after a local predicate was
+placed in the wrong result handler, and one targeted run failed an incorrect
+expected activation-status string. Both were corrected before the final focused
+race suites and required checks above. Initial passing check/unit measurements
+were superseded by the final campaigns after adding committed-feedback coverage.
+No failed or superseded run is used for these final coverage claims.
+
+Both independent campaigns report complete and exit 0. All 34 selected program
+scenarios (including covered standalone startup) and the real PTY scenario pass
+without skips, missing counters, timeouts or cleanup failures. Tested base:
+`aca8bead4feed87a84adf3752bffaa1f010ca9aa`, plus the recorded worktree diff.
+Both campaigns hash the same 77 production files; the sorted compact JSON source
+mapping SHA-256 is `fd271cd0bf79299f4b4afca282929cd5c765a4b35071a44c86d0f835a36b1160`.
+Terminal child binary SHA-256: `6aa2c17f8d5553fdaa61aff83d45816d2f6dbbbdaccc57896069a4f588e557ba`.
+Host tools: Go `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0.
+Raw independent profiles, command exits, scenarios, source provenance and exact
+uncovered statements/functions remain in `cli/.coverage/{unit,integration}`.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2541/3069 | 2337/3069 |
+| `cli/internal/changes` | 862/989 | 742/989 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 503/526 | 414/526 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 8/8 | 8/8 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining gaps include the main unit boundary, navigation fallbacks, agent/brief
+error paths, transport rejection branches and document/history failures. Exact
+locations are in each campaign's `uncovered.txt` and `functions.log`.
+All recorded input hashes matched before these checkpoint/log writes;
+production, tests and tooling remain the verified sources. The prior Docker
+bind-mount limitation remains historical evidence; Docker was not rerun because
+this pass changes neither tooling nor toolchain compatibility. No backend or
+database access, Git publication or deployment occurred. The implementation log's
+final blank line is intentional.

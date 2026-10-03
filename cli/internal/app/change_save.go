@@ -205,6 +205,7 @@ func (m Model) applyChangeResult(r changes.Result) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	selected, offset := m.changeList.DetailSelected, m.changeList.DetailOffset
+	returning := m.historyDetailReload && !m.historyOpen && m.state == ChangeDetailsState && r.Operation == changes.Details && r.ProjectID == m.history.ProjectID && r.ID == m.history.OwnerID
 	next.Detail.DocumentTypes = append([]string(nil), m.optionCatalog.config.ChangeDocs...)
 	m.changeList = next
 	m.changeDetailLoaded = next.DetailLoaded
@@ -215,9 +216,12 @@ func (m Model) applyChangeResult(r changes.Result) (tea.Model, tea.Cmd) {
 		m.testCase.Rows = append([]dto.TestCase(nil), next.Detail.TestCases...)
 		m.testCase.Loaded = true
 	}
-	if r.Operation != changes.Create && r.Operation != changes.Details && r.Operation != changes.List && r.Operation != changes.Delete {
+	if returning || (r.Operation != changes.Create && r.Operation != changes.Details && r.Operation != changes.List && r.Operation != changes.Delete) {
 		m.changeList.DetailSelected = selected
 		m.changeList.DetailOffset = offset
+		if returning {
+			m.changeList = m.changeList.ClampDetailSelection(m.changeTableRows(), terminalWidth(m.width))
+		}
 	}
 	m.status = next.Status
 	if r.Operation == changes.Details && next.DetailLoaded && len(next.Detail.TestCases) == 0 {
@@ -226,6 +230,13 @@ func (m Model) applyChangeResult(r changes.Result) (tea.Model, tea.Cmd) {
 	m.err = ""
 	if next.Err != nil {
 		m.err = next.Err.Error()
+	}
+	if returning {
+		m.status = "returned from history; " + m.status
+		if m.history.Committed != "" {
+			m.status = m.history.Committed + "; " + m.status
+		}
+		m.historyDetailReload = !next.DetailLoaded
 	}
 	if r.Err == nil && r.Operation != changes.List && r.Operation != changes.Details {
 		m.state = ChangeDetailsState

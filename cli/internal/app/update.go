@@ -1154,6 +1154,9 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 }
 
 func (m Model) arrive(state State, status string) (tea.Model, tea.Cmd) {
+	if state != ChangeDetailsState {
+		m.historyDetailReload = false
+	}
 	if m.state == ChangesListState {
 		m.rememberSelectedChange()
 		if state != ChangesListState {

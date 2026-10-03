@@ -211,6 +211,7 @@ type Model struct {
 	history             documents.History
 	historyOpen         bool
 	historyReturning    bool
+	historyDetailReload bool
 	historyPrinter      documents.Printer
 	changeDocuments     documents.ChangeModel
 	commentID           int
