@@ -1,5 +1,346 @@
 # CLI rebuild checkpoint
 
+## Pure-white Docs/comments and aligned checkboxes (2026-10-05)
+
+Docs and comment bodies now use `styles.Foreground` (`#FFFFFF`), including when
+selected. Every Docs row reserves the same 16-column timestamp plus separator,
+including unsaved slots and saved docs with no timestamp. All checked/unchecked
+boxes align. Today's local timestamps remain AccentPurple, other dates AccentCyan;
+Docs checkmarks remain AccentGreen. Item actions and comment safety are unchanged.
+The existing color tests verify exact rendered white text, green checks and timestamp
+colors. `TestDocCheckboxesAlignWithMissingTimestamps` verifies display columns for
+dated docs, saved undated docs and empty slots, both normal and selected.
+
+Tested revision: `76e254a29fe7234d953523fffd41b8aec4d7ac20` plus the uncommitted
+implementation. Final unit/integration production source hashes match.
+Integration child SHA-256:
+`7eb80843918846d6d7aa5c82575941dd7d2868bd71bb0cdb9ebc6e7d514fcee2`.
+Both campaign statuses are complete with exit 0; all 35 program/startup scenarios
+and the real PTY child pass. Independent provenance, tools, scenario results,
+profiles, uncovered statements/functions and totals are retained under
+`cli/.coverage/unit/` and `cli/.coverage/integration/`.
+Only this checkpoint and the implementation log changed after final campaigns.
+No live backend/database use, Git publication or deployment occurred.
+
+| Final command | Exit/result |
+| --- | --- |
+| `make -C cli check` | 0; formatting, lint, vet, race, architecture and tooling pass; `/tmp/cli-white-aligned-docs-check-corrected.log`. |
+| `make -C cli coverage` | 0; **5709/6544 (87.2402%)**, strict 80% gate passes; `/tmp/cli-white-aligned-docs-coverage-corrected.log`. |
+| `make -C cli deps-audit` | 0; no vulnerabilities; `/tmp/cli-white-aligned-docs-deps-audit-final.log`. |
+| `make -C cli integration-coverage` | 0; **5045/6544 (77.0935%)**, independent 70% gate passes; `/tmp/cli-white-aligned-docs-integration-coverage-corrected.log`. |
+| Targeted `go test -count=1 ./internal/changes` in `cli/` | 0; `/tmp/cli-white-aligned-docs-target-corrected.log`. |
+| Documentation checker and `git diff --check` | 0. |
+
+Early targeted tests exited 1: the new alignment assertion initially counted bytes
+instead of display columns, then included the empty Comments placeholder. The test
+now measures display width and selects only Docs rows. An early check and unit
+campaign exited 2 on that test; terminal tests passed but their campaign exited 2
+because the test source changed during execution. Those failed artifacts remain in
+`/tmp/cli-white-aligned-docs-unit-failed` and
+`/tmp/cli-white-aligned-docs-integration-failed`; they establish no passing coverage.
+All affected campaigns were rerun successfully with fixed inputs. No failing,
+skipped or blocked scenarios remain; no baseline application failure was identified.
+
+| Package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2609/3132 | 2392/3132 |
+| `cli/internal/changes` | 888/1015 | 772/1015 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 524/548 | 434/548 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 21/21 | 17/21 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining gaps include startup errors, agent/brief failures, navigation, HTTP
+rejections and process recovery. Exact statements/functions remain in each campaign's
+`uncovered.txt` and `functions.log`; all production packages count.
+
+## Doc/comment timestamp formats and today's color (2026-10-05)
+
+Comments show `<modified_at> - <body>` on one line, preserving safe newline
+replacement and full editor/viewer bodies. Docs show `<modified_at> - [✓] <type>`;
+empty slots retain `[ ] <type>`. Timestamp dates are local: today uses
+AccentPurple, other dates AccentCyan. Following text uses the primary foreground
+(`styles.Default.Foreground`); only Docs checkmarks are AccentGreen. All colors
+persist when selected. Existing item actions and the temporary history error stay.
+
+Unit evidence covers each format, both timestamp colors for yesterday/today/tomorrow
+with UTC inputs rendered in UTC+14, selected/unselected rows, green Docs checks,
+primary comment bodies containing a checkmark, controls and full body preservation.
+The existing complete-program viewer scenario now asserts the displayed comment
+and Docs timestamp prefixes. All 35 program/startup scenarios and the real PTY child
+pass. No live backend/database use, Git publication or deployment occurred.
+
+Tested revision: `76e254a29fe7234d953523fffd41b8aec4d7ac20` plus the uncommitted
+implementation. Final unit and integration production source hashes match.
+Integration child SHA-256:
+`bb914ec9404ca01e59bb8d8f4816d3b28c94ad7fd68fe5a960fa3f8b5afda82e`.
+Both statuses are complete with exit 0. Separate profiles, provenance, tool versions,
+scenario results, uncovered statements/functions and exact totals are retained in
+`cli/.coverage/unit/` and `cli/.coverage/integration/`.
+Only this checkpoint and the implementation log changed after these campaigns.
+
+| Final command | Exit/result |
+| --- | --- |
+| `make -C cli check` | 0; formatting, lint, vet, race, architecture and tooling pass; `/tmp/cli-comment-doc-today-check-final.log`. |
+| `make -C cli coverage` | 0; **5709/6544 (87.2402%)**, strict 80% unit gate passes; `/tmp/cli-comment-doc-today-coverage-final.log`. |
+| `make -C cli deps-audit` | 0; no vulnerabilities; `/tmp/cli-comment-doc-today-deps-audit-final.log`. |
+| `make -C cli integration-coverage` | 0; **5045/6544 (77.0935%)**, independent 70% gate passes; `/tmp/cli-comment-doc-today-integration-coverage-final.log`. |
+| Targeted `go test -count=1 ./internal/changes` in `cli/` | 0; `/tmp/cli-comment-doc-today-target.log`. |
+| Documentation checker and `git diff --check` | 0. |
+
+The initial comment-only coverage campaigns exited 2 after all tests passed because
+the assertion ledger changed during execution. Those incomplete artifacts remain
+in `/tmp/cli-comment-format-unit-failed` and
+`/tmp/cli-comment-format-integration-failed`; they establish no passing coverage.
+They were rerun with fixed inputs successfully. Subsequent Docs and today's-color
+requests received fresh successful final campaigns. No failing, skipped or blocked
+scenarios remain, and no pre-existing application failure was identified.
+
+| Package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2609/3132 | 2392/3132 |
+| `cli/internal/changes` | 888/1015 | 772/1015 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 524/548 | 434/548 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 21/21 | 17/21 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining gaps include startup failures, agent/brief failure branches, navigation,
+HTTP rejections and process recovery. Exact uncovered statements/functions remain
+in each campaign's `uncovered.txt` and `functions.log`; all production packages count.
+
+## Testcase Space toggle and green slug follow-up (2026-10-05)
+
+Space once again checks/unchecks the selected testcase using the existing
+update-done request and refresh, like Active. The footer advertises Space to toggle;
+docs/comments retain Space to view. Enter editors, Delete confirmation and the
+user-approved testcase-history error remain. The slug value now uses AccentGreen,
+including selected rows. Unit tests exercise both Space message forms and both
+checkbox directions; complete-program and real PTY tests check/uncheck cases.
+The layout color test verifies the slug's normal and selected foreground.
+
+Tested revision: `76e254a29fe7234d953523fffd41b8aec4d7ac20` plus the uncommitted
+implementation. Unit and terminal denominator production source hashes match.
+Integration child SHA-256:
+`38baea3a3f62236a59449cae9a19538fc2f3cfb4d7bfa2a1fa11bed7394c8234`.
+Both campaigns completed with exit 0; final runs contain no failures or skips.
+Independent profiles, provenance, tools, scenarios and uncovered statements/functions
+remain under `cli/.coverage/unit/` and `cli/.coverage/integration/`.
+Only documentation/logs changed after these campaigns. No live backend/database,
+Git publication or deployment occurred.
+
+| Final command | Exit/result |
+| --- | --- |
+| `make -C cli check` | 0; format, lint, vet, race, architecture and tooling pass; `/tmp/cli-testcase-space-check-final.log`. |
+| `make -C cli coverage` | 0; **5705/6540 (87.2324%)**, strict 80% gate passes; `/tmp/cli-testcase-space-coverage-final.log`. |
+| `make -C cli deps-audit` | 0; no vulnerabilities; `/tmp/cli-testcase-space-deps-audit-final.log`. |
+| `make -C cli integration-coverage` | 0; **5042/6540 (77.0948%)**, independent 70% gate passes; all 35 program/startup scenarios and the real PTY child pass; `/tmp/cli-testcase-space-integration-coverage-final.log`. |
+| Documentation checker in `cli/` and `git diff --check` | 0. |
+
+The initial unit campaign exited 2 because the enhanced toggle test mutated a
+shared fake slice before its second press, also modifying UI state. The fixture
+now clones the fake response first. Its failed campaign is preserved under
+`/tmp/cli-testcase-space-unit-failed`; it establishes no passing coverage.
+The corrected unit campaign passed before the slug change; all required campaigns
+were rerun successfully on the final production source. No baseline application
+failure was identified.
+
+| Package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2609/3132 | 2392/3132 |
+| `cli/internal/changes` | 884/1011 | 769/1011 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 524/548 | 434/548 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 21/21 | 17/21 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining gaps include startup errors, agent/brief failures, navigation, HTTP
+rejections and process recovery. Exact statements/functions are retained in each
+campaign's `uncovered.txt` and `functions.log`; all production packages count.
+
+## Change detail layout and terminal selection (2026-10-04)
+
+Implemented the requested detail order and section dividers, brief in configured
+Docs, aligned cyan document timestamps, Created/Modified together, green small
+checks, white docs/testcases and bold blue completion. Comments display one safe
+line with newlines replaced by spaces; editor/viewer bodies stay intact.
+Every screen reserves one AccentRed error row between its prompt and footer.
+Long errors retain their beginning/end with an ellipsis. Mouse capture is removed
+so the terminal owns double-click selection and its Ctrl+Shift+C copy binding.
+
+Enter launches item editors; Space prints full current item bodies with the
+existing `bat -pp --color=always` adapter in the scoped, cancellable viewport.
+Delete retains confirmation and existing HTTP mutation/refresh behavior.
+H/Ctrl+H opens doc history; Escape/Ctrl+C returns to the original selection.
+Footer help follows selection, and D retains testcase completion toggling.
+The user explicitly accepted the testcase-history error for now; the backend has
+no testcase history contract. No backend production changes or live API/database
+access occurred. No Git publication or deployment occurred.
+
+Tested revision: `76e254a29fe7234d953523fffd41b8aec4d7ac20` plus the uncommitted implementation.
+Final unit and integration denominator production source hashes are identical.
+The integration child binary SHA-256 is `b0fe7a95e86d8140793a730fd679d9178fa7d2d73c70d6caee9a62ea55ed32e9`.
+Both campaign statuses are complete with exit 0. Profiles, denominator source
+hashes, provenance, tool versions, commands/exits, scenarios, exact package totals,
+uncovered statements and functions are retained independently under
+`cli/.coverage/unit/` and `cli/.coverage/integration/`. Only documentation/logs
+changed after these final campaigns.
+
+| Final command | Exit/result |
+| --- | --- |
+| `make -C cli check` | 0; formatting, lint, vet, race, architecture and tooling pass; `/tmp/cli-screens-check-final.log`. |
+| `make -C cli coverage` | 0; **5710/6546 (87.2288%)**, strict 80% unit gate passes; `/tmp/cli-screens-coverage-final.log`. |
+| `make -C cli deps-audit` | 0; no vulnerabilities; `/tmp/cli-screens-deps-audit-final.log`. |
+| `make -C cli integration-coverage` | 0; **5047/6546 (77.1005%)**, strict independent 70% gate passes; all 35 program/startup scenarios and the real PTY child pass; `/tmp/cli-screens-integration-coverage-final.log`. |
+| Targeted `go test -count=1 ./internal/app ./internal/changes ./internal/documents` in `cli/` | 0; `/tmp/cli-screen-unit-final-target.log`. |
+| Targeted `go test -count=1 ./integration -run 'TestCLIProgram031|TestCLIProgramTestCaseLifecycle|TestCLIProgramSelectedItemViewer'` in `cli/` | 0; `/tmp/cli-screen-program-second.log`. |
+| `git diff --check` | 0. |
+
+Early targeted unit/program checks and incomplete terminal campaigns failed on
+old layout/preview assumptions, row navigation, newly required manifest/ledger
+entries and long-error assertions. These regressions were repaired: mutation,
+commit/retry, cancellation, control filtering and HTTP payload assertions remain.
+The new viewer program initially paged before bat finished; it now waits for the
+loaded viewer status before input. Early direct Go test invocations from the
+repository root exited 1 because the module is under `cli/`; they were rerun from
+the CLI module. The initial `check` exited 2 on two new manifest/ledger consistency
+assertions, now fixed. Failed integration artifacts remain in
+`/tmp/cli-screens-integration-failed`, `-second`, `-third`, and `-fourth`; their
+incomplete statuses establish no passing coverage. Additional targeted recovery
+runs exposed the clipped combined-project error assertion, subsequently repaired.
+Final runs contain no failing, skipped or blocked scenarios. No pre-existing
+application failure was identified; baseline coverage was not remeasured before
+editing.
+
+| Package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2614/3138 | 2397/3138 |
+| `cli/internal/changes` | 884/1011 | 769/1011 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 524/548 | 434/548 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 21/21 | 17/21 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+The CLI targets (80% unit, 70% terminal) are met. Remaining gaps include startup
+failure branches, agent/brief failure paths, navigation transitions, HTTP rejection
+branches and document/process recovery. Exact statements/functions remain in
+both campaigns' `uncovered.txt` and `functions.log`; totals include all production
+packages, including the untested command and zero-statement shared packages.
+
+## 031 review fixes 07: history terminal-control filtering (2026-10-03)
+
+The P1 finding is valid and fixed. History decodes the complete captured bat
+output and permits printable Unicode, tabs/newlines and complete SGR syntax
+colors only. OSC clipboard/hyperlink commands, non-SGR CSI, other escape/string
+controls, C0/C1 and malformed/incomplete controls cannot reach the viewport.
+Filtering precedes line splitting, clipping and scroll bounds; stored document
+and comment bodies and captured output remain intact. HTTP contracts are unchanged.
+The assertion ledger records the feature/root regressions and the existing
+complete-program scenario extended with stored OSC 52 and erase-scrollback input
+passed through real bat. Retained color, resize, scrolling, version and PTY tests
+pass. No manifest change was needed because the existing scenario was extended.
+
+Tested base revision: `f246b6bf0c3f05facb688c716d7a305d0d329440` plus this
+uncommitted fix. Both campaigns recorded the same production source SHA-256 for
+`internal/documents/history.go`:
+`808af512ffa23a8e2b33ff7b06b3f7ee5144f7c0eb730da9455c7898e7bcce1c`.
+Full source/test hashes, tool versions, command exits, profiles, scenario inventory,
+package totals and uncovered functions/statements are in the independent
+`cli/.coverage/{unit,integration}/` artifacts. The covered child binary SHA-256 is
+`5fff35c4b0dd3cc70530d0054f8e228773336657fa37064cba697b0c8044484f`.
+Only this checkpoint and the implementation log changed after the campaigns.
+
+| Command | Exit and result |
+| --- | --- |
+| `make -C cli check` before edits | 0; baseline checks all pass. |
+| `go test -count=1 ./internal/documents -run '^Test031HistoryFilters'` from `cli/`, before fix | 1; intentionally reproduces controls leaking and incorrect multiline control scroll bounds; `/tmp/031-review-07-reproduction.log`. |
+| `golangci-lint fmt --no-config --enable gofumpt --enable goimports internal/documents/history.go internal/documents/history_test.go internal/app/docs_refactor_test.go integration/docs_refactor_program_test.go` from `cli/` | 0; formats only touched Go files. |
+| `go test -count=1 ./internal/documents ./internal/app -run '^Test031History'` from `cli/` | 0 on final source; initial run exposed an expected trailing SGR reset missing from the new clipping assertion, which was corrected. |
+| `go test -count=1 -timeout=1m ./integration -run '^TestCLIProgram031DocumentCommentsAndHistory$'` from `cli/` | 0; real bat and fake HTTP server, `/tmp/031-review-07-target-program.log`. |
+| `make -C cli check` | 0; formatting, lint, vet, unit race, architecture and tooling all pass; `/tmp/031-review-07-check.log`. |
+| `make -C cli coverage` | 0; **5593/6434 (86.9288%)**, independent 80% gate passes; `/tmp/031-review-07-coverage.log`. |
+| `make -C cli deps-audit` | 0; no vulnerabilities; `/tmp/031-review-07-deps-audit.log`. |
+| `make -C cli integration-coverage` | 0; **4943/6434 (76.8262%)**, independent 70% gate passes; all 34 complete-program/startup scenarios and the real PTY scenario pass; `/tmp/031-review-07-integration-coverage.log`. |
+
+Both coverage campaign statuses are complete with exit 0. No final failing,
+skipped or blocked scenarios. Go is `go1.26.8-X:nodwarf5`, golangci-lint is
+2.13.1 and govulncheck is v1.7.0. The new filter has 12/14 unit-covered statements;
+only its defensive decoder zero-progress fallback is unexercised. Remaining
+production gaps are reported below and detailed in each `uncovered.txt` and
+`functions.log`; zero-statement packages remain in the audited inventory.
+
+| Package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2541/3069 | 2337/3069 |
+| `cli/internal/changes` | 862/989 | 742/989 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 502/527 | 417/527 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 21/21 | 17/21 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Backend code is unchanged; backend suites were not rerun. No live backend or
+database access, Git publication, stage/production promotion or deployment.
+
 ## CLI check cleanup (2026-09-30)
 
 The CLI formatting and package-comment baseline is fixed. The formatter
@@ -1856,3 +2197,797 @@ before producing a valid profile; the rerun exits 0 with **4788/5563 (86.0687%)*
 `make -C cli integration-coverage` exits 0 with **4237/5563 (76.1639%)**.
 Both final campaigns report complete, independent profiles and pass the 80%/70%
 gates. No live backend or database was used.
+
+## 031 CLI document refactor (2026-10-03)
+
+Implemented [031](../../agent/specs/031-cli-docs-refactor.md): current backend
+DTO/routes, ordered configured Docs slots and the full Brief editor, independent
+comments, captured-ID bottom delete confirmation, owner/type-scoped retained
+history with captured real bat colors, same-ID activation/undelete, inactive
+changes and active-only epic selection. `/documents` retains all three owners
+and starts history at the explicitly selected version. Local timestamps and
+committed-write/read-only retry behavior are covered by unit and program tests.
+Editor callbacks additionally bind owner, type, project and revision.
+The [assertion ledger](cli-contracts.md) maps every numbered requirement.
+
+Fresh baseline at `63ce51493cf69a3d1b1531d9df9bb89d8cbd2ab1` was clean Git source:
+`make -C cli check` exited 2 solely for the stale backend-route ledger; formatting,
+lint (zero issues), vet, race and architecture passed. Earlier checkpoint format
+and package-comment findings were already repaired in this revision.
+Baseline unit **4987/5784 (86.2206%)** and terminal **4416/5784 (76.3485%)**
+campaigns both exited 0. Baseline command logs are under `/tmp/031-baseline-*.log`.
+
+| Final command | Exit | Evidence |
+| --- | ---: | --- |
+| `make -C cli check` | 0 | Formatting, zero lint findings, vet, uncached unit race, architecture and all 36 tooling tests pass. `/tmp/031-check-final4.log`. |
+| `make -C cli coverage` | 0 | Complete independent unit campaign **5503/6363 (86.4844%)**; strict 80% gate passes. `/tmp/031-unit-final3.log`. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities; dependencies unchanged. `/tmp/031-deps-final2.log`. |
+| `make -C cli integration-coverage` | 0 | Complete independent terminal campaign **4892/6363 (76.8820%)**; strict 70% gate passes. All 34 program manifest scenarios plus the instrumented real PTY child pass without skips, missing counters or cleanup failures. `/tmp/031-integration-final3.log`. |
+| `make -C cli integration-test` | 0 | Retained whole-program, startup and Flow suites pass. `/tmp/031-integration-work4.log`; later final campaign verifies the changed program scenarios after final editor isolation fixes. |
+| `make -C cli terminal-test` | 0 | PTY and harness assertions pass. `/tmp/031-pty-work5.log`; the final campaign repeats the PTY only to validate final source and collect independent counters. |
+| `go test -count=1 ./internal/doc -run 'Test(CommentAndDeleteAPIContracts\|CommentUndelete\|ActiveSet)'` (backend cwd) | 0 | Fresh unchanged backend endpoint unit assertions. Backend source and APIHydra suites were already implemented/verified before this pass; no new API coverage measurement is claimed here. |
+
+Both `cli/.coverage/{unit,integration}/status.json` report `complete: true` and
+`exit: 0`. Each contains independent raw/complete profiles, command exits,
+revision plus full worktree diff and file hashes, exact package totals,
+`functions.log` and `uncovered.txt`. Tested base revision is the hash above;
+the common aggregate production Go source SHA-256 is
+`d679f859b2d3947c8285455f8a5521ef63283e600407d99f378b4e999bf0fd16`
+(SHA-256 of sorted compact JSON mapping of the 77 production Go input hashes).
+The terminal child binary SHA-256 is
+`97001e376ab02305588e5028db20a1a4435fa835675cbff8f2845775b4ac3eb8`.
+Go is `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0;
+exact bat/socat command versions and scenario lists are retained in campaign logs.
+Only this evidence/checkpoint, assertion ledger and implementation log were edited
+after the final campaigns; production and test source hashes remain unchanged.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2486/3029 | 2313/3029 |
+| `cli/internal/changes` | 858/989 | 742/989 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 484/509 | 400/509 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 8/8 | 8/8 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 317/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+The denominator includes the untested main package and structurally empty DTO
+and style packages; no unit hits contribute to terminal totals. Remaining gaps
+are visible in each campaign's uncovered statements/functions: main error exits,
+navigation fallbacks, agent/brief error paths, transport rejection branches,
+and some document/history invalid-input/cancellation/printing paths. Both final
+aggregate targets pass without excluding those statements.
+
+Intermediate focused runs exposed stale Active/testcase/menu/PTY expectations,
+footer line-wrap synchronization, missing refresh feedback on first history
+activation, test color-profile leakage and new lint/manifest findings. Those were
+repaired; diagnostic logs remain under `/tmp/031-*-work*.log` and
+`/tmp/031-check-final.log`. Incomplete/failed runs established no coverage success.
+The final two complete campaigns above supersede earlier measurements.
+No CLI test used a live backend/database. No backend source/schema, database
+lifecycle, Git publication, deployment, stage or production promotion occurred.
+
+Final review additionally repaired retry attribution after switching from comment
+mutations to change-field or testcase mutations. Successful old comment feedback
+cannot capture a subsequent reload; starting another write clears that old outcome.
+`Test031RetryBelongsToTheLatestCommittedOperation` proves committed read-only
+recovery without repeating either write. A fixture initially assumed a failed read
+without injecting the failure; it was corrected. That incomplete unit campaign's
+raw artifacts remain at `/tmp/031-unit-failed-02`, and its diagnostics at
+`/tmp/031-unit-final2.log`. The final campaigns above use the corrected fixture.
+The final log keeps the skill-required blank line after its implementation block;
+`git diff --check` flags that trailing log line only. Production, test and other
+documentation diffs have no whitespace findings.
+
+## 031 review fixes 01 (2026-10-03)
+
+All three supplied findings were validated against 031-11/12/14/16/18/19 and
+fixed in the app shell without changing HTTP or feature contracts. A committed
+comment insert/update closes the editor and clears its exact draft before any
+refresh error is returned; failed writes retain the draft for Enter retry.
+Returning from inactive changes schedules a fresh active-list read and restores
+the original selected ID through the existing filter/selection machinery. This
+also restarts an active read canceled by entering inactive mode. Returning from
+owner document history makes the selected list row visible after Details resets
+the offset. Esc and Ctrl+C are covered for both navigation paths.
+
+Regression tests in `internal/app/docs_review_fixes_test.go` reproduced all three
+findings on the original production source (focused run exit 1), and pass after
+the fixes. They cover both comment refresh stages, exact failed-write drafts,
+typed read-only recovery without duplicate writes, reordered/filtered active
+rows, late canceled results, and a scrolled `/documents` record. The existing
+program and PTY scenarios now verify a fresh active list containing the newly
+activated row (PTY verifies the new total). The assertion ledger records reuse.
+
+| Command | Exit | Evidence |
+| --- | ---: | --- |
+| Baseline `make -C cli check` | 0 | Clean baseline; `/tmp/031-review-baseline-check.log`. |
+| `make -C cli format` | 0 | Only intended source/test files formatted; `/tmp/031-review-format.log`. |
+| `go test -count=1 ./internal/app ./internal/documents ./internal/changes` (CLI cwd) | 0 | `/tmp/031-review-focused.log`. |
+| `go test -count=1 -timeout=3m ./integration -run '^TestCLIProgram031'` (CLI cwd) | 0 | `/tmp/031-review-program.log`. |
+| Final `make -C cli check` | 0 | Format, lint (zero issues), vet, unit race, architecture and tooling pass; `/tmp/031-review-check-final.log`. |
+| Final `make -C cli coverage` | 0 | Complete independent unit profile **5515/6368 (86.6049%)**; 80% integer gate passes; `/tmp/031-review-unit-final2.log`. |
+| `make -C cli deps-audit` | 0 | No vulnerabilities; `/tmp/031-review-deps.log`. Production and dependencies unchanged afterward. |
+| Final `make -C cli integration-coverage` | 0 | Complete independent terminal profile **4897/6368 (76.9001%)**; 70% integer gate passes; `/tmp/031-review-integration-final2.log`. All 34 program scenarios and the real PTY scenario finish without skips, missing counters or cleanup failures. |
+
+Both final campaign status files report complete and exit 0. Tested base revision
+is `30832e776e40199517d48ccdf67a507937b03ae3`, plus the recorded worktree changes
+and untracked regression test. Both campaigns hash the same 77 production Go
+files, with aggregate SHA-256
+`4e1c31e3c4857d12567ef6ff7bffce54c753a7095c63aaeeff7c7f8e6d71c23b`
+(SHA-256 of sorted compact JSON of the production file hash mapping). The terminal
+child binary SHA-256 is
+`befd23232a2a7275bf0203d1ee877e5d4543e462148acac7841dfd8f2f33ada7`.
+Go is `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0.
+Independent raw profiles, exact package totals, uncovered statements/functions,
+scenario results, tool versions and commands/exits remain under
+`cli/.coverage/{unit,integration}`. Only this evidence and the implementation log
+were edited after the final campaigns; production and test source is unchanged.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2497/3034 | 2318/3034 |
+| `cli/internal/changes` | 859/989 | 742/989 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 484/509 | 400/509 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 8/8 | 8/8 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 317/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining gaps include the untested main unit boundary, navigation fallbacks,
+agent/brief error paths, transport rejection branches and document/history
+invalid-input, cancellation and printing failures. Exact statements and functions
+are retained in each campaign's `uncovered.txt` and `functions.log`; the whole
+production inventory remains in both denominators and profiles are independent.
+
+An initial focused program run failed because its final read-count assertion
+also counted a later ordinary reload; the assertion was moved to the inactive
+return boundary. The first terminal campaign exited 2 on the old PTY return
+status marker; it produced no valid coverage result. Its raw artifacts are kept
+at `/tmp/031-review-integration-failed-01`. After updating that assertion, both
+campaigns exited 2 because the assertion ledger changed while they ran; their
+raw artifacts remain at `/tmp/031-review-{unit,integration}-input-changed`.
+All program/PTY tests passed in those rejected campaigns, but no coverage success
+is claimed for them. The final complete campaigns above supersede those runs.
+The implementation log retains the skill-required final blank line; any
+`git diff --check` finding for that log line is intentional. No other whitespace
+finding remains. No live backend/database or Git publication was used.
+
+## 031 review fixes 02 — inactive deletion refresh and stale detail isolation
+
+Both findings are valid under 031-16/19 and 031-15/19 respectively. Change list
+loads and post-delete refreshes now capture the same inactive-aware reader.
+Opening change document history invalidates and cancels the originating change
+request, preventing a delayed detail snapshot from overwriting a successful
+history activation and its return refresh. HTTP contracts remain unchanged.
+
+`Test031DeleteRefreshPreservesListModeAndReadOnlyRecovery` covers both list modes,
+success and failed post-delete refreshes, retained undeleted rows and read-only
+recovery without replaying the mutation. The keyboard-driven
+`Test031HistoryActivationRejectsPendingDetailSnapshot` pauses comments after
+capturing the old active documents, opens history, activates an older document,
+returns through Esc/Ctrl+C and then delivers the old snapshot despite cancellation.
+It verifies cancellation at history entry and unchanged detail/status/error on
+late delivery. Both regression tests failed on the original production code;
+raw expected-failure output remains in `/tmp/031-review02-repro.log`.
+
+| Command | Exit | Evidence |
+| --- | ---: | --- |
+| Baseline `make -C cli check` | 0 | `/tmp/031-review02-baseline-check.log`; clean baseline. |
+| Focused two new regression tests (before fixes) | 1 | Both reported regressions reproduced; `/tmp/031-review02-repro.log`. |
+| `make -C cli format` | 0 | `/tmp/031-review02-format.log`; only intended edits. |
+| `go test -count=1 -race ./internal/app ./internal/changes ./internal/documents` (CLI cwd) | 0 | `/tmp/031-review02-focused.log`. |
+| Final `make -C cli check` | 0 | `/tmp/031-review02-check.log`; format, lint, vet, race, architecture and tooling pass, including the final strengthened cancellation assertion. |
+| `make -C cli coverage` | 0 | `/tmp/031-review02-unit.log`; **5525/6370 (86.7347%)**, 80% integer gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/031-review02-deps.log`; no vulnerabilities. |
+| `make -C cli integration-coverage` | 0 | `/tmp/031-review02-integration.log`; **4899/6370 (76.9074%)**, 70% integer gate passes. |
+
+Both independent campaign status files report complete and exit 0. All 34 program
+scenarios and the real PTY scenario finish without skips, missing counters,
+assertion failures or cleanup failures. Base revision is
+`59d4a8c5df24d47e82a83fe0dbbcec26c188e7b0`, plus the recorded worktree diff.
+Both campaigns hash the same 77 production files; the sorted compact JSON
+production-hash mapping has SHA-256
+`ae6bde237eb17dd4d121a06ec5c48be18aa104f30fce25bca4a90f19a454af42`.
+The terminal child binary SHA-256 is
+`6732c1df99ee57ff3c13c36c3cef9e093578e47d0cca55b2b257d1e04efbfd59`.
+Go is `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1 and govulncheck 1.7.0.
+Raw profiles, commands/exits, source provenance, exact package totals and uncovered
+statements/functions remain in `cli/.coverage/{unit,integration}`. Only this
+checkpoint and the implementation log changed after the completed campaigns;
+production, tests and the assertion ledger are unchanged.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2504/3036 | 2320/3036 |
+| `cli/internal/changes` | 862/989 | 742/989 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 484/509 | 400/509 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 8/8 | 8/8 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 317/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining gaps include the main unit boundary, navigation fallbacks, agent and
+brief error paths, transport rejection branches and document/history error paths;
+exact locations remain in each campaign's `uncovered.txt` and `functions.log`.
+No required scenario failed or was skipped in final verification. No backend,
+database or Git publication was used. The skill-required final blank line in
+`cli/implementation-log.md` remains intentional.
+
+## 031 review fixes 03 — history exit reconciliation and portable timestamps
+
+Both findings are valid under 031-14/15/19 and 031-24. Esc/Ctrl+C now cancels
+the pending history mutation's HTTP/process work while retaining its revision
+and busy state until the result arrives. The application then refreshes the
+originating owner using reads only, retaining committed feedback and selection.
+Read/print-only history operations still cancel immediately. Timestamp
+assertions in the change list/detail rendering test use the active local
+timezone rather than assuming Zagreb summer time. HTTP contracts are unchanged.
+
+`Test031HistoryExitReconcilesPendingMutation` pauses activation and comment
+restoration at the write, retained-history read, active-selection read and
+printing boundaries, with both exit keys. It verifies committed feedback,
+owner refresh, failed-refresh/read-only retry, no duplicate Space write and
+rejection of duplicate results. `Test031OwnerHistoryExitDrainsQueuedMutationResult`
+checks the `/documents` return path with a result queued behind the exit key.
+The existing complete-program document/comment scenario now cancels a pending
+history read after each successful mutation and verifies returned committed
+feedback and the refreshed delete target.
+
+| Command | Exit | Evidence |
+| --- | ---: | --- |
+| Baseline `make -C cli check` | 0 | `/tmp/031-review03-baseline-check.log`; clean baseline in the host timezone. |
+| Baseline `TZ=UTC go test -count=1 ./internal/app -run '^TestChangesCommandLoadsAndRendersBackendRows$'` (CLI cwd) | 1 | Both reported assertions fail: rendered `10:45`, expected `12:45`. |
+| Initial history regression before production fixes | 1 | `/tmp/031-review03-history-repro.log`; committed feedback is lost for both mutation kinds. Two spec/print cases also timed out because the initial fake activation failed to clear deletion metadata; that fixture was repaired before final verification. |
+| `make -C cli format` | 0 | `/tmp/031-review03-format.log`; only intended source/test edits. |
+| `TZ=UTC go test -count=1 -race ./internal/app ./internal/documents` (CLI cwd) | 0 | `/tmp/031-review03-utc-focused.log`; complete app/document suites, including new regressions. |
+| `TZ=Europe/Zagreb go test -count=1 ./internal/app -run '^TestChangesCommandLoadsAndRendersBackendRows$'` (CLI cwd) | 0 | `/tmp/031-review03-zagreb.log`; list/detail assertions also pass in Zagreb. |
+| `go test -count=1 -race -timeout=60s ./integration -run '^TestCLIProgram031DocumentCommentsAndHistory$'` (CLI cwd) | 0 | `/tmp/031-review03-program-focused.log`; keyboard-driven pending-read cancellation passes for both mutations. |
+| Final `make -C cli check` | 0 | `/tmp/031-review03-check.log`; format, lint, vet, race, architecture and tooling pass. |
+| `make -C cli coverage` | 0 | `/tmp/031-review03-unit.log`; **5546/6386 (86.8462%)**, 80% integer gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/031-review03-deps.log`; no vulnerabilities. |
+| `make -C cli integration-coverage` | 0 | `/tmp/031-review03-integration.log`; **4917/6386 (76.9966%)**, 70% integer gate passes. |
+
+Both independent campaigns report complete and exit 0. All 34 program scenarios,
+including the covered standalone startup child, and the real PTY scenario pass
+without skips, missing counters, assertion failures or cleanup failures.
+The tested base revision is `51f42539c6366613d3c994027fe83248819e1bc4`, plus
+the recorded worktree diff. Both campaigns hash the same 77 production files;
+the sorted compact JSON source mapping has SHA-256
+`901cbabee6bd1a8728eb2dce1e8112a99373b8448b25d7abf3ba90757e21e991`.
+The terminal child binary SHA-256 is
+`cba66a536c72f058e7a80054ee1aa1b74b9b46d9003c940dd0d625d4161d0814`.
+Go is `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1 and govulncheck 1.7.0.
+Profiles, exact package totals, source provenance, commands/exits and uncovered
+statements/functions remain under `cli/.coverage/{unit,integration}`.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2516/3045 | 2329/3045 |
+| `cli/internal/changes` | 862/989 | 742/989 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 493/516 | 408/516 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 8/8 | 8/8 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining gaps include the main unit boundary, navigation fallbacks, agent/brief
+error paths, transport rejection branches and document/history failures; exact
+locations remain in each campaign's `uncovered.txt` and `functions.log`.
+All campaign inputs matched their recorded hashes before these final checkpoint
+and implementation-log writes. Production, tests, tooling and the assertion
+ledger have not changed since verification. No backend, database or Git
+publication was used. The implementation log's final blank line is intentional.
+
+## 031 review fixes 04 — owner history feedback, confirmation filtering and Docker bat
+
+All three findings are valid under 031-09/14/18/19 and the documented Docker
+verification contract. Returning from `/documents` history now carries the
+committed activation outcome into the owner model. Pending, failed, cancelled
+and successful refreshes retain that outcome; `/retry` performs reads only.
+New owner/operation feedback replaces the previous outcome. The document delete
+confirmation renders the same filtered options used for selection. Docker
+`test_version` installs Python and Debian's bat package and supplies the `bat`
+executable name through its `batcat` alias. HTTP contracts are unchanged.
+
+Regressions: `Test031OwnerHistoryCommitSurvivesRefreshFailure` covers both exit
+keys, visible feedback, repeated refresh failure, recovery, restored selection
+and exactly one activation. `Test031OwnerHistoryCommitRefreshCancellationAndScopeReset`
+covers cancellation and new-owner/insert isolation.
+`Test031DocumentConfirmationFilterMatchesRenderedSelection` covers yes/no and
+unmatched filtering with exact deletion effects. The isolated
+`test_docker_provisions_bat_before_check` executes the real container recipe
+against a Debian-style batcat installation before permitting `make init check`.
+
+| Command | Exit | Evidence |
+| --- | ---: | --- |
+| Pre-fix focused app regressions | 1 | `/tmp/031-review04-repro.log`; lost commit feedback and mismatched rendered options reproduced. |
+| Pre-fix `python3 -B -m unittest discover -s scripts -p makefile_test.py` (CLI cwd) | 1 | `/tmp/031-review04-tooling-repro.log`; Docker recipe installs Python without bat. |
+| `make -C cli format` | 0 | `/tmp/031-review04-format.log`; only intended changes. |
+| `go test -count=1 -race ./internal/app ./internal/documents ./pkg/documentprocess` (CLI cwd) | 0 | `/tmp/031-review04-focused.log`; complete focused suites pass. |
+| `make -C cli tooling-test` | 0 | `/tmp/031-review04-tooling.log`; 37 Python tests plus architecture fixtures and PTY harness tests pass. |
+| `make -C cli check` | 0 | `/tmp/031-review04-check.log`; formatting, lint, vet, race, architecture and tooling pass. |
+| `make -C cli coverage` | 0 | `/tmp/031-review04-unit.log`; **5558/6398 (86.8709%)**, 80% integer gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/031-review04-deps.log`; no vulnerabilities. |
+| `make -C cli integration-coverage` | 0 | `/tmp/031-review04-integration.log`; **4923/6398 (76.9459%)**, 70% integer gate passes. |
+| `make -C cli test_version` | 2 | `/tmp/031-review04-docker.log`; bat installation succeeds, but the bind-mounted Makefile is unreadable. |
+| Exact `test_version` image/shell recipe with a tar-copied checkout | 0 | `/tmp/031-review04-docker-copy.log`; stock `golang:1.26.0`, pinned tooling, full check and the real bat test pass. |
+| `python3 -B -m unittest discover -s cli/scripts -p documentation_test.py` | 0 | `/tmp/031-review04-docs.log`; final command/link and route-ledger checks pass. |
+
+The direct Docker target remains blocked by this host's bind-mount permissions:
+a separate stock-image probe cannot read `/project/cli/Makefile` even as container
+root (`/tmp/031-review04-docker-mount.log`). Docker enables SELinux, and the
+checkout has `user_home_t` labels; this evidence points to an existing host
+labeling restriction. The copied-checkout verification uses the exact target's
+image and shell recipe without relabeling source or changing container security.
+It includes the tracked repository files and a temporary empty Git repository
+for tooling's ignore-rule check. It does not establish that the bind-mounted
+target passes on this host. The disposable container was removed on exit.
+
+Both independent host coverage campaigns report complete and exit 0. All 34
+program scenarios (including covered startup) and the real PTY scenario pass
+without skips, missing counters or cleanup failures. Tested base revision:
+`8493d27eee2f97f9b7b0415d4b7be96b89fe6528`, plus the recorded worktree diff.
+Both campaigns hash the same 77 production files; the sorted compact JSON source
+mapping has SHA-256
+`ddcde65705e56828f99b6b70371e4b15074cee0165315c09e45c3135a65ac390`.
+Terminal child binary SHA-256:
+`80a85c616f01a1330d4314a0236258b80ffdd1c5ed03925ce1d30ef38d62c065`.
+Host Go is `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1 and govulncheck 1.7.0.
+Raw profiles, provenance, command exits and exact uncovered statements/functions
+remain under `cli/.coverage/{unit,integration}`.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2518/3047 | 2329/3047 |
+| `cli/internal/changes` | 862/989 | 742/989 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 503/526 | 414/526 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 8/8 | 8/8 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining gaps include the main unit boundary, navigation fallbacks, agent/brief
+error paths, transport rejection branches and document/history failures; see the
+campaigns' `uncovered.txt` and `functions.log`. Campaign input hashes matched
+before these checkpoint/log writes; production, tests and tooling remain the
+verified sources. No backend/database use, Git commit/push or deployment occurred.
+Next action: caller review/publication; Docker bind-mount labeling remains a host
+verification limitation. The implementation log's final blank line is intentional.
+
+## 031 review fixes 05 — lossless comment recovery and history detail reload
+
+Both findings are valid under 031-12/14/19. Comment editing now saves the full
+raw body in `editorDraft` before launching the external editor. Editor startup
+failure leaves tabs and CRLF intact for Enter submission and Ctrl+E retry.
+History records when it cancels an in-flight change/details read and starts a
+fresh full detail read on return, including after history activation. Successful
+reload restores editing, testcase readiness and the originating selection;
+failed reload remains visible and permits read-only retry. Committed activation
+feedback survives pending, failed and successful reads. Canceled results remain
+stale. Navigation away clears the pending reload attribution. HTTP contracts and
+feature boundaries are unchanged.
+
+Regressions in `cli/internal/app/docs_review_fixes_test.go`:
+`Test031CommentEditorFailureRetainsRawDraft` covers failed startup, exact retry
+files, same-ID Enter update and independent comment preservation.
+`Test031HistoryReturnRestartsCanceledDetailRead` covers Esc/Ctrl+C, successful
+and failed reload, retry, selection, late results, and Enter/Delete/Space access.
+`Test031HistoryActivationRejectsPendingDetailSnapshot` now also proves detail
+readiness and retained activation feedback after canceling a real pending read.
+`Test031HistoryDetailReloadRetainsCommittedActivation` proves the committed
+outcome survives failure and retry without repeating activation.
+
+| Command | Exit | Evidence |
+| --- | ---: | --- |
+| Pre-fix focused regressions (CLI cwd) | 1 | `/tmp/031-review05-repro.log`; both findings reproduced, including return after activation. |
+| `make -C cli format` | 0 | `/tmp/031-review05-format.log`; only intended source changes. |
+| `go test -count=1 -race ./internal/app ./internal/documents ./pkg/documentprocess` (CLI cwd) | 0 | `/tmp/031-review05-focused.log`; complete focused suites on final source. |
+| `make -C cli check` | 0 | `/tmp/031-review05-check.log`; formatting, lint, vet, race, architecture and tooling pass. |
+| `make -C cli coverage` | 0 | `/tmp/031-review05-unit.log`; **5581/6420 (86.9315%)**, 80% integer gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/031-review05-deps.log`; no vulnerabilities. |
+| `make -C cli integration-coverage` | 0 | `/tmp/031-review05-integration.log`; **4931/6420 (76.8069%)**, 70% integer gate passes. |
+| `python3 -B -m unittest discover -s cli/scripts -p documentation_test.py` | 0 | `/tmp/031-review05-docs.log`; command/link and route-ledger checks pass. |
+
+During editing, one focused run failed compilation after a local predicate was
+placed in the wrong result handler, and one targeted run failed an incorrect
+expected activation-status string. Both were corrected before the final focused
+race suites and required checks above. Initial passing check/unit measurements
+were superseded by the final campaigns after adding committed-feedback coverage.
+No failed or superseded run is used for these final coverage claims.
+
+Both independent campaigns report complete and exit 0. All 34 selected program
+scenarios (including covered standalone startup) and the real PTY scenario pass
+without skips, missing counters, timeouts or cleanup failures. Tested base:
+`aca8bead4feed87a84adf3752bffaa1f010ca9aa`, plus the recorded worktree diff.
+Both campaigns hash the same 77 production files; the sorted compact JSON source
+mapping SHA-256 is `fd271cd0bf79299f4b4afca282929cd5c765a4b35071a44c86d0f835a36b1160`.
+Terminal child binary SHA-256: `6aa2c17f8d5553fdaa61aff83d45816d2f6dbbbdaccc57896069a4f588e557ba`.
+Host tools: Go `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0.
+Raw independent profiles, command exits, scenarios, source provenance and exact
+uncovered statements/functions remain in `cli/.coverage/{unit,integration}`.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2541/3069 | 2337/3069 |
+| `cli/internal/changes` | 862/989 | 742/989 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 503/526 | 414/526 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 8/8 | 8/8 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining gaps include the main unit boundary, navigation fallbacks, agent/brief
+error paths, transport rejection branches and document/history failures. Exact
+locations are in each campaign's `uncovered.txt` and `functions.log`.
+All recorded input hashes matched before these checkpoint/log writes;
+production, tests and tooling remain the verified sources. The prior Docker
+bind-mount limitation remains historical evidence; Docker was not rerun because
+this pass changes neither tooling nor toolchain compatibility. No backend or
+database access, Git publication or deployment occurred. The implementation log's
+final blank line is intentional.
+
+## 031 review fixes 06 — safe comment previews and stable history error selection
+
+Both findings are valid under 031-10/12/14/19. Comment previews now escape
+terminal controls before preview clipping through the existing document-screen
+escaping implementation, moved to shared `internal/ui`. The document helpers
+retain their behavior and exported contracts; feature import boundaries stay
+intact. OSC 52, CSI display/style sequences, C1 controls and format controls are
+shown as escaped text. Raw comment bodies, including tabs, CRLF and content
+beyond the preview, remain the exact external-editor seed and recovery draft.
+History now reconciles refreshed, sorted rows by selected ID before reading and
+validating the active set, retaining #8 when [9,8] becomes [10,9,8] even if that
+second read fails. Committed activation/undelete feedback and read-only retry
+remain intact. Backend HTTP contracts are unchanged.
+
+Regressions: `Test031CommentPreviewEscapesTerminalControls` proves escaped rows
+and final DetailsView output at narrow/wide widths, unchanged raw bodies and
+three-line previews. `Test031CommentControlEscapingRetainsRawEditorSeed` proves
+the shell's displayed preview is safe and the actual editor file/draft is exact.
+`Test031HistoryRetainsSelectionAfterPartialReadFailure` exercises spec/comment,
+refresh/activation and active-read/validation failures, retaining selected ID,
+avoiding printing on failed reads and avoiding mutation replay on retry.
+
+| Command | Exit | Evidence |
+| --- | ---: | --- |
+| Pre-fix `make -C cli check` | 0 | `/tmp/031-review06-baseline-check.log`; clean baseline. |
+| Pre-fix targeted regressions (CLI cwd) | 1 | `/tmp/031-review06-repro.log`; controls remain raw and all eight history cases select #9 instead of #8. |
+| `make -C cli format` | 0 | `/tmp/031-review06-format.log`; intended files only. |
+| `go test -count=1 -race ./internal/changes ./internal/documents ./internal/app ./internal/ui` (CLI cwd) | 0 | `/tmp/031-review06-focused.log`; final focused suites pass. |
+| `make -C cli check` | 0 | `/tmp/031-review06-check.log`; format, lint, vet, unit race, architecture and tooling checks pass. |
+| `make -C cli coverage` | 0 | `/tmp/031-review06-coverage.log`; **5581/6420 (86.9315%)**, 80% integer gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/031-review06-deps-audit.log`; no vulnerabilities. |
+| `make -C cli integration-coverage` | 0 | `/tmp/031-review06-integration-coverage.log`; **4931/6420 (76.8069%)**, 70% integer gate passes. |
+
+An initial focused run failed compilation because the new test treated
+`editorDraft` as a struct instead of a string pointer. The assertion was fixed
+before the final focused suites and required checks. No failed run establishes
+coverage. Final campaigns are complete, independent and exit 0; all 34 selected
+program scenarios (including covered startup) and the real PTY scenario pass
+without skips, missing counters, assertion failures, crashes, timeouts or cleanup
+failures. Source base: `acf0c620f8c3e5ddd5b950ba872919ef1b35e64a` plus worktree
+diff and the untracked shared helper, whose hash is recorded in both campaigns.
+All input hashes matched each other and the final source before checkpoint/log
+writes. The 78-file production mapping's sorted compact JSON SHA-256 is
+`86eaa19c7ab26e9b34de5ca65bc492a499b9b8b017e94a2eb0701fb0cef301d4`.
+Terminal child binary SHA-256:
+`b0730fcc54b958f7ab07f5553997104f38685dec0d7588b2296e30e5b5ba4195`.
+Tools: Go `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0.
+Raw profiles, commands/exits, scenarios, provenance, exact package counts and
+uncovered statements/functions remain in `cli/.coverage/{unit,integration}`.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2541/3069 | 2337/3069 |
+| `cli/internal/changes` | 862/989 | 742/989 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 490/513 | 405/513 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 21/21 | 17/21 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining gaps include the main unit boundary, navigation fallbacks, agent/brief
+error paths, HTTP rejection branches and document/history failures; exact
+locations are in each campaign's `uncovered.txt` and `functions.log`. Moving
+escaping to `ui` moves its 13 statements from documents into the shared package;
+the production denominator and aggregate covered counts are unchanged.
+No backend/database access, Git publication or deployment occurred. Docker was
+not rerun because tooling and toolchain compatibility are unchanged.
+Documentation command/link checks also pass:
+`python3 -B -m unittest discover -s cli/scripts -p documentation_test.py`
+exits 0 (`/tmp/031-review06-docs.log`). Final diff has no whitespace errors.
+
+## 031 review fixes 08 — expand history tabs before clipping
+
+The P2 finding is valid under 031-14: ANSI width measurement treats tabs as
+zero-width, while the root Lip Gloss surface expands each to four spaces.
+History now performs that expansion on sanitized display lines before clipping.
+Stored document/comment bodies, captured bat output and syntax SGR colors remain
+intact. No HTTP or process contract changes.
+
+`Test031HistoryExpandsTabsBeforeClipping` covers the reported width-20 case,
+leading/repeated tabs, clipping within tab spaces, Unicode cell widths, SGR
+changes and inherited colors after scrolling. The root-model regression
+`Test031HistoryTabsKeepFooterWithinTerminal` opens both document and comment
+history with keyboard input, resizes to widths 20/40/80 and pages both ways,
+asserting the viewport/footer fit within 24 terminal rows and raw bodies/output
+remain intact. Existing bat color, version-navigation and PTY checks are retained.
+
+| Command | Exit | Evidence |
+| --- | ---: | --- |
+| Pre-fix targeted new regressions (CLI cwd) | 1 | `/tmp/031-review08-repro.log`; all five tab cases fail and both root views render 32 rows in a 24-row terminal. |
+| `make -C cli format` | 0 | `/tmp/031-review08-format.log`; intended files only. |
+| `go test -count=1 -race ./internal/documents ./internal/app` (CLI cwd) | 0 | `/tmp/031-review08-focused.log`; final focused suites pass. |
+| `make -C cli check` | 0 | `/tmp/031-review08-check.log`; formatting, lint, vet, unit race, architecture and tooling checks pass. |
+| `make -C cli coverage` | 0 | `/tmp/031-review08-coverage.log`; **5595/6435 (86.9464%)**, 80% integer gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/031-review08-deps-audit.log`; no vulnerabilities. |
+| `make -C cli integration-coverage` | 0 | `/tmp/031-review08-integration-coverage.log`; **4944/6435 (76.8298%)**, 70% integer gate passes. |
+| `python3 -B -m unittest discover -s cli/scripts -p documentation_test.py` | 0 | `/tmp/031-review08-docs.log`; documented commands and links pass after evidence updates. |
+
+The first post-fix focused run exited 1 because Lip Gloss's GetTabWidth returns
+zero for an unset style despite its documented default; the replacement now
+uses the verified four-space rendering default. Final tests and campaigns ran
+on the corrected source. Both independent campaigns are complete and exit 0;
+all 34 selected program scenarios (including covered startup) and the real PTY
+scenario pass with no skips, missing counters or cleanup failures.
+
+Tested source: `2e566dcde9eadf6e3f7b74163b0d92c323acc9bc` plus the worktree diff
+captured in both provenance files. All campaign input hashes matched each other
+and current files before this checkpoint and implementation-log write. The sorted
+compact input-hash mapping SHA-256 is
+`375fb991bbf95f05b26cfefa9c35caa864fc4e93c8f9876fbd01786db338f4fb`.
+The terminal child binary SHA-256 is
+`9a6fd24f35b5ba373c118650c655ccfe521a24661b68cf2dd4d44d3629aeb111`.
+Tools: Go `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0.
+Fresh profiles, command exits, scenario inventory, provenance, package counts and
+uncovered statements/functions are in `cli/.coverage/{unit,integration}`.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2542/3069 | 2337/3069 |
+| `cli/internal/changes` | 862/989 | 742/989 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 503/528 | 418/528 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 21/21 | 17/21 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining coverage gaps include main, navigation fallbacks, agent/brief failures,
+HTTP rejection branches and history/document failure paths; exact locations remain
+in each campaign's `uncovered.txt` and `functions.log`. The new display statement
+is covered by both campaigns. Backend and Docker checks are outside this fix's
+scope; no backend source, tools or toolchain compatibility changed. No baseline
+check failures or blockers remain. Next action: caller review/publication.
+
+## 031 review fixes 09 — omit unverified document-slot timestamps
+
+The P2 finding is valid under 031-07 and 031-19. Document insertion returns
+only the new ID. The optimistic row now clears the previous version's UpdatedAt
+and renders its checked slot without a date until a successful detail read
+supplies the saved version's timestamp. New slots also omit their zero timestamp.
+The committed ID/body and read-only retry feedback remain available. Successful
+reads retain the specified local timestamp format. No HTTP contract changed.
+
+`Test031DocumentSlotTimestampUnavailableUntilRefresh` covers both new and
+existing slots when the optional type update, change detail read, document read,
+or testcase read fails after insertion. It proves the new ID/body survive,
+prior captured metadata remains untouched, a failed retry keeps the date absent,
+and successful recovery displays the backend timestamp without another write.
+All eight cases failed before the fix (year 0001 or the previous timestamp).
+Existing slot rendering, timestamp/timezone and shell tests remain retained.
+
+| Command | Exit | Evidence |
+| --- | ---: | --- |
+| `go test -count=1 ./internal/changes -run '^Test031DocumentSlotTimestampUnavailableUntilRefresh$'` (CLI cwd, before fix) | 1 | `/tmp/031-review09-repro.log`; all eight cases reproduce the defect. |
+| `make -C cli format` | 0 | `/tmp/031-review09-format.log`; intended files only. |
+| `go test -count=1 -race ./internal/changes ./internal/app` (CLI cwd) | 0 | `/tmp/031-review09-focused.log`. |
+| `make -C cli check` | 0 | `/tmp/031-review09-check.log`; formatting, lint, vet, unit race, architecture and tooling pass. |
+| `make -C cli coverage` | 0 | `/tmp/031-review09-coverage.log`; **5601/6438 (86.9991%)**, 80% integer gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/031-review09-deps-audit.log`; no vulnerabilities. |
+| `make -C cli integration-coverage` | 0 | `/tmp/031-review09-integration-coverage.log`; **4947/6438 (76.8406%)**, 70% integer gate passes. |
+| `python3 -B -m unittest discover -s cli/scripts -p documentation_test.py` | 0 | `/tmp/031-review09-docs.log`; commands and links pass after evidence updates. |
+
+Both independent campaigns completed with all 34 selected program scenarios
+(including the covered startup child) and the real PTY scenario passing; no skips,
+missing counters, assertion failures, timeouts or cleanup failures occurred.
+Tested source: `03b7d7bbc17594dc77d3174f4eb97db90d4f4b61` plus the three-file
+source/test diff captured by both provenance files. All input hashes matched
+between campaigns and current files before the checkpoint/log write. The sorted
+compact input-hash mapping SHA-256 is
+`a92f7b39ceea64da32f1f41e9faa2bb01a5c6f4fa639ca13e9456ac06c113eae`.
+Terminal child binary SHA-256: `a89c22dd0f813d6d619ddb826ae51de9e5ec7b37f819b8f9ccfed346768ba528`.
+Tools: Go `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0.
+Fresh profiles, command exits, scenario inventory, package counts and uncovered
+statements/functions are in `cli/.coverage/{unit,integration}`.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2542/3069 | 2337/3069 |
+| `cli/internal/changes` | 868/992 | 745/992 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 503/528 | 418/528 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 21/21 | 17/21 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining gaps include main, navigation fallbacks, agent/brief failures, HTTP
+rejection branches and history/document failure paths; exact locations remain
+in each campaign's `uncovered.txt` and `functions.log`. No baseline failures or
+blockers remain. Backend and Docker validation are outside this CLI fix's scope;
+no backend code or toolchain changed. No Git publication or deployment occurred.
+Next action: caller review/publication.
+
+## 031 review fixes 10 — inactive activation refresh recovery (2026-10-03)
+
+Validated the P2 finding against 031-16/19: activation committed successfully,
+but failed inactive-list refresh feedback was replaced by the Main-screen
+workaround and `/retry` was rejected. The new unit regression reproduced that
+feedback failure before the fix (exit 1).
+
+Command discovery and validation now include `/retry` when browsing inactive
+changes. The footer advertises it, and failed reads retain committed activation
+feedback and read-only recovery guidance. Retry uses the existing inactive-aware
+List operation without repeating UpdateChangeActive. The ordinary active-list
+menu and Main-screen reload contract remain unchanged; the architecture now
+records the inactive-list exception. No HTTP contract changed.
+
+`Test031InactiveActivationRefreshReadOnlyRetry` covers typed and dropdown retry,
+a second failed read, successful recovery, project scope, retained filters,
+exactly one activation, no active-list read during retry, and removal of the
+command after returning to active changes. The existing manifest scenario
+`TestCLIProgram031InactiveChangesAndEpicSelection` now injects two inactive-read
+failures and verifies keyboard recovery and exact write/read counts against an
+owned fake HTTP server. Its existing active-list return and epic assertions remain.
+
+| Command actually run | Exit | Evidence |
+| --- | ---: | --- |
+| `go test -count=1 ./internal/app -run '^Test031InactiveActivationRefreshReadOnlyRetry$'` (CLI cwd, before fix) | 1 | Both cases reproduce missing read-only recovery guidance. |
+| `make -C cli format` | 0 | `/tmp/031-review10-format.log`; intended Go files only. |
+| `go test -count=1 -race ./internal/changes ./internal/app` (CLI cwd) | 0 | Initial fixed implementation passes; final source rerun by `check`. |
+| `go test -count=1 ./internal/changes ./internal/app` (CLI cwd) | 0 | `/tmp/031-review10-focused.log`; final focused tests pass. |
+| `go test -count=1 ./integration -run '^TestCLIProgram031InactiveChangesAndEpicSelection$'` (CLI cwd) | 0 | `/tmp/031-review10-program.log`; final scenario rerun by campaign. |
+| `make -C cli check` | 0 | `/tmp/031-review10-check.log`; formatting, lint, vet, unit race, architecture and tooling pass. |
+| `make -C cli coverage` | 0 | `/tmp/031-review10-coverage.log`; **5611/6446 (87.0462%)**, 80% gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/031-review10-deps-audit.log`; no vulnerabilities. |
+| `make -C cli integration-coverage` | 0 | `/tmp/031-review10-integration-coverage.log`; **4958/6446 (76.9159%)**, 70% gate passes. |
+| `python3 -B -m unittest discover -s cli/scripts -p documentation_test.py` | 0 | `/tmp/031-review10-docs.log`; documentation commands and links pass after evidence updates. |
+
+Both independent campaigns complete with all 34 selected program scenarios,
+including the covered startup child, and the real PTY scenario passing. No skips,
+missing counters, assertion failures, crashes, timeouts or cleanup failures.
+Tested revision: `6fd9eb84c155744d2f9d31672819cbc7407bed60` plus the source/test
+changes captured in provenance. Both input hash maps match each other and the
+current files before these evidence/log updates. Their sorted compact mapping
+SHA-256 is `5a6b35383eb10d0c8180a2d02ef172fe663b3584f7564ee45baa82a6679d5080`.
+Terminal child binary SHA-256:
+`dc7dcb867a18fa6ac7b6894471fdb3e9d6ba43c0ff298204312593a14c26a8be`.
+Tools: Go `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0.
+Raw profiles, command exits, scenarios and uncovered statements/functions remain
+under `cli/.coverage/{unit,integration}`.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 297/357 | 270/357 |
+| `cli/internal/app` | 2552/3077 | 2346/3077 |
+| `cli/internal/changes` | 868/992 | 747/992 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 503/528 | 418/528 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 25/40 | 19/40 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 130/132 | 112/132 |
+| `cli/internal/ui` | 21/21 | 17/21 |
+| `cli/pkg/briefprocess` | 128/161 | 84/161 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining uncovered behavior includes main, navigation fallbacks, agent/process
+failure paths and HTTP rejection branches; exact locations are in each campaign's
+`uncovered.txt` and `functions.log`. No baseline failures or blockers remain.
+No backend source or toolchain changed; backend/Docker checks are outside scope.
+No Git publication or deployment occurred. Next action: caller review/publication.

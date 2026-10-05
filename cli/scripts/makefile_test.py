@@ -109,6 +109,36 @@ if name==os.environ.get('FAIL_TOOL'): sys.exit(31)
             self.assertNotIn('-it',args)
             self.assertNotIn('-t',args)
 
+    def test_docker_provisions_bat_before_check(self):
+        self.assertEqual(self.make('test_version').returncode,0)
+        recipe=self.calls()[-1][-1]
+        # Run the actual container shell recipe with an isolated PATH. Debian's
+        # bat package exposes batcat; the check needs an executable named bat.
+        stub='''#!/usr/bin/python3
+import json, os, pathlib, sys
+name=pathlib.Path(sys.argv[0]).name
+args=sys.argv[1:]
+with open(os.environ['CALLS'], 'a') as f: f.write(json.dumps([name,*args])+'\\n')
+root=pathlib.Path(sys.argv[0]).parent
+if name=='apt-get' and args[0]=='install':
+    assert 'python3' in args and 'bat' in args
+    (root/'batcat').symlink_to('/bin/true')
+if name=='ln':
+    assert args==['-s','/usr/bin/batcat','/usr/local/bin/bat']
+    (root/'bat').symlink_to(root/'batcat')
+if name=='make':
+    assert args==['init','check']
+    assert (root/'bat').exists(), 'check requires bat on PATH'
+'''
+        for name in ('apt-get','ln','go','make'):
+            path=self.root/'bin'/name; path.write_text(stub); path.chmod(0o700)
+        env=dict(self.env,PATH=str(self.root/'bin'))
+        result=subprocess.run(['/bin/sh','-eu','-c',recipe],env=env,text=True,
+                              stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+        self.assertEqual(result.returncode,0,result.stdout)
+        self.assertIn(['apt-get','install','-y','--no-install-recommends','python3','bat'],self.calls())
+        self.assertEqual(self.calls()[-1],['make','init','check'])
+
     def test_check_runs_unit_once_and_no_program_or_pty_campaign(self):
         # Python discovery is empty in this fixture; Go tooling/checker fixtures
         # still run through actual recipes and all calls can be audited.

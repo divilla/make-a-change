@@ -22,6 +22,7 @@ type Operation string
 // Supported operations; Retry always schedules List or Details.
 const (
 	List        Operation = "list"
+	Reactivate  Operation = "reactivate"
 	Details     Operation = "details"
 	Create      Operation = "create"
 	Delete      Operation = "delete"
@@ -31,7 +32,7 @@ const (
 	Types       Operation = "types"
 	Epic        Operation = "epic"
 	AfterChange Operation = "after-change"
-	Open        Operation = "open"
+	Active      Operation = "active"
 	PRURL       Operation = "pr-url"
 	Document    Operation = "document"
 )
@@ -41,7 +42,7 @@ type Input struct {
 	Value        string
 	Types        []string
 	Association  *int
-	Open         bool
+	Active       bool
 	Title        string
 	UUID         string
 	DocumentType string
@@ -114,12 +115,16 @@ func (m Model) Begin(ctx context.Context, api API, docs Documents, op Operation,
 	prior := m.Detail
 	prior.Documents = append([]dto.Document(nil), m.Detail.Documents...)
 	priorRows := append([]dto.ChangeView(nil), m.Rows...)
+	readList := readRows
+	if m.Inactive {
+		readList = readInactiveRows
+	}
 	return m, func() tea.Msg {
 		defer cancel()
 		r := Result{Generation: generation, ProjectID: project, ID: id, Operation: op, Detail: prior}
 		switch op {
 		case List:
-			r.Rows, r.Err = readRows(ctx, api, project)
+			r.Rows, r.Err = readList(ctx, api, project)
 			return r
 		case Details:
 			r.Detail, r.Err = readDetail(ctx, api, docs, project, id)
@@ -139,6 +144,13 @@ func (m Model) Begin(ctx context.Context, api API, docs Documents, op Operation,
 					r.Steps = append(r.Steps, "saved types "+strings.Join(types, "|"))
 				}
 			}
+		case Reactivate:
+			r.Err = api.UpdateChangeActive(ctx, id, true)
+			if r.Err == nil {
+				r.Steps = []string{fmt.Sprintf("activated change #%d", id)}
+				r.Rows, r.RefreshErr = readInactiveRows(ctx, api, project)
+			}
+			return r
 		case Delete:
 			r.Err = api.DeleteChange(ctx, id)
 		case Title:
@@ -163,9 +175,9 @@ func (m Model) Begin(ctx context.Context, api API, docs Documents, op Operation,
 			r.Err = api.UpdateChangeAfterChange(ctx, id, in.Association)
 			r.Detail.AfterChangeID = optionalInt(in.Association)
 			r.Detail.AfterChangeName = "null"
-		case Open:
-			r.Err = api.UpdateChangeOpen(ctx, id, in.Open)
-			r.Detail.Open = in.Open
+		case Active:
+			r.Err = api.UpdateChangeActive(ctx, id, in.Active)
+			r.Detail.Active = in.Active
 		case PRURL:
 			r.Err = api.UpdateChangePRUrl(ctx, id, in.Value)
 			r.Detail.PRUrl = in.Value
@@ -179,11 +191,13 @@ func (m Model) Begin(ctx context.Context, api API, docs Documents, op Operation,
 					if r.Detail.Documents[i].DocType == in.DocumentType {
 						r.Detail.Documents[i].Body = in.Value
 						r.Detail.Documents[i].ID = docID
+						// Insert returns only an ID; the new version's timestamp needs a read.
+						r.Detail.Documents[i].UpdatedAt = time.Time{}
 						found = true
 					}
 				}
 				if !found {
-					r.Detail.Documents = append(r.Detail.Documents, dto.Document{ID: docID, RefID: id, RefTable: "change", DocType: in.DocumentType, Body: in.Value, Current: true})
+					r.Detail.Documents = append(r.Detail.Documents, dto.Document{ID: docID, RefID: id, RefTable: "change", DocType: in.DocumentType, Body: in.Value})
 				}
 				switch in.DocumentType {
 				case "brief":
@@ -212,7 +226,7 @@ func (m Model) Begin(ctx context.Context, api API, docs Documents, op Operation,
 			r.Steps = append(r.Steps, completedStep(op, id, in))
 		}
 		if op == Delete {
-			r.Rows, r.RefreshErr = readRows(ctx, api, project)
+			r.Rows, r.RefreshErr = readList(ctx, api, project)
 			if r.RefreshErr != nil {
 				for _, v := range priorRows {
 					if v.ID != strconv.Itoa(id) {
@@ -241,8 +255,8 @@ func completedStep(op Operation, id int, in Input) string {
 		value = fmt.Sprint(in.Types)
 	case Epic, AfterChange:
 		value = optionalInt(in.Association)
-	case Open:
-		value = strconv.FormatBool(in.Open)
+	case Active:
+		value = strconv.FormatBool(in.Active)
 	}
 	// Bound feedback after escaping control characters; Detail retains the full value.
 	quoted := ansi.Truncate(strconv.Quote(value), 42, "…\"")
@@ -301,7 +315,7 @@ func validate(op Operation, project, id int, in Input, catalog dto.ProjectConfig
 		if !slices.Contains(catalog.ChangeDocs, in.DocumentType) {
 			return fmt.Errorf("change document type %q is not configured for this project", in.DocumentType)
 		}
-	case List, Details, Delete, Open:
+	case List, Details, Delete, Active, Reactivate:
 	default:
 		return errors.New("unsupported change operation")
 	}
@@ -386,6 +400,8 @@ func (m Model) Apply(r Result) (Model, bool) {
 		if len(r.Rows) == 0 {
 			m.Status = "no changes"
 		}
+	case Reactivate:
+		m = m.WithRows(r.Rows)
 	case Delete:
 		m = m.WithRows(r.Rows)
 		m.Detail = dto.ChangeView{}
@@ -403,7 +419,7 @@ func (m Model) Apply(r Result) (Model, bool) {
 		m.Err = r.RefreshErr
 		m.Outcome = m.Status
 		m.refreshOp, m.refreshID = Details, r.ID
-		if r.Operation == Delete {
+		if r.Operation == Delete || r.Operation == Reactivate {
 			m.refreshOp, m.refreshID = List, 0
 		}
 		m.Status += "; remaining step failed — /retry reads only"
@@ -436,7 +452,13 @@ func readDetail(ctx context.Context, api API, docs Documents, project, id int) (
 	if err != nil {
 		return view, err
 	}
-	view.Documents = rows
+	for _, d := range rows {
+		if d.DocType == "comment" {
+			view.Comments = append(view.Comments, d)
+		} else {
+			view.Documents = append(view.Documents, d)
+		}
+	}
 	for _, d := range rows {
 		switch d.DocType {
 		case "brief":
@@ -453,7 +475,7 @@ func readDetail(ctx context.Context, api API, docs Documents, project, id int) (
 
 // Present formats persisted identity and server completion without deriving either.
 func Present(c dto.Change) dto.ChangeView {
-	v := dto.ChangeView{ID: strconv.Itoa(c.ID), ProjectID: strconv.Itoa(c.ProjectID), RefUUID: c.RefUUID, Ref: "null", RefSlug: "null", EpicID: optionalInt(c.EpicID), EpicName: "null", AfterChangeID: optionalInt(c.AfterChangeID), AfterChangeName: "null", Title: c.Title, ChangePhase: c.ChangePhase, ChangeTypes: append([]string(nil), c.ChangeTypes...), Open: c.Open, Done: c.DoneTC, Total: c.TotalTC, Completed: c.Completed, PRUrl: c.PRUrl, Created: c.CreatedAt.Format(time.RFC3339Nano), Modified: c.UpdatedAt.Format(time.RFC3339Nano)}
+	v := dto.ChangeView{ID: strconv.Itoa(c.ID), ProjectID: strconv.Itoa(c.ProjectID), RefUUID: c.RefUUID, Ref: "null", RefSlug: "null", EpicID: optionalInt(c.EpicID), EpicName: "null", AfterChangeID: optionalInt(c.AfterChangeID), AfterChangeName: "null", Title: c.Title, ChangePhase: c.ChangePhase, ChangeTypes: append([]string(nil), c.ChangeTypes...), Active: c.Active, Done: c.DoneTC, Total: c.TotalTC, Completed: c.Completed, PRUrl: c.PRUrl, Created: c.CreatedAt.Format(time.RFC3339Nano), Modified: c.UpdatedAt.Format(time.RFC3339Nano)}
 	if c.RefSlug != nil {
 		v.RefSlug = *c.RefSlug
 		if ref, _, ok := strings.Cut(*c.RefSlug, "-"); ok {
@@ -498,4 +520,19 @@ func AssociationInput(value string) (*int, error) {
 		return nil, errors.New("prerequisite must be a positive change ID or null")
 	}
 	return &id, nil
+}
+
+func readInactiveRows(ctx context.Context, api API, project int) ([]dto.ChangeView, error) {
+	rows, err := api.ListInactiveChanges(ctx, project)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]dto.ChangeView, 0, len(rows))
+	for _, r := range rows {
+		if r.ProjectID != project {
+			return nil, errors.New("inactive change belongs to another project")
+		}
+		out = append(out, Present(r))
+	}
+	return out, nil
 }

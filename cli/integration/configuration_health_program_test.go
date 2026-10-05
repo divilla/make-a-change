@@ -21,6 +21,8 @@ func TestCLIProgramHealthRoutesAndDegradedStatus(t *testing.T) {
 		calls = append(calls, r.Method+" "+r.URL.Path)
 		mu.Unlock()
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/config":
 			writeProgramJSON(w, programProjectConfig())
 		case "/api/v1/project/details":
@@ -94,6 +96,8 @@ func TestCLIProgramConfigurationCRUDAndCatalogRefresh(t *testing.T) {
 		defer mu.Unlock()
 		calls[r.URL.Path]++
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/config":
 			writeProgramJSON(w, rows["program"])
 		case "/api/v1/project/details":
@@ -202,6 +206,8 @@ func TestCLIProgramConfigurationSelectedProjectCatalogRefresh(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/details":
 			writeProgramJSON(w, programProject(7, "Program Project"))
 		case "/api/v1/project/config":
@@ -254,6 +260,8 @@ func TestCLIProgramConfigurationStaleResponseIsolation(t *testing.T) {
 	row := programProjectConfig()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/config":
 			writeProgramJSON(w, row)
 		case "/api/v1/project/details":

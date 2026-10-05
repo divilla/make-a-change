@@ -186,6 +186,17 @@ func (m Model) Apply(r Result) (Model, bool) {
 		m.Rows = r.Rows
 		m.Selected = 0
 		m.Status = "deleted project"
+		if r.RefreshErr != nil {
+			m.Status = "project delete committed"
+		}
+		for _, p := range r.Rows {
+			if r.RefreshErr == nil && p.ID == r.ID {
+				m.Status = "project delete committed; record retained"
+				if !p.Active {
+					m.Status = "project deactivated"
+				}
+			}
+		}
 	}
 	if r.RefreshErr != nil {
 		m.Err = r.RefreshErr

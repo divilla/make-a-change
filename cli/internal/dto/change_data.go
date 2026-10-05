@@ -13,7 +13,7 @@ type Change struct {
 	ChangePhase     string    `json:"change_phase"`
 	ChangeTypes     []string  `json:"change_types"`
 	Title           string    `json:"title"`
-	Open            bool      `json:"open"`
+	Active          bool      `json:"active"`
 	DoneTC          int64     `json:"done_tc"`
 	TotalTC         int64     `json:"total_tc"`
 	Completed       int64     `json:"completed"`
@@ -26,16 +26,16 @@ type Change struct {
 
 // Document is one version returned by the document API.
 type Document struct {
-	ID        int       `json:"id"`
-	RefID     int       `json:"ref_id"`
-	RefTable  string    `json:"ref_table"`
-	DocType   string    `json:"doc_type"`
-	Body      string    `json:"body"`
-	AgentEdit bool      `json:"agent_edit"`
-	Current   bool      `json:"current"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	HTML      string    `json:"html"`
+	ID        int        `json:"id"`
+	RefID     int        `json:"ref_id"`
+	RefTable  string     `json:"ref_table"`
+	DocType   string     `json:"doc_type"`
+	Body      string     `json:"body"`
+	AgentEdit bool       `json:"agent_edit"`
+	DeletedAt *time.Time `json:"deleted_at"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	HTML      string     `json:"html"`
 }
 
 // DocumentInput appends a version without changing earlier versions.

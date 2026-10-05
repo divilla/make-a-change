@@ -354,8 +354,9 @@ sub parse_review_options {
 			push @review_arguments, $argument;
 		}
 	}
-	unshift @review_arguments, '--model', 'gpt-6-sol' unless $has_model;
+	unshift @review_arguments, '--model', 'gpt-6.1-sol' unless $has_model;
 	push @review_arguments, codex_settings();
+	$review_base = 'origin/dev' if $review_base eq '';
 	return ($review_base, @review_arguments);
 }
 
@@ -374,8 +375,7 @@ sub main {
 	@arguments && $arguments[0] !~ /\A-/ or fail('usage: codex-review-loop.pl SPECIFICATION [review options]');
 	my $specification = shift @arguments;
 	-f $specification or fail("specification file not found: $specification");
-	my $fix_prompt = '$change-fix-findings ' . $specification
-		. ' Do not commit or push; the caller handles commits.';
+	my $fix_prompt = '$change-fix-findings ' . $specification;
 
 	my $temp_root = select_temp_root($repo_root_physical);
 	defined $temp_root or fail('cannot find a writable temporary directory outside the repository');
@@ -397,11 +397,6 @@ sub main {
 	}
 
 	my ($review_base, @review_arguments) = parse_review_options(@arguments);
-	if ($review_base eq '') {
-		($review_base, $status) = capture_command(1, 'git', 'symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD');
-		$review_base =~ s/\s+\z//;
-		$status == 0 && $review_base ne '' or fail("cannot resolve origin's default branch; supply --base explicitly");
-	}
 
 	my ($review_base_commit, $resolve_status) = capture_command(1, 'git', 'rev-parse', '--verify', '--end-of-options', "$review_base^{commit}");
 	$review_base_commit =~ s/\s+\z//;
@@ -445,7 +440,7 @@ sub main {
 		unlink $fix_result_file;
 		printf "=== Fix findings %02d ===\n", $fix_number;
 		$status = run_codex(
-			$findings_file, 'codex', 'exec', '--json', '--model', 'gpt-6-sol',
+			$findings_file, 'codex', 'exec', '--json', '--model', 'gpt-6.1-sol',
 			codex_settings(), '-o', $fix_result_file, $fix_prompt,
 		);
 		exit $status if $status != 0;

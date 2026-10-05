@@ -261,7 +261,7 @@ order, followed by an `=== Implementation ===` heading and the rendered Codex
 command. In a color-capable terminal, labels remain white while repository,
 specification, and branch values are blue, magenta, and green respectively.
 
-The implementation runs as `codex exec --json` with `gpt-6-sol`, high reasoning,
+The implementation runs as `codex exec --json` with `gpt-6.1-sol`, high reasoning,
 and the standard (`default`) service tier set explicitly on its command line.
 It writes the final response with `-o <temporary-result>` and invokes
 `$change-code <specification>` with
@@ -283,11 +283,12 @@ scripts/codex-review-loop.pl agent/specs/010-executor-service.md
 
 The required first positional argument is the specification file. The script
 always reviews a branch range so every pass includes fixes committed by earlier
-passes. It uses the default remote branch from `origin/HEAD` unless
+passes. It uses `origin/dev` unless
 `--base BRANCH` is supplied; arguments after the specification are forwarded
 to Codex. Every review pass uses the native `codex exec review --base` target,
-with the base resolved to a pinned commit before the loop begins. The
-review and every fresh findings-fix session explicitly select `gpt-6-sol`, high
+with the base resolved to a pinned commit before the loop begins. If `origin/dev`
+is missing, the script stops rather than selecting another branch. The
+review and every fresh findings-fix session explicitly select `gpt-6.1-sol`, high
 reasoning, and the standard (`default`) service tier. An explicit review model
 option still overrides the review default. The specification is supplied only
 to the subsequent `$change-fix-findings` fixer
@@ -311,7 +312,7 @@ Every findings pass redirects that file through standard input to a fresh
 `codex exec` invocation and explicitly invokes `$change-fix-findings` with the
 positional specification file. The skill validates the findings against the
 specification and repository contracts, implements valid fixes with tests and
-verification, and preserves unrelated changes. The prompt leaves commits and
+verification, and preserves unrelated changes. The skill leaves commits and
 pushes to the loop. Each review and fix command has a numbered heading, and the
 loop prints each captured final response after its progress line. If the fixer
 makes no repository changes, the response keeps protected-contract blockers and

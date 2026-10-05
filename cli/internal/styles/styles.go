@@ -7,6 +7,7 @@ import "github.com/charmbracelet/lipgloss"
 const (
 	Background              lipgloss.Color = "#000000"
 	Foreground              lipgloss.Color = "#FFFFFF"
+	AccentWhite             lipgloss.Color = "#FFFFFF"
 	LightBlue               lipgloss.Color = "#AFD7D7"
 	AccentBlue              lipgloss.Color = "#87AFFF"
 	AccentPurple            lipgloss.Color = "#D7AFFF"
@@ -72,7 +73,7 @@ var Default = Tokens{
 		Background(MutedPurple).
 		Foreground(lipgloss.Color("15")),
 	Error: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("203")),
+		Foreground(AccentRed),
 	Success: lipgloss.NewStyle().
 		Foreground(lipgloss.Color("114")),
 	AccentCyan: lipgloss.NewStyle().

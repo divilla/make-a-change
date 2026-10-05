@@ -89,29 +89,14 @@ func TestTypesAndCompletionUseRequestedColors(t *testing.T) {
 }
 
 func TestDetailsViewSeparatesSpecAndTestCases(t *testing.T) {
-	model := Model{}.WithDetail(dto.ChangeView{
-		ID:      "12",
-		RefUUID: "11111111-2222-4333-8444-555555555555",
-		Ref:     "3",
-		Title:   "Backend Change",
-		Spec:    "Spec text",
-		TestCases: []dto.TestCase{
-			{ID: 31, Scenario: "first scenario", Done: true},
-		},
-	})
-
-	view := stripANSI(DetailsView(model, 120, 20))
-
-	assert.Contains(t, view, "ID │ 12")
-	assert.Contains(t, view, "Ref UUID │ 11111111-2222-4333-8444-555555555555")
-	specIndex := strings.Index(view, "Spec │ Spec text")
-	dividerIndex := strings.Index(view[specIndex:], "───────────┼")
-	testCaseIndex := strings.Index(view, "✅ │ first scenario (#31)")
-	require.NotEqual(t, -1, specIndex)
-	require.NotEqual(t, -1, dividerIndex)
-	require.NotEqual(t, -1, testCaseIndex)
-	assert.Less(t, specIndex, specIndex+dividerIndex)
-	assert.Less(t, specIndex+dividerIndex, testCaseIndex)
+	model := Model{}.WithDetail(dto.ChangeView{ID: "12", RefUUID: "uuid", Title: "Change", DocumentTypes: []string{"brief", "spec"}, Documents: []dto.Document{{ID: 9, DocType: "spec", Body: "Spec text"}}, TestCases: []dto.TestCase{{ID: 31, Scenario: "first scenario", Done: true}}})
+	view := stripANSI(DetailsView(model, 120, 30))
+	assert.Contains(t, view, "[✓] spec")
+	assert.NotContains(t, view, "Spec text")
+	assert.Contains(t, view, "first scenario (#31)")
+	assert.Contains(t, view, "Docs")
+	assert.Contains(t, view, "Comments")
+	assert.Greater(t, strings.Index(view, "first scenario (#31)"), strings.Index(view, "Docs"))
 }
 
 func TestDetailsViewEmojiRowsDoNotOverflowSelectionWidth(t *testing.T) {
@@ -120,7 +105,7 @@ func TestDetailsViewEmojiRowsDoNotOverflowSelectionWidth(t *testing.T) {
 		Ref:     "3",
 		Title:   "Backend Change",
 		Spec:    "Spec text",
-		Open:    true,
+		Active:  true,
 		Created: "2026-06-29T08:15:00Z",
 		TestCases: []dto.TestCase{
 			{ID: 31, Scenario: "first scenario", Done: true},
@@ -153,29 +138,19 @@ func TestDetailsViewRendersUnassignedRefAsBlank(t *testing.T) {
 
 func TestDetailIdentityOrderColorsAndTitleDivider(t *testing.T) {
 	change := dto.ChangeView{ID: "12", RefUUID: "uuid", RefSlug: "006-some-slug", EpicName: "Epic", ChangePhase: "backlog", ChangeTypes: []string{"feature"}, AfterChangeName: "First change #2", Title: "Title"}
-	rows := DetailRows(change)
-	require.GreaterOrEqual(t, len(rows), 6)
-	labels := make([]string, 0, 6)
-	for _, row := range rows[:6] {
-		labels = append(labels, row.Label)
+	rows := append(fixedDetailRows(change), DetailRows(change)...)
+	var labels []string
+	for _, row := range rows {
+		if row.Label != "" {
+			labels = append(labels, row.Label)
+		}
 	}
-	assert.Equal(t, []string{"Slug", "Epic", "Phase", "Types", "After Change", "Title"}, labels)
-	assert.False(t, rows[3].DividerAfter)
-	assert.True(t, rows[4].DividerAfter)
-	assert.Equal(t, styles.Default.AccentCyan.GetForeground(), detailValueStyle(rows[0], nil).GetForeground())
-	assert.Equal(t, styles.Default.AccentCyan.GetForeground(), detailSelectedStyle(rows[0], nil).GetForeground())
-	assert.Equal(t, styles.AccentPurple, detailValueStyle(rows[3], nil).GetForeground())
-	assert.Equal(t, styles.AccentPurple, detailSelectedStyle(rows[3], nil).GetForeground())
-	assert.Equal(t, styles.Foreground, detailValueStyle(rows[5], nil).GetForeground())
-	assert.Equal(t, styles.Foreground, detailSelectedStyle(rows[5], nil).GetForeground())
-	view := stripANSI(DetailsView(Model{Detail: change}, 120, 10))
-	for _, pair := range [][2]string{{"ID │ 12", "Ref UUID │ uuid"}, {"Ref UUID │ uuid", "Slug │ 006-some-slug"}, {"Slug │ 006-some-slug", "Epic │ Epic"}, {"Epic │ Epic", "Phase │ backlog"}, {"Phase │ backlog", "Types │ feature"}, {"Types │ feature", "After Change │ First change #2"}, {"After Change │ First change #2", "Title │ Title"}} {
-		assert.Less(t, strings.Index(view, pair[0]), strings.Index(view, pair[1]))
-	}
-	assert.Contains(t, view[strings.Index(view, "After Change │ First change #2"):strings.Index(view, "Title │ Title")], "───┼───")
-	assert.NotContains(t, view, "Ref │")
-	assert.NotContains(t, view, "AccentCyan")
-	assert.NotContains(t, view, "Foreground")
+	require.Equal(t, []string{"ID", "Epic", "Phase", "Types", "Active", "Timestamps", "Title", "Docs", "Testcases", "Completed", "Comments", "After Change", "Ref UUID", "Slug", "PR URL"}, labels)
+	view := stripANSI(DetailsView(Model{Detail: change}, 120, 30))
+	require.Contains(t, view, "After Change │ First change #2")
+	require.NotContains(t, view, "┌")
+	require.Contains(t, view, "─────────────┼")
+	require.Contains(t, view, "Completed │ ---===")
 }
 
 func TestNullableChangeFieldsRenderAsDashes(t *testing.T) {
@@ -229,11 +204,9 @@ func TestDetailsViewCountsFixedRowsInsidePageSize(t *testing.T) {
 	view := stripANSI(DetailsView(model, 120, 4))
 	lines := strings.Split(view, "\n")
 
-	require.GreaterOrEqual(t, len(lines), 6)
-	contentLines := lines[1 : len(lines)-1]
-	assert.Len(t, contentLines, 4)
+	require.Len(t, lines, 4)
 	assert.Contains(t, view, "ID │ 12")
-	assert.Contains(t, view, "Ref UUID │ 11111111-2222-4333-8444-555555555555")
+	assert.Contains(t, view, "Epic │ -")
 }
 
 func TestMoveDetailSelectionKeepsVisibleRowsAnchored(t *testing.T) {
@@ -250,7 +223,7 @@ func TestMoveDetailSelectionKeepsVisibleRowsAnchored(t *testing.T) {
 	model = model.MoveDetailSelection(2, 4, 120)
 
 	assert.Equal(t, 2, model.DetailSelected)
-	assert.Equal(t, 1, model.DetailOffset)
+	assert.Equal(t, 0, model.DetailOffset)
 }
 
 func TestMoveDetailSelectionScrollsOnlyEnoughToRevealBottom(t *testing.T) {
@@ -268,7 +241,7 @@ func TestMoveDetailSelectionScrollsOnlyEnoughToRevealBottom(t *testing.T) {
 	model = model.MoveDetailSelection(3, 3, 120)
 
 	assert.Equal(t, 3, model.DetailSelected)
-	assert.Equal(t, 3, model.DetailOffset)
+	assert.Equal(t, 2, model.DetailOffset)
 }
 
 func TestP205PhaseStyleUsesOnlyProjectColors(t *testing.T) {
@@ -298,7 +271,7 @@ func TestShortDetailsViewportScrollsIdentityAndBody(t *testing.T) {
 	for _, height := range []int{3, 4, 5} {
 		t.Run(fmt.Sprint(height), func(t *testing.T) {
 			const width = 100
-			page := height - 2
+			page := height
 			original := Model{}.WithDetail(dto.ChangeView{ID: "12", RefUUID: "11111111-2222-4333-8444-555555555555", Ref: "3", Title: "first title line\nlast title line", PRUrl: "https://example.test/pr"})
 			model := original
 			var seen strings.Builder
@@ -308,7 +281,7 @@ func TestShortDetailsViewportScrollsIdentityAndBody(t *testing.T) {
 				seen.WriteString(stripANSI(view))
 				model = model.ScrollDetailViewport(page, page, width)
 			}
-			for _, value := range []string{"ID │ 12", "Ref UUID", original.Detail.RefUUID, "first title line", "last title line", "https://example.test/pr", "Modified"} {
+			for _, value := range []string{"ID │ 12", "Ref UUID", original.Detail.RefUUID, "first title line", "last title line", "https://example.test/pr", "Timestamps"} {
 				require.Contains(t, seen.String(), value)
 			}
 			for i := 0; i < 100; i++ {

@@ -50,6 +50,8 @@ func TestCLIProgramChangeCRUDAndPartialSuccess(t *testing.T) {
 				var body map[string]any
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 				switch r.URL.Path {
+				case "/api/v1/doc/comment-list":
+					writeProgramJSON(w, []any{})
 				case "/api/v1/project/details":
 					writeProgramJSON(w, programProject(7, "Program Project"))
 				case "/api/v1/project/config":
@@ -79,7 +81,7 @@ func TestCLIProgramChangeCRUDAndPartialSuccess(t *testing.T) {
 						return
 					}
 					writeProgramJSON(w, change)
-				case "/api/v1/doc/current", "/api/v1/test-case/list":
+				case "/api/v1/doc/list-active", "/api/v1/test-case/list":
 					writeProgramJSON(w, []any{})
 				case "/api/v1/change/create":
 					writes["create"] = append(writes["create"], body)
@@ -97,7 +99,7 @@ func TestCLIProgramChangeCRUDAndPartialSuccess(t *testing.T) {
 					w.WriteHeader(204)
 				default:
 					op := strings.TrimPrefix(r.URL.Path, "/api/v1/change/update-")
-					keys := map[string]string{"title": "title", "phase": "change_phase", "types": "change_types", "epic": "epic_id", "after-change": "after_change_id", "open": "open", "pr-url": "pr_url"}
+					keys := map[string]string{"title": "title", "phase": "change_phase", "types": "change_types", "epic": "epic_id", "after-change": "after_change_id", "active": "active", "pr-url": "pr_url"}
 					key, ok := keys[op]
 					if !ok {
 						t.Errorf("unexpected route %s", r.URL.Path)
@@ -186,11 +188,12 @@ func TestCLIProgramChangeCRUDAndPartialSuccess(t *testing.T) {
 			recoverRead()
 			edit("/after-change", "null", "saved after-change")
 			recoverRead()
-			s.navigate(t, "/open\r", "saved open")
+			s.navigate(t, "/active\r", "saved active")
 			recoverRead()
 			clearAndReplace("/pr-url", "https://example.test/pr/1", "saved pr-url")
 			recoverRead()
-			s.navigate(t, strings.Repeat("\x1b[6~", 8), "Modified")
+			s.waitFor(t, "Created:")
+			s.navigate(t, strings.Repeat("\x1b[6~", 8), "PR URL │")
 			s.waitFor(t, "73%")
 			s.waitFor(t, "https://example.test/pr/1")
 			s.navigate(t, "/delete\r", "Are you sure?")
@@ -203,7 +206,7 @@ func TestCLIProgramChangeCRUDAndPartialSuccess(t *testing.T) {
 			s.finishFromChanges(t)
 			mu.Lock()
 			defer mu.Unlock()
-			for _, op := range []string{"create", "title", "phase", "open", "pr-url", "delete"} {
+			for _, op := range []string{"create", "title", "phase", "active", "pr-url", "delete"} {
 				assert.Len(t, writes[op], 1, op)
 			}
 			for _, op := range []string{"types", "epic", "after-change"} {
@@ -215,7 +218,7 @@ func TestCLIProgramChangeCRUDAndPartialSuccess(t *testing.T) {
 			assert.Equal(t, float64(3), writes["epic"][0]["epic_id"])
 			assert.Equal(t, float64(9), writes["after-change"][0]["after_change_id"])
 			assert.Equal(t, "https://example.test/pr/1", writes["pr-url"][0]["pr_url"])
-			assert.Equal(t, false, writes["open"][0]["open"])
+			assert.Equal(t, false, writes["active"][0]["active"])
 			assert.Empty(t, writes["types"][1]["change_types"])
 			assert.Nil(t, writes["epic"][1]["epic_id"])
 			assert.Nil(t, writes["after-change"][1]["after_change_id"])
@@ -236,6 +239,8 @@ func TestCLIProgramChangeDelayedScopeAndShutdown(t *testing.T) {
 				}
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 				switch r.URL.Path {
+				case "/api/v1/doc/comment-list":
+					writeProgramJSON(w, []any{})
 				case "/api/v1/project/details":
 					name := "Program Project"
 					if body.ID == 8 {
@@ -262,7 +267,7 @@ func TestCLIProgramChangeDelayedScopeAndShutdown(t *testing.T) {
 					close(started)
 					<-r.Context().Done()
 					close(canceled)
-				case "/api/v1/doc/current", "/api/v1/test-case/list":
+				case "/api/v1/doc/list-active", "/api/v1/test-case/list":
 					writeProgramJSON(w, []any{})
 				default:
 					t.Errorf("unexpected route %s", r.URL.Path)
@@ -331,6 +336,8 @@ func TestCLIProgramChangeReloadBlocksCachedRows(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.Copy(io.Discard, r.Body)
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/details":
 			writeProgramJSON(w, programProject(7, "Program Project"))
 		case "/api/v1/project/config":
@@ -356,7 +363,7 @@ func TestCLIProgramChangeReloadBlocksCachedRows(t *testing.T) {
 			details++
 			mu.Unlock()
 			writeProgramJSON(w, scopedProgramChange(3, 7, "Loaded change"))
-		case "/api/v1/doc/current", "/api/v1/test-case/list":
+		case "/api/v1/doc/list-active", "/api/v1/test-case/list":
 			writeProgramJSON(w, []any{})
 		default:
 			t.Errorf("unexpected route %s", r.URL.Path)
@@ -402,6 +409,8 @@ func TestCLIProgramChangeMalformedReadRecovery(t *testing.T) {
 	var lists int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/details":
 			writeProgramJSON(w, programProject(7, "Program Project"))
 		case "/api/v1/project/config":
@@ -421,7 +430,7 @@ func TestCLIProgramChangeMalformedReadRecovery(t *testing.T) {
 	root := t.TempDir()
 	writeProgramConfig(t, root, server.URL)
 	s := startProgram(t, root, "")
-	s.navigate(t, "/changes\r", "backend contract")
+	s.navigate(t, "/changes\r", "changeWire.id of type int")
 	s.navigate(t, "/return\r", "MainScreen")
 	s.navigate(t, "/changes\r", "Recovered change")
 	s.finishFromChanges(t)

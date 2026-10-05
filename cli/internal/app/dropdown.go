@@ -2,6 +2,7 @@ package app
 
 import (
 	"cli/internal/changes"
+	"cli/internal/documents"
 	"cli/internal/dto"
 	"cli/internal/epics"
 	"cli/internal/projects"
@@ -65,7 +66,7 @@ func (m Model) handleDropdownKey(key string, msg tea.KeyMsg) (tea.Model, tea.Cmd
 }
 
 func (m *Model) openCommandDropdown() {
-	options := commandOptions(m.state)
+	options := m.commandOptions(m.state)
 	m.previousState = m.state
 	m.dropdown = dropdownModel{
 		kind:     dropdownCommand,
@@ -124,6 +125,7 @@ func (m *Model) openFilterDropdown(label string, source selectorSource, field fi
 }
 
 func (m Model) cancelDropdown() (tea.Model, tea.Cmd) {
+	m.deleteDocumentID = 0
 	m.state = m.dropdown.previous
 	m.status = "cancel"
 	m.dropdown = dropdownModel{}
@@ -139,6 +141,12 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 		}
 		switch selected.ID {
 		case "/yes":
+			if m.deleteDocumentID > 0 {
+				id := m.deleteDocumentID
+				m.deleteDocumentID = 0
+				m.dropdown = dropdownModel{}
+				return m.beginChangeDocumentMutation(documents.DeleteDocument, id, "")
+			}
 			target := m.dropdown.onSelect
 			previous := m.dropdown.previous
 			m.dropdown = dropdownModel{}
@@ -171,6 +179,15 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 
 	if m.dropdown.kind == dropdownCommand {
 		selected := m.selectedOption()
+		if m.historyOpen {
+			m.dropdown = dropdownModel{}
+			if selected.ID == "/return" {
+				return m.historyKey(tea.KeyMsg{Type: tea.KeyEsc})
+			}
+			var cmd tea.Cmd
+			m.history, cmd = m.history.Refresh(m.ctx, m.client, m.historyPrinter)
+			return m, cmd
+		}
 		if selected.ID == "" {
 			m.err = "unknown command"
 			return m, nil
@@ -270,6 +287,19 @@ func (m *Model) openConfirmation(state, previous, onYes State) {
 
 func (m Model) dropdownView(width int) string {
 	width = ui.NormalizeWidth(width)
+	if m.dropdown.kind == dropdownConfirm && m.deleteDocumentID > 0 {
+		lines := []string{lipgloss.NewStyle().Foreground(styles.AccentPurple).Render("Are you sure?")}
+		for i, option := range m.filteredOptions() {
+			line := "  " + option.Label
+			if i == m.dropdown.highlighted {
+				line = styles.Default.MenuSelected.Width(width).Render(line)
+			} else {
+				line = styles.Default.MenuItem.Render(line)
+			}
+			lines = append(lines, line)
+		}
+		return strings.Join(lines, "\n")
+	}
 	prompt := m.dropdown.filter
 	if m.dropdown.kind == dropdownCommand {
 		prompt = "/" + m.dropdown.filter

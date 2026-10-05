@@ -68,7 +68,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.quitRequested {
 			return m.requestQuit()
 		}
-		if msg.err == nil && !strings.HasPrefix(m.status, "deleted project") {
+		if msg.err == nil && !strings.HasPrefix(m.status, "deleted project") && !strings.HasPrefix(m.status, "project delete committed") && !strings.HasPrefix(m.status, "project deactivated") {
 			m.status = "project selection saved"
 		}
 		return m, nil
@@ -114,6 +114,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.applyHealthResult(msg)
 	case testcases.Result:
 		return m.applyTestCaseResult(msg)
+	case documents.ChangeResult:
+		return m.applyChangeDocumentResult(msg)
+	case documents.HistoryResult:
+		return m.applyHistoryResult(msg)
 	case documents.Result:
 		return m.applyDocumentResult(msg)
 	case epics.Result:
@@ -171,6 +175,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.configCatalogCancel = nil
 		if msg.err != nil {
+			m.changeList.Detail.DocumentTypes = nil
 			m.optionCatalog = optionCatalog{err: msg.err}
 			if m.status == "config save failed" {
 				m.err += "; project configuration unavailable: " + msg.err.Error()
@@ -185,6 +190,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.optionCatalog = optionCatalog{config: msg.config, phases: msg.phases, types: msg.types, loaded: true}
 		m.selectedConfigSlug = msg.config.Slug
+		m.changeList.Detail.DocumentTypes = append([]string(nil), msg.config.ChangeDocs...)
 		if strings.Contains(m.err, "project catalog refresh failed") {
 			m.err = ""
 			m.status = m.configurations.Committed + "; project catalog refreshed"
@@ -204,9 +210,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.currentProject = dto.Option{ID: m.currentProject.ID, Label: strings.TrimSpace(msg.project.Name)}
-		m.selectedConfigSlug = msg.project.Config
+		m.selectedConfigSlug = msg.project.ConfigSlug
 		return m, nil
 	case editorFinishedMsg:
+		if msg.generation > 0 && (msg.generation != m.editorGeneration || msg.source != m.state || msg.projectID != m.currentProject.ID || msg.ownerID != m.changeList.Detail.ID || msg.field != m.detailEditField) {
+			return m, nil
+		}
+		if msg.generation > 0 {
+			if msg.source == DocumentState && (msg.documentRevision != m.document.Revision || msg.documentOwner != m.document.OwnerID || msg.documentTable != m.document.OwnerTable || msg.documentType != m.document.DraftType) {
+				return m, nil
+			}
+			if msg.source == ChangeDetailsState && ((msg.field == detailEditDocument && msg.documentType != m.changeList.Draft.DocumentType) || (msg.field == detailEditComment && msg.commentID != m.commentID)) {
+				return m, nil
+			}
+		}
 		if m.state == BriefState && msg.source == BriefState {
 			if msg.err != nil {
 				m.err = msg.err.Error()
@@ -300,6 +317,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.err = ""
 		return m.handleDropdownKey(msg.String(), msg)
 	}
+	if m.historyOpen {
+		return m.historyKey(msg)
+	}
+	if m.changeDocuments.Busy {
+		return m, nil
+	}
 	if m.state == BriefState {
 		return m.briefKey(msg)
 	}
@@ -320,6 +343,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	key := msg.String()
+	if m.state == ChangesListState && m.changeList.Inactive && (key == "esc" || key == "ctrl+c") && m.input.Value() == "" {
+		return m.leaveInactiveChanges()
+	}
 	if m.isDropdownState() {
 		m.err = ""
 		return m.handleDropdownKey(key, msg)
@@ -407,6 +433,17 @@ func (m Model) handleListNavigationKey(key string, msg tea.KeyMsg) (Model, tea.C
 	switch m.state {
 	case ChangesListState:
 		switch {
+		case key == "ctrl+h" && m.input.Value() == "":
+			next, cmd := m.openInactiveChanges()
+			return next.(Model), cmd, true
+		case (key == " " || key == "space") && m.changeList.Inactive && m.input.Value() == "":
+			rows := changes.FilteredRows(m.changeList.Rows, m.changeFilters())
+			if m.changeList.Selected >= 0 && m.changeList.Selected < len(rows) {
+				id, _ := strconv.Atoi(rows[m.changeList.Selected].ID)
+				next, cmd := m.beginChange(changes.Reactivate, id, changes.Input{})
+				return next.(Model), cmd, true
+			}
+			return m, nil, true
 		case (key == "enter" || msg.Type == tea.KeyCtrlJ) && strings.HasPrefix(strings.TrimSpace(m.input.Value()), "/"):
 			return m, nil, false
 		case key == "up":
@@ -433,6 +470,9 @@ func (m Model) handleListNavigationKey(key string, msg tea.KeyMsg) (Model, tea.C
 		}
 	case ChangeDetailsState:
 		switch {
+		case key == "ctrl+h" || key == "h":
+			next, cmd := m.selectedDocumentHistory()
+			return next.(Model), cmd, true
 		case key == "up":
 			m.changeList = m.changeList.MoveDetailSelection(-1, m.changeTableRows(), terminalWidth(m.width))
 			return m, nil, true
@@ -654,6 +694,7 @@ func (m Model) submitFindValue(value string) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handlePromptCancel() (tea.Model, tea.Cmd) {
+	m.editorGeneration++
 	if m.editorDraft != nil || m.input.Value() != "" || m.detailEditField != "" {
 		m.detailEditField = ""
 		m.editorDraft = nil
@@ -676,6 +717,9 @@ func (m Model) requestQuit() (tea.Model, tea.Cmd) {
 	m = m.cancelConfigurationCatalogRefresh()
 	m.health = m.health.Invalidate()
 	m.testCase = m.testCase.Invalidate()
+	m.history = m.history.Invalidate()
+	m.historyOpen, m.historyReturning = false, false
+	m.changeDocuments = m.changeDocuments.Invalidate()
 	m.document = m.document.Invalidate()
 	m.changeList = m.changeList.Invalidate()
 	m.epicList = m.epicList.Invalidate()
@@ -760,8 +804,16 @@ func (m Model) handleListSelection() (tea.Model, tea.Cmd) {
 			m.err = "no change details selectable"
 			return m, nil
 		}
+		if row.Comment && row.DocumentID > 0 {
+			return m.beginComment(row.DocumentID)
+		}
+		if row.DocumentType != "" && !row.Comment {
+			m.changeList.Draft.DocumentType = row.DocumentType
+			return m.beginDetailTextEditor(detailEditDocument)
+		}
 		if row.TestCaseID != "" {
-			return m.beginTestCaseScenarioEdit(row)
+			next, _ := m.beginTestCaseScenarioEdit(row)
+			return next.(Model).openTextEditor(TestCaseUpdateState, row.TestCaseText)
 		}
 		switch row.Label {
 		case "Slug":
@@ -818,7 +870,7 @@ func (m Model) executeCommand(command string) (tea.Model, tea.Cmd) {
 func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.Cmd) {
 	m.state = source
 	m.dropdown = dropdownModel{}
-	if command != "/quit" && !commandAllowed(source, command) {
+	if command != "/quit" && !m.commandAllowed(source, command) {
 		m.err = "unknown command: " + command
 		return m, nil
 	}
@@ -836,6 +888,8 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		return m.healthCommand(command)
 	}
 	switch command {
+	case "/new-comment":
+		return m.beginComment(0)
 	case "/brief-new":
 		return m.openBrief(true)
 	case "/brief-clarify":
@@ -872,6 +926,14 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 	case "/project-config":
 		return m.beginProject(projects.Config, m.projectList.Detail.ID, "")
 	case "/retry":
+		if m.historyOpen {
+			var cmd tea.Cmd
+			m.history, cmd = m.history.Refresh(m.ctx, m.client, m.historyPrinter)
+			return m, cmd
+		}
+		if source == ChangeDetailsState && m.changeDocuments.Committed != "" && m.changeDocuments.Err != nil && m.changeDocuments.ProjectID == m.appConfig.ProjectID && strconv.Itoa(m.changeDocuments.OwnerID) == m.changeList.Detail.ID {
+			return m.beginChangeDocumentMutation(documents.Read, 0, "")
+		}
 		if source == ChangesListState {
 			m.rememberSelectedChange()
 			return m.beginChange(changes.List, 0, changes.Input{})
@@ -921,6 +983,9 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		m.restoreSelectedChange()
 		m.status = "filters cleared"
 	case "/return":
+		if source == ChangesListState && m.changeList.Inactive {
+			return m.leaveInactiveChanges()
+		}
 		return m.arrive(navigation.ReturnTargets()[source], "return")
 	case "/new-change", "/new-testcase", "/new-test-case", "/new-epic", "/new-project":
 		if source == ChangeDetailsState && (command == "/new-testcase" || command == "/new-test-case") && !m.changeDetailLoaded {
@@ -1053,13 +1118,13 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		return m.beginChangeField(detailEditPRUrl)
 	case "/after-change":
 		return m.beginChangeField(detailEditAfterChange)
-	case "/open":
+	case "/active":
 		if !m.changeDetailLoaded {
 			m.err = "load change details with /retry before editing"
 			return m, nil
 		}
 		id, _ := changeNumericID(m.changeList.Detail)
-		return m.beginChange(changes.Open, id, changes.Input{Open: !m.changeList.Detail.Open})
+		return m.beginChange(changes.Active, id, changes.Input{Active: !m.changeList.Detail.Active})
 	case "/phase":
 		if source == ChangeDetailsState {
 			return m.beginDetailFieldSelector(detailEditPhase)
@@ -1090,6 +1155,9 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 }
 
 func (m Model) arrive(state State, status string) (tea.Model, tea.Cmd) {
+	if state != ChangeDetailsState {
+		m.historyDetailReload = false
+	}
 	if m.state == ChangesListState {
 		m.rememberSelectedChange()
 		if state != ChangesListState {
@@ -1275,12 +1343,14 @@ func (m Model) handleDetailSpaceToggle() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch {
-	case row.Label == "Open":
-		m.status = "saving open"
+	case row.Label == "Active":
+		m.status = "saving active"
 		id, _ := changeNumericID(m.changeList.Detail)
-		return m.beginChange(changes.Open, id, changes.Input{Open: !m.changeList.Detail.Open})
+		return m.beginChange(changes.Active, id, changes.Input{Active: !m.changeList.Detail.Active})
 	case row.TestCaseID != "":
 		return m.beginTestCase(testcases.SetDone, row.TestCaseID, "", !row.TestCaseDone)
+	case row.DocumentType != "":
+		return m.viewSelectedDetail(row)
 	default:
 		return m, nil
 	}
@@ -1296,6 +1366,9 @@ func (m Model) handleDetailDelete() (tea.Model, tea.Cmd) {
 	if !ok {
 		m.err = "no change details selectable"
 		return m, nil
+	}
+	if row.DocumentID > 0 {
+		return m.openDocumentConfirmation(row.DocumentID)
 	}
 	if row.TestCaseID == "" {
 		return m, nil

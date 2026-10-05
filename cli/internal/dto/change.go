@@ -20,11 +20,13 @@ type ChangeView struct {
 	AfterChangeID   string
 	AfterChangeName string
 	PRUrl           string
-	Open            bool
+	Active          bool
 	Done            int64
 	Total           int64
 	Completed       int64
 	Documents       []Document
+	Comments        []Document
+	DocumentTypes   []string
 	TestCases       []TestCase
 	Created         string
 	Modified        string

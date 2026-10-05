@@ -27,7 +27,7 @@ func (f *projectAPI) GetProject(ctx context.Context, id int) (dto.Project, error
 	if f.get != nil {
 		return f.get(ctx, id)
 	}
-	return dto.Project{ID: id, Name: "Loaded", Config: "custom"}, f.readErr
+	return dto.Project{ID: id, Name: "Loaded", ConfigSlug: "custom"}, f.readErr
 }
 
 func (f *projectAPI) GetProjectConfig(context.Context, int) (dto.ProjectConfig, error) {
@@ -63,7 +63,7 @@ func TestP203ProjectActionsStatesAndAllDisplayedFields(t *testing.T) {
 			}
 		})
 	}
-	p := dto.Project{ID: 7, Name: "Project", Config: "custom", LastRef: 42, ChangeCount: 3, CreatedAt: time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 9, 28, 11, 0, 0, 0, time.UTC)}
+	p := dto.Project{ID: 7, Name: "Project", ConfigSlug: "custom", LastRef: 42, ChangeCount: 3, CreatedAt: time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 9, 28, 11, 0, 0, 0, time.UTC)}
 	for _, s := range []string{"#ID", "Project", "custom", "42", "Changes", "Created", "Modified"} {
 		assert.Contains(t, DetailsView(p, 160), s)
 	}
@@ -134,7 +134,7 @@ func TestP204MutationSuccessFailurePartialSuccessAndReadOnlyRetry(t *testing.T) 
 					assert.ErrorIs(t, m.Err, failure)
 					assert.Contains(t, m.Status, "refresh failed")
 					if op == Delete {
-						assert.Contains(t, m.Status, "deleted")
+						assert.Contains(t, m.Status, "project delete committed")
 					} else {
 						assert.Contains(t, m.Status, "saved")
 						assert.Equal(t, "draft", m.Detail.Name)

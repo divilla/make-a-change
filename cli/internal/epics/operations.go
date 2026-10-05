@@ -209,6 +209,17 @@ func (m Model) Apply(r Result) (Model, bool) {
 		m.Rows = r.Rows
 		m.Selected = 0
 		m.Status = "deleted epic"
+		if r.RefreshErr != nil {
+			m.Status = "epic delete committed"
+		}
+		for _, e := range r.Rows {
+			if r.RefreshErr == nil && e.ID == r.ID {
+				m.Status = "epic delete committed; record retained"
+				if !e.Active {
+					m.Status = "epic deactivated"
+				}
+			}
+		}
 	}
 	m.Outcome = ""
 	if r.Committed && r.RefreshErr != nil {

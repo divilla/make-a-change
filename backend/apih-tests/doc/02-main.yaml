@@ -2067,3 +2067,503 @@ spec:
     response:
       expected_status: 404
       expected_body: '{"message":"Not Found"}'
+
+  # Restore owned comments without changing IDs, bodies, timestamps or active docs.
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_comment_project}}'
+    response:
+      expected_status: 200
+      expected_types:
+        .deleted_at:
+        - string
+      capture:
+        undelete_project_created: .created_at
+        undelete_project_updated: .updated_at
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-undelete
+      body: '{"id":${doc_comment_project}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_comment_project}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${doc_comment_project},"ref_id":${doc_project},"ref_table":"project","doc_type":"comment","body":"","html":"","agent_edit":false,"created_at":${undelete_project_created},"updated_at":${undelete_project_updated},"deleted_at":null}'
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-undelete
+      body: '{"id":${doc_comment_project}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_id":${doc_project},"ref_table":"project"}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_comment_project},"body":"","deleted_at":null,"created_at":${undelete_project_created},"updated_at":${undelete_project_updated}}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":${doc_project},"ref_table":"project"}'
+    response:
+      expected_status: 200
+      expected_types:
+        if all(.[]; .doc_type != "comment") then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":${doc_comment_project}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_comment_epic}}'
+    response:
+      expected_status: 200
+      expected_types:
+        .deleted_at:
+        - string
+      capture:
+        undelete_epic_created: .created_at
+        undelete_epic_updated: .updated_at
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-undelete
+      body: '{"id":${doc_comment_epic}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_comment_epic}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${doc_comment_epic},"ref_id":${doc_epic},"ref_table":"epic","doc_type":"comment","body":"","html":"","agent_edit":false,"created_at":${undelete_epic_created},"updated_at":${undelete_epic_updated},"deleted_at":null}'
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-undelete
+      body: '{"id":${doc_comment_epic}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_id":${doc_epic},"ref_table":"epic"}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_comment_epic},"body":"","deleted_at":null,"created_at":${undelete_epic_created},"updated_at":${undelete_epic_updated}}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":${doc_epic},"ref_table":"epic"}'
+    response:
+      expected_status: 200
+      expected_types:
+        if all(.[]; .doc_type != "comment") then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":${doc_comment_epic}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_comment_change}}'
+    response:
+      expected_status: 200
+      expected_types:
+        .deleted_at:
+        - string
+      capture:
+        undelete_change_created: .created_at
+        undelete_change_updated: .updated_at
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-undelete
+      body: '{"id":${doc_comment_change}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_comment_change}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${doc_comment_change},"ref_id":${doc_change},"ref_table":"change","doc_type":"comment","body":"","html":"","agent_edit":false,"created_at":${undelete_change_created},"updated_at":${undelete_change_updated},"deleted_at":null}'
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-undelete
+      body: '{"id":${doc_comment_change}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-list
+      body: '{"ref_id":${doc_change},"ref_table":"change"}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_comment_change},"body":"","deleted_at":null,"created_at":${undelete_change_created},"updated_at":${undelete_change_updated}}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":${doc_change},"ref_table":"change"}'
+    response:
+      expected_status: 200
+      expected_types:
+        if all(.[]; .doc_type != "comment") then 0 else 1 end:
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":${doc_comment_change}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-undelete
+      body: '{"id":${doc_project_old}}'
+    response:
+      expected_status: 404
+      expected_body: '{"message":"doc not found"}'
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-undelete
+      body: '{'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment undelete payload"}'
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-undelete
+      body: '{}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-undelete
+      body: '{"id":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-undelete
+      body: '{"id":0}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-undelete
+      body: '{"id":-1}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-undelete
+      body: '{"id":"bad"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment undelete payload"}'
+  - request:
+      method: POST
+      path: /api/v1/doc/comment-undelete
+      body: '{"id":[]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc comment undelete payload"}'
+  - request:
+      method: GET
+      path: /api/v1/doc/comment-undelete
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'
+
+  # Select retained versions through the existing procedure, preserving their IDs.
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_project_old}}'
+    response:
+      expected_status: 200
+      capture:
+        active_project_created: .created_at
+  - request:
+      method: POST
+      path: /api/v1/doc/active-set
+      body: '{"id":${doc_project_old}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":${doc_project},"ref_table":"project"}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_project_old},"doc_type":${doc_project_doc},"body":"# Old doc","agent_edit":false,"deleted_at":null,"created_at":${active_project_created}}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":${doc_project_old}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":${doc_project},"ref_table":"project"}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/doc/active-set
+      body: '{"id":${doc_project_old}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_project_old}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${doc_project_old},"ref_id":${doc_project},"ref_table":"project","doc_type":${doc_project_doc},"body":"# Old doc","agent_edit":false,"deleted_at":null,"created_at":${active_project_created}}'
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":${doc_project},"ref_table":"project"}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_project_old},"deleted_at":null}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/active-set
+      body: '{"id":${doc_project_old}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/active-set
+      body: '{"id":${doc_project_new}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_epic_old}}'
+    response:
+      expected_status: 200
+      capture:
+        active_epic_created: .created_at
+  - request:
+      method: POST
+      path: /api/v1/doc/active-set
+      body: '{"id":${doc_epic_old}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":${doc_epic},"ref_table":"epic"}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_epic_old},"doc_type":${doc_epic_doc},"body":"# Old doc","agent_edit":false,"deleted_at":null,"created_at":${active_epic_created}}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":${doc_epic_old}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":${doc_epic},"ref_table":"epic"}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/doc/active-set
+      body: '{"id":${doc_epic_old}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_epic_old}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${doc_epic_old},"ref_id":${doc_epic},"ref_table":"epic","doc_type":${doc_epic_doc},"body":"# Old doc","agent_edit":false,"deleted_at":null,"created_at":${active_epic_created}}'
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":${doc_epic},"ref_table":"epic"}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_epic_old},"deleted_at":null}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/active-set
+      body: '{"id":${doc_epic_old}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/active-set
+      body: '{"id":${doc_epic_new}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_change_old}}'
+    response:
+      expected_status: 200
+      capture:
+        active_change_created: .created_at
+  - request:
+      method: POST
+      path: /api/v1/doc/active-set
+      body: '{"id":${doc_change_old}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":${doc_change},"ref_table":"change"}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_change_old},"doc_type":"brief","body":"# Old doc","agent_edit":false,"deleted_at":null,"created_at":${active_change_created}}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":${doc_change_old}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":${doc_change},"ref_table":"change"}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/doc/active-set
+      body: '{"id":${doc_change_old}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_change_old}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${doc_change_old},"ref_id":${doc_change},"ref_table":"change","doc_type":"brief","body":"# Old doc","agent_edit":false,"deleted_at":null,"created_at":${active_change_created}}'
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":${doc_change},"ref_table":"change"}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${doc_change_old},"deleted_at":null}]'
+  - request:
+      method: POST
+      path: /api/v1/doc/active-set
+      body: '{"id":${doc_change_old}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/active-set
+      body: '{"id":${doc_change_new}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/delete
+      body: '{"id":${doc_change_new}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/doc/list-active
+      body: '{"ref_id":${doc_change},"ref_table":"change"}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/doc/active-set
+      body: '{"id":${doc_comment_change}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc type"}'
+  - request:
+      method: POST
+      path: /api/v1/doc/details
+      body: '{"id":${doc_comment_change}}'
+    response:
+      expected_status: 200
+      expected_types:
+        .deleted_at:
+        - string
+  - request:
+      method: POST
+      path: /api/v1/doc/active-set
+      body: '{'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc active set payload"}'
+  - request:
+      method: POST
+      path: /api/v1/doc/active-set
+      body: '{}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  - request:
+      method: POST
+      path: /api/v1/doc/active-set
+      body: '{"id":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  - request:
+      method: POST
+      path: /api/v1/doc/active-set
+      body: '{"id":0}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  - request:
+      method: POST
+      path: /api/v1/doc/active-set
+      body: '{"id":-1}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc payload"}'
+  - request:
+      method: POST
+      path: /api/v1/doc/active-set
+      body: '{"id":"bad"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid doc active set payload"}'
+  - request:
+      method: GET
+      path: /api/v1/doc/active-set
+    response:
+      expected_status: 405
+      expected_body: '{"message":"Method Not Allowed"}'

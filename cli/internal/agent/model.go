@@ -18,7 +18,7 @@ type API interface {
 	GetProjectConfig(context.Context, int) (dto.ProjectConfig, error)
 	GetChange(context.Context, int) (dto.Change, error)
 	CreateChange(context.Context, dto.ChangeCreateInput) (int, error)
-	CurrentDocuments(context.Context, int, string) ([]dto.Document, error)
+	ActiveDocuments(context.Context, int, string) ([]dto.Document, error)
 	InsertDocument(context.Context, dto.DocumentInput) (int, error)
 }
 
@@ -246,7 +246,7 @@ func (m Model) Begin(ctx context.Context, step Step, progress ...chan<- string) 
 				r.Err = errors.New("change details do not match selected project")
 				return r
 			}
-			r.Documents, r.Err = api.CurrentDocuments(ctx, change, "change")
+			r.Documents, r.Err = api.ActiveDocuments(ctx, change, "change")
 			if r.Err == nil {
 				_, _, r.Err = currentBrief(r.Documents, change)
 			}
@@ -275,7 +275,7 @@ func (m Model) Begin(ctx context.Context, step Step, progress ...chan<- string) 
 					r.Err = errors.New("change details do not match selected project")
 					return r
 				}
-				rows, err := api.CurrentDocuments(ctx, change, "change")
+				rows, err := api.ActiveDocuments(ctx, change, "change")
 				if err != nil {
 					r.Err = err
 					return r
@@ -299,7 +299,7 @@ func (m Model) Begin(ctx context.Context, step Step, progress ...chan<- string) 
 				r.Err = errors.New("backend returned no committed ID")
 			}
 		case Refresh:
-			r.Documents, r.Err = api.CurrentDocuments(ctx, change, "change")
+			r.Documents, r.Err = api.ActiveDocuments(ctx, change, "change")
 			if r.Err == nil {
 				current, id, err := currentBrief(r.Documents, change)
 				r.Err = err
@@ -332,7 +332,7 @@ func (m Model) Begin(ctx context.Context, step Step, progress ...chan<- string) 
 				r.Err = errors.New("change details do not match selected project")
 				return r
 			}
-			rows, err := api.CurrentDocuments(ctx, change, "change")
+			rows, err := api.ActiveDocuments(ctx, change, "change")
 			if err != nil {
 				r.Err = err
 				return r
@@ -381,7 +381,7 @@ func currentBrief(rows []dto.Document, change int) (string, int, error) {
 	brief, id := "", 0
 	seen := map[string]bool{}
 	for _, row := range rows {
-		if row.RefID != change || row.RefTable != "change" || !row.Current || row.ID <= 0 || strings.TrimSpace(row.DocType) == "" {
+		if row.RefID != change || row.RefTable != "change" || row.DeletedAt != nil || row.DocType == "comment" || row.ID <= 0 || strings.TrimSpace(row.DocType) == "" {
 			return "", 0, errors.New("current document owner or status conflicts with selected change")
 		}
 		if seen[row.DocType] {

@@ -33,6 +33,10 @@ func (m Model) beginTestCase(op testcases.Operation, rawID, scenario string, don
 	default:
 		m.testCase, cmd = m.testCase.BeginRow(m.ctx, m.client, projectID, changeID, op, rawID, scenario, done)
 	}
+	if op != testcases.Refresh && cmd != nil {
+		m.changeDocuments = m.changeDocuments.Invalidate()
+		m.changeDocuments.Committed, m.changeDocuments.Err = "", nil
+	}
 	m.status = m.testCase.Status
 	m.err = ""
 	if m.testCase.Err != nil {
@@ -75,6 +79,7 @@ func (m Model) applyTestCaseResult(r testcases.Result) (tea.Model, tea.Cmd) {
 	if r.ChangeErr == nil {
 		refreshed = changes.Present(r.Change)
 		refreshed.Documents = old.Documents
+		refreshed.Comments, refreshed.DocumentTypes = old.Comments, old.DocumentTypes
 		refreshed.Brief, refreshed.Spec, refreshed.PR = old.Brief, old.Spec, old.PR
 	}
 	if r.RowsErr == nil {
@@ -169,6 +174,10 @@ func (m Model) beginChange(op changes.Operation, id int, in changes.Input) (tea.
 	project, _ := strconv.Atoi(m.currentProject.ID)
 	var cmd tea.Cmd
 	m.changeList, cmd = m.changeList.Begin(m.ctx, m.client, documents.Access{API: m.client, Types: m.optionCatalog.config.ChangeDocs}, op, project, id, in, m.optionCatalog.config)
+	if op != changes.List && op != changes.Details && cmd != nil {
+		m.changeDocuments = m.changeDocuments.Invalidate()
+		m.changeDocuments.Committed, m.changeDocuments.Err = "", nil
+	}
 	if op == changes.Details && cmd != nil {
 		m.changeDetailLoaded = false
 		m.testCase = m.testCase.Invalidate()
@@ -196,6 +205,8 @@ func (m Model) applyChangeResult(r changes.Result) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	selected, offset := m.changeList.DetailSelected, m.changeList.DetailOffset
+	returning := m.historyDetailReload && !m.historyOpen && m.state == ChangeDetailsState && r.Operation == changes.Details && r.ProjectID == m.history.ProjectID && r.ID == m.history.OwnerID
+	next.Detail.DocumentTypes = append([]string(nil), m.optionCatalog.config.ChangeDocs...)
 	m.changeList = next
 	m.changeDetailLoaded = next.DetailLoaded
 	if r.Operation == changes.List && r.Err == nil {
@@ -205,9 +216,12 @@ func (m Model) applyChangeResult(r changes.Result) (tea.Model, tea.Cmd) {
 		m.testCase.Rows = append([]dto.TestCase(nil), next.Detail.TestCases...)
 		m.testCase.Loaded = true
 	}
-	if r.Operation != changes.Create && r.Operation != changes.Details && r.Operation != changes.List && r.Operation != changes.Delete {
+	if returning || (r.Operation != changes.Create && r.Operation != changes.Details && r.Operation != changes.List && r.Operation != changes.Delete) {
 		m.changeList.DetailSelected = selected
 		m.changeList.DetailOffset = offset
+		if returning {
+			m.changeList = m.changeList.ClampDetailSelection(m.changeTableRows(), terminalWidth(m.width))
+		}
 	}
 	m.status = next.Status
 	if r.Operation == changes.Details && next.DetailLoaded && len(next.Detail.TestCases) == 0 {
@@ -217,15 +231,22 @@ func (m Model) applyChangeResult(r changes.Result) (tea.Model, tea.Cmd) {
 	if next.Err != nil {
 		m.err = next.Err.Error()
 	}
+	if returning {
+		m.status = "returned from history; " + m.status
+		if m.history.Committed != "" {
+			m.status = m.history.Committed + "; " + m.status
+		}
+		m.historyDetailReload = !next.DetailLoaded
+	}
 	if r.Err == nil && r.Operation != changes.List && r.Operation != changes.Details {
 		m.state = ChangeDetailsState
-		if r.Operation == changes.Delete {
+		if r.Operation == changes.Delete || r.Operation == changes.Reactivate {
 			m.state = ChangesListState
 		}
 		m.detailEditField = ""
 		m = m.setPromptValue("")
 	}
-	if m.state == ChangesListState {
+	if m.state == ChangesListState && !m.changeList.Inactive {
 		m.status = strings.ReplaceAll(m.status, "/retry reads only", "return to Main and reopen /changes")
 	}
 	return m, nil
@@ -257,6 +278,12 @@ func (m Model) saveChangeDetailTextValue(value string) (tea.Model, tea.Cmd) {
 	in := changes.Input{Value: value}
 	op := changes.Document
 	switch m.detailEditField {
+	case detailEditComment:
+		op := documents.EditComment
+		if m.commentID == 0 {
+			op = documents.NewComment
+		}
+		return m.beginChangeDocumentMutation(op, m.commentID, value)
 	case detailEditTitle:
 		op = changes.Title
 	case detailEditSlug:

@@ -205,8 +205,9 @@ func TestChangeSlugPromptKeepsPrefixAndRejectsInvalidCharacters(t *testing.T) {
 	client := &fakeClient{gotChange: change}
 	m := newChangeTestModel(client)
 	m.state = ChangeDetailsState
+	m.height = 60
 	m.changeList = m.changeList.WithDetail(change)
-	m.changeList.DetailSelected = 0
+	m = selectDetailLabel(m, "Slug")
 
 	m, cmd := sendKey(m, tea.KeyEnter)
 	require.Nil(t, cmd)
@@ -251,8 +252,9 @@ func TestChangeSlugPromptKeepsPrefixAndRejectsInvalidCharacters(t *testing.T) {
 func TestChangeSlugWithoutRefSlugHasNoInventedPrefix(t *testing.T) {
 	m := newChangeTestModel(&fakeClient{})
 	m.state = ChangeDetailsState
+	m.height = 60
 	m.changeList = m.changeList.WithDetail(dto.ChangeView{ID: "12", Ref: "null", RefSlug: "null", Title: "Change"})
-	m.changeList.DetailSelected = 0
+	m = selectDetailLabel(m, "Slug")
 	m, cmd := sendKey(m, tea.KeyEnter)
 	require.Nil(t, cmd)
 	require.Empty(t, m.slugPrefix)
@@ -274,11 +276,12 @@ func TestAfterChangeRowShowsNameAndPromptUsesAssociationID(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			m := newChangeTestModel(&fakeClient{})
 			m.state = ChangeDetailsState
+			m.height = 60
 			m.changeList = m.changeList.WithDetail(dto.ChangeView{ID: "12", RefUUID: "uuid", RefSlug: "006-some-slug", AfterChangeID: tc.id, AfterChangeName: tc.label, Title: "Change"})
 			view := stripANSI(m.View())
 			require.Less(t, strings.Index(view, "Ref UUID │ uuid"), strings.Index(view, "Slug │ 006-some-slug"))
-			require.Less(t, strings.Index(view, "Slug │ 006-some-slug"), strings.Index(view, tc.wantRow))
-			m.changeList.DetailSelected = 4
+			require.Greater(t, strings.Index(view, "Slug │ 006-some-slug"), strings.Index(view, tc.wantRow))
+			m = selectDetailLabel(m, "After Change")
 			active, cmd := sendKey(m, tea.KeyEnter)
 			require.Nil(t, cmd)
 			require.Equal(t, detailEditAfterChange, active.detailEditField)
@@ -296,8 +299,9 @@ func TestPRURLRowUsesInlinePromptAndBothCancelKeys(t *testing.T) {
 	change := dto.ChangeView{ID: "12", Ref: "111", Title: "Change", PRUrl: "https://example.test/pr"}
 	m := newChangeTestModel(&fakeClient{})
 	m.state = ChangeDetailsState
+	m.height = 60
 	m.changeList = m.changeList.WithDetail(change)
-	m.changeList.DetailSelected = 9
+	m = selectDetailLabel(m, "PR URL")
 	active, cmd := sendKey(m, tea.KeyEnter)
 	require.Nil(t, cmd)
 	require.Equal(t, ChangeDetailsState, active.state)
@@ -344,6 +348,7 @@ func TestTextPromptLabelsAndInputColorsAcrossForms(t *testing.T) {
 func TestChangeDetailPromptAndFooterMeetBoxWithoutBlankLine(t *testing.T) {
 	m := newChangeTestModel(&fakeClient{})
 	m.state = ChangeDetailsState
+	m.height = 60
 	m.width, m.height = 80, 24
 	m.changeList = m.changeList.WithDetail(dto.ChangeView{ID: "12", Ref: "111", RefSlug: "111-change", Title: "Change"})
 	lines := strings.Split(stripANSI(m.View()), "\n")
@@ -354,7 +359,7 @@ func TestChangeDetailPromptAndFooterMeetBoxWithoutBlankLine(t *testing.T) {
 		}
 		if strings.HasPrefix(line, "▀") {
 			require.Less(t, i+1, len(lines))
-			require.Contains(t, lines[i+1], "<ctrl+n>")
+			require.Contains(t, lines[i+2], "<ctrl+n>")
 		}
 	}
 }
@@ -374,6 +379,7 @@ func TestP403ClearingUpdatePromptCancelsField(t *testing.T) {
 			client := &fakeClient{gotChange: original}
 			m := newChangeTestModel(client)
 			m.state = ChangeDetailsState
+			m.height = 60
 			m.changeList.Detail = original
 			m, _ = sendCommand(m, tc.command)
 			active := m
@@ -483,6 +489,7 @@ func TestP404SavedLongTitleKeepsDetailViewportUsable(t *testing.T) {
 			}
 			m := newChangeTestModel(client)
 			m.state = ChangeDetailsState
+			m.height = 60
 			m.width, m.height = 80, 24
 			m.changeList.Detail = dto.ChangeView{ID: "12", Title: "Old title", PRUrl: "https://example.test/pr"}
 			m, _ = sendCommand(m, "/title")
@@ -573,6 +580,7 @@ func TestP404ShortDetailShellKeepsAllFieldsReachable(t *testing.T) {
 	for _, feedback := range []string{"", strings.Repeat("wrapped error ", 20)} {
 		m := newChangeTestModel(&fakeClient{})
 		m.state = ChangeDetailsState
+		m.height = 60
 		m.err = feedback
 		m.width, m.height = 80, 1000
 		m.changeList = m.changeList.WithDetail(dto.ChangeView{ID: "12", RefUUID: "server-uuid", Ref: "3", Title: "visible title", PRUrl: "https://example.test/pr"})
@@ -601,6 +609,7 @@ func TestP404ChangeViewportsFitAndExposeEveryField(t *testing.T) {
 	for _, size := range [][2]int{{80, 24}, {60, 16}, {120, 40}} {
 		m := newChangeTestModel(&fakeClient{})
 		m.state = ChangeDetailsState
+		m.height = 60
 		m.width = size[0]
 		m.height = size[1]
 		var title strings.Builder
@@ -618,7 +627,7 @@ func TestP404ChangeViewportsFitAndExposeEveryField(t *testing.T) {
 		for i := 0; i < 40; i++ {
 			require.Contains(t, seen.String(), fmt.Sprintf("title line %02d", i))
 		}
-		for _, value := range []string{"server-slug", "After Change", "https://example.test/pr", "73%", "Created", "Modified"} {
+		for _, value := range []string{"server-slug", "After Change", "https://example.test/pr", "73%", "Comments", "Modified"} {
 			require.Contains(t, seen.String(), value)
 		}
 	}
@@ -639,6 +648,7 @@ func TestP404ChangeViewportsFitAndExposeEveryField(t *testing.T) {
 func TestP404ChangeLongRenderingAndLiteralTitleNoOp(t *testing.T) {
 	m := newChangeTestModel(&fakeClient{})
 	m.state = ChangeDetailsState
+	m.height = 60
 	m.changeList.Detail = dto.ChangeView{ID: "12", Title: strings.Repeat("a", 50000)}
 	started := time.Now()
 	_ = m.View()
@@ -658,6 +668,7 @@ func TestP404ChangeLongRenderingAndLiteralTitleNoOp(t *testing.T) {
 func TestP406ConfiguredDocumentSelectorAndNoCatalog(t *testing.T) {
 	m := newChangeTestModel(&fakeClient{})
 	m.state = ChangeDetailsState
+	m.height = 60
 	m.changeList.Detail = dto.ChangeView{ID: "12", Documents: []dto.Document{{DocType: "notes", Body: "bytes"}}}
 	m.optionCatalog.config.ChangeDocs = []string{"notes", "brief"}
 	m, cmd := sendCommand(m, "/document")
@@ -665,6 +676,7 @@ func TestP406ConfiguredDocumentSelectorAndNoCatalog(t *testing.T) {
 	require.Equal(t, []dto.Option{{ID: "notes", Label: "notes"}, {ID: "brief", Label: "brief"}}, m.dropdown.options)
 	m.optionCatalog.config.ChangeDocs = nil
 	m.state = ChangeDetailsState
+	m.height = 60
 	m, cmd = sendCommand(m, "/document")
 	m = applyMsg(m, cmd())
 	require.Contains(t, m.err, "no options")
@@ -675,6 +687,7 @@ func TestP404ChangeReadCannotOverwriteDraftOrSelectedProject(t *testing.T) {
 	m.changeList.Detail = dto.ChangeView{ID: "12", Title: "/save"}
 	m.changeList.DetailLoaded = true
 	m.state = ChangeDetailsState
+	m.height = 60
 	next, cmd := m.beginChange(changes.Details, 12, changes.Input{})
 	m = next.(Model)
 	pending := cmd()

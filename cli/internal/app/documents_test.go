@@ -39,7 +39,7 @@ func (a *appDocs) ListDocuments(_ context.Context, id int, table string) ([]dto.
 	return a.rows, a.listErr
 }
 
-func (a *appDocs) CurrentDocuments(context.Context, int, string) ([]dto.Document, error) {
+func (a *appDocs) ActiveDocuments(context.Context, int, string) ([]dto.Document, error) {
 	return a.current, nil
 }
 

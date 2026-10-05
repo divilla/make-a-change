@@ -33,7 +33,7 @@ func (a *docAPI) ListDocuments(ctx context.Context, _ int, _ string) ([]dto.Docu
 	return a.rows, a.listErr
 }
 
-func (a *docAPI) CurrentDocuments(context.Context, int, string) ([]dto.Document, error) {
+func (a *docAPI) ActiveDocuments(context.Context, int, string) ([]dto.Document, error) {
 	a.currentCalls++
 	return a.current, a.currentErr
 }
@@ -58,9 +58,9 @@ func scoped(t *testing.T, a *docAPI, project, owner int, table string) Model {
 	return m
 }
 
-func doc(id, owner int, table string, current bool) dto.Document {
+func doc(id, owner int, table string, _ bool) dto.Document {
 	when := time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC)
-	return dto.Document{ID: id, RefID: owner, RefTable: table, DocType: "spec", Body: "raw", HTML: "<p>rendered</p>", Current: current, CreatedAt: when, UpdatedAt: when}
+	return dto.Document{ID: id, RefID: owner, RefTable: table, DocType: "spec", Body: "raw", HTML: "<p>rendered</p>", CreatedAt: when, UpdatedAt: when}
 }
 
 func TestP602OwnerCatalogsAndEmptyReadAccess(t *testing.T) {
@@ -84,6 +84,35 @@ func TestP602OwnerCatalogsAndEmptyReadAccess(t *testing.T) {
 	m, cmd := m.BeginInsert(context.Background(), a, "body", false)
 	require.Nil(t, cmd)
 	require.ErrorContains(t, m.Err, "configured")
+}
+
+func Test031OwnerHistoryCommitRefreshCancellationAndScopeReset(t *testing.T) {
+	a := &docAPI{cfg: dto.ProjectConfig{ChangeDocs: []string{"spec"}}}
+	m := scoped(t, a, 7, 12, "change")
+	m.Committed = "committed active selection document #5"
+	ctx, cancel := context.WithCancel(context.Background())
+	m, cmd := m.BeginRefresh(ctx, a)
+	cancel()
+	m, ok := m.Apply(cmd().(Result))
+	require.True(t, ok)
+	require.ErrorIs(t, m.Err, context.Canceled)
+	require.Contains(t, m.Status, m.Committed)
+	require.Contains(t, m.Status, "/retry reads only")
+	// Opening another owner cannot inherit the previous owner's outcome.
+	m, cmd = m.BeginOpen(context.Background(), a, 7, 13, "change")
+	require.Empty(t, m.Committed)
+	m, ok = m.Apply(cmd().(Result))
+	require.True(t, ok)
+	require.NotContains(t, m.Status, "committed")
+	// A subsequent insert owns its own feedback, even if its write fails.
+	m.Committed = "committed active selection document #5"
+	a.insertErr = errors.New("write offline")
+	m, cmd = m.BeginInsert(context.Background(), a, "new version", false)
+	require.Empty(t, m.Committed)
+	m, ok = m.Apply(cmd().(Result))
+	require.True(t, ok)
+	require.ErrorIs(t, m.Err, a.insertErr)
+	require.NotContains(t, m.Status, "committed")
 }
 
 func TestP602HistorySelectionDetailsAndViewport(t *testing.T) {
@@ -402,4 +431,8 @@ func TestP602AgentHistoryRowDisplaysProvenance(t *testing.T) {
 	a := &docAPI{cfg: dto.ProjectConfig{ProjectDocs: []string{"notes"}}, rows: []dto.Document{row}, current: []dto.Document{}}
 	m := scoped(t, a, 7, 7, "project")
 	require.Contains(t, View(m, 80, 10), "history agent")
+}
+
+func (a *docAPI) ListComments(context.Context, int, string) ([]dto.Document, error) {
+	return []dto.Document{}, nil
 }

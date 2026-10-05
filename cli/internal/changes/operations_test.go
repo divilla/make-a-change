@@ -4,8 +4,10 @@ import (
 	"cli/internal/dto"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
@@ -118,9 +120,9 @@ func (a *changeAPI) UpdateChangeAfterChange(ctx context.Context, _ int, v *int) 
 	return a.call(ctx, "after-change")
 }
 
-func (a *changeAPI) UpdateChangeOpen(ctx context.Context, _ int, v bool) error {
-	a.value.Open = v
-	return a.call(ctx, "open")
+func (a *changeAPI) UpdateChangeActive(ctx context.Context, _ int, v bool) error {
+	a.value.Active = v
+	return a.call(ctx, "active")
 }
 
 func (a *changeAPI) UpdateChangePRUrl(ctx context.Context, _ int, v string) error {
@@ -145,7 +147,7 @@ func changeCatalog() dto.ProjectConfig {
 }
 
 func changeSetup() (Model, *changeAPI) {
-	a := &changeAPI{value: dto.Change{ID: 12, ProjectID: 7, Title: "Original", Open: true, Completed: 73, DoneTC: 2, TotalTC: 9}}
+	a := &changeAPI{value: dto.Change{ID: 12, ProjectID: 7, Title: "Original", Active: true, Completed: 73, DoneTC: 2, TotalTC: 9}}
 	return Model{ProjectID: 7, Detail: Present(a.value), DetailLoaded: true}, a
 }
 
@@ -163,7 +165,7 @@ func TestP403EachChangeActionAndValidation(t *testing.T) {
 		op Operation
 		in Input
 	}{
-		{List, Input{}}, {Details, Input{}}, {Create, Input{Title: "Explicit", Value: "plain brief"}}, {Delete, Input{}}, {Title, Input{Value: "/save"}}, {Phase, Input{Value: "review"}}, {Types, Input{Types: []string{}}}, {Epic, Input{Association: &assoc}}, {Epic, Input{}}, {AfterChange, Input{Association: &assoc}}, {AfterChange, Input{}}, {Open, Input{Open: false}}, {PRURL, Input{Value: "https://host/path"}}, {Document, Input{DocumentType: "spec", Value: "new\tbytes\n"}},
+		{List, Input{}}, {Details, Input{}}, {Create, Input{Title: "Explicit", Value: "plain brief"}}, {Delete, Input{}}, {Title, Input{Value: "/save"}}, {Phase, Input{Value: "review"}}, {Types, Input{Types: []string{}}}, {Epic, Input{Association: &assoc}}, {Epic, Input{}}, {AfterChange, Input{Association: &assoc}}, {AfterChange, Input{}}, {Active, Input{Active: false}}, {PRURL, Input{Value: "https://host/path"}}, {Document, Input{DocumentType: "spec", Value: "new\tbytes\n"}},
 	} {
 		t.Run(string(tt.op), func(t *testing.T) {
 			m, a := changeSetup()
@@ -274,6 +276,85 @@ func TestP405CommittedStepsSurviveLaterFailureAndRetryOnlyReads(t *testing.T) {
 	}
 }
 
+type savedSlotDocuments struct {
+	api *changeAPI
+	row dto.Document
+}
+
+func (d *savedSlotDocuments) Save(ctx context.Context, id int, kind, body string) (int, error) {
+	d.row.ID, d.row.RefID, d.row.RefTable = 91, id, "change"
+	d.row.DocType, d.row.Body = kind, body
+	return d.row.ID, d.api.call(ctx, "document")
+}
+
+func (d *savedSlotDocuments) Load(ctx context.Context, _ int) ([]dto.Document, error) {
+	return []dto.Document{d.row}, d.api.call(ctx, "documents")
+}
+
+func Test031DocumentSlotTimestampUnavailableUntilRefresh(t *testing.T) {
+	oldTime := time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC)
+	newTime := oldTime.Add(48 * time.Hour)
+	for _, existing := range []bool{false, true} {
+		for _, failure := range []string{"types", "details", "documents", "testcases"} {
+			t.Run(fmt.Sprintf("existing=%t/failure=%s", existing, failure), func(t *testing.T) {
+				m, api := changeSetup()
+				m.Detail.DocumentTypes = []string{"spec"}
+				if existing {
+					m.Detail.Spec = "old body"
+					m.Detail.Documents = []dto.Document{{ID: 9, RefID: 12, RefTable: "change", DocType: "spec", Body: "old body", UpdatedAt: oldTime}}
+				}
+				prior := m.Detail.Documents
+				docs := &savedSlotDocuments{api: api, row: dto.Document{UpdatedAt: newTime}}
+				api.fail = failure
+				input := Input{DocumentType: "spec", Value: "Types: feature\nnew body"}
+				m, cmd := m.Begin(context.Background(), api, docs, Document, 7, 12, input, changeCatalog())
+				m = finish(t, m, cmd)
+				require.Error(t, m.Err)
+				require.Contains(t, m.Status, "saved spec document #91")
+				require.Contains(t, m.Status, "/retry reads only")
+				require.Len(t, m.Detail.Documents, 1)
+				require.Equal(t, 91, m.Detail.Documents[0].ID)
+				require.Equal(t, input.Value, m.Detail.Documents[0].Body)
+				require.True(t, m.Detail.Documents[0].UpdatedAt.IsZero())
+				if existing {
+					require.Equal(t, 9, prior[0].ID)
+					require.Equal(t, oldTime, prior[0].UpdatedAt)
+				}
+				for _, retryFails := range []bool{true, false} {
+					m.Detail.DocumentTypes = []string{"spec"} // The shell restores the project catalog after reads.
+					var slot DetailRow
+					for _, row := range DetailRows(m.Detail) {
+						if row.DocumentType == "spec" {
+							slot = row
+						}
+					}
+					require.Equal(t, 91, slot.DocumentID)
+					require.Equal(t, "[✓] spec", slot.Text)
+					api.fail = ""
+					if retryFails {
+						api.fail = "details"
+					}
+					before := len(api.calls)
+					m, cmd = m.Begin(context.Background(), api, docs, Details, 7, 12, Input{}, changeCatalog())
+					m = finish(t, m, cmd)
+					for _, call := range api.calls[before:] {
+						require.Contains(t, []string{"details", "documents", "testcases"}, call)
+					}
+				}
+				require.NoError(t, m.Err)
+				require.Equal(t, newTime, m.Detail.Documents[0].UpdatedAt)
+				m.Detail.DocumentTypes = []string{"spec"}
+				for _, row := range DetailRows(m.Detail) {
+					if row.DocumentType == "spec" {
+						require.Equal(t, "[✓] spec", row.Text)
+						require.Equal(t, newTime.Local().Format("2006-01-02 15:04"), row.Timestamp)
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestP404StaleResultsCanceledWorkAndInvisibleRows(t *testing.T) {
 	m, a := changeSetup()
 	m.Rows = []dto.ChangeView{m.Detail}
@@ -328,7 +409,7 @@ func TestP402EveryReturnedFieldAndLiteralNoOp(t *testing.T) {
 	for _, row := range append(fixedDetailRows(view), DetailRows(view)...) {
 		labels[row.Label] = true
 	}
-	for _, label := range []string{"ID", "Ref UUID", "Slug", "Epic", "After Change", "Phase", "Types", "Title", "Open", "Complete", "Created", "Modified", "PR URL"} {
+	for _, label := range []string{"ID", "Ref UUID", "Slug", "Epic", "After Change", "Phase", "Types", "Title", "Active", "Completed", "Comments", "Timestamps", "PR URL"} {
 		require.True(t, labels[label], label)
 	}
 	for _, value := range []string{"/save", "/cancel", "/editor", "/return"} {
@@ -345,8 +426,14 @@ func TestPresentUsesPaddedRefSlugForReferenceAndSlugRow(t *testing.T) {
 	require.Equal(t, "006", view.Ref)
 	require.Equal(t, refSlug, view.RefSlug)
 	rows := DetailRows(view)
-	require.Equal(t, refSlug, rows[0].Text)
-	require.Equal(t, "-", rows[4].Text)
+	for _, row := range rows {
+		if row.Label == "Slug" {
+			require.Equal(t, refSlug, row.Text)
+		}
+		if row.Label == "After Change" {
+			require.Equal(t, "-", row.Text)
+		}
+	}
 }
 
 func TestP403NullableAssociationForm(t *testing.T) {
@@ -372,7 +459,7 @@ func TestP405CancellationAfterCommitRetainsStepAndLiteralValue(t *testing.T) {
 			defer cancel()
 			a.cancelAfter = string(op)
 			a.cancel = cancel
-			in := Input{Title: "Created", Value: "literal\tbytes\n", DocumentType: "brief"}
+			in := Input{Title: "Comments", Value: "literal\tbytes\n", DocumentType: "brief"}
 			m, cmd := m.Begin(ctx, a, a, op, 7, 12, in, changeCatalog())
 			m = finish(t, m, cmd)
 			require.ErrorIs(t, m.Err, context.Canceled)
@@ -391,5 +478,54 @@ func TestP405CancellationAfterCommitRetainsStepAndLiteralValue(t *testing.T) {
 			require.NoError(t, m.Err)
 			require.Equal(t, []string{"details", "documents", "testcases"}, a.calls[before:])
 		})
+	}
+}
+
+func (a *changeAPI) ListInactiveChanges(ctx context.Context, id int) ([]dto.Change, error) {
+	return a.ListChangeRows(ctx, id)
+}
+
+type inactiveDeleteAPI struct{ *changeAPI }
+
+func (a inactiveDeleteAPI) ListInactiveChanges(ctx context.Context, _ int) ([]dto.Change, error) {
+	return []dto.Change{{ID: 13, ProjectID: 7, Active: false}}, a.call(ctx, "list-inactive")
+}
+
+func Test031DeleteRefreshPreservesListModeAndReadOnlyRecovery(t *testing.T) {
+	for _, inactive := range []bool{false, true} {
+		for _, refreshFails := range []bool{false, true} {
+			t.Run(fmt.Sprintf("inactive=%t/failure=%t", inactive, refreshFails), func(t *testing.T) {
+				m, base := changeSetup()
+				api := inactiveDeleteAPI{base}
+				m.Inactive = inactive
+				m.Rows = []dto.ChangeView{{ID: "12"}, {ID: "13", Active: false}}
+				endpoint := "list"
+				if inactive {
+					endpoint = "list-inactive"
+				}
+				if refreshFails {
+					base.fail = endpoint
+				}
+				m, cmd := m.Begin(context.Background(), api, base, Delete, 7, 12, Input{}, changeCatalog())
+				m = finish(t, m, cmd)
+				require.Equal(t, []string{"delete", endpoint}, base.calls)
+				require.Equal(t, inactive, m.Inactive)
+				require.Contains(t, m.Status, "deleted change #12")
+				if refreshFails {
+					require.ErrorContains(t, m.Err, endpoint+" failed")
+					require.Contains(t, m.Status, "/retry reads only")
+					require.Equal(t, []dto.ChangeView{{ID: "13", Active: false}}, m.Rows)
+					base.fail = ""
+					m, cmd = m.Begin(context.Background(), api, base, List, 7, 0, Input{}, changeCatalog())
+					m = finish(t, m, cmd)
+					require.Equal(t, []string{"delete", endpoint, endpoint}, base.calls)
+				}
+				require.NoError(t, m.Err)
+				if inactive {
+					require.Equal(t, "13", m.Rows[0].ID)
+					require.False(t, m.Rows[0].Active)
+				}
+			})
+		}
 	}
 }

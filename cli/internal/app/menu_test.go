@@ -18,8 +18,8 @@ func TestCommandMenuLayoutAndColors(t *testing.T) {
 	m.state = ChangeDetailsState
 	m.openCommandDropdown()
 	m.dropdown.options = append(m.dropdown.options, dto.Option{ID: "/example", Label: "/example"})
-	require.Len(t, m.dropdown.options, 19)
-	m.dropdown.highlighted = 2
+	require.Len(t, m.dropdown.options, 20)
+	m.dropdown.highlighted = 3
 
 	view := m.dropdownView(80)
 	lines := strings.Split(view, "\n")
@@ -27,13 +27,13 @@ func TestCommandMenuLayoutAndColors(t *testing.T) {
 	assert.Equal(t, strings.Repeat("▄", 80), stripANSI(lines[0]))
 	assert.True(t, strings.HasPrefix(stripANSI(lines[1]), " > /"))
 	assert.Equal(t, strings.Repeat("▀", 80), stripANSI(lines[2]))
-	assert.True(t, strings.HasPrefix(stripANSI(lines[3]), "    find"))
-	assert.Contains(t, stripANSI(lines[5]), "title")
-	assert.Contains(t, stripANSI(lines[5]), "Edit the title")
+	assert.True(t, strings.HasPrefix(stripANSI(lines[3]), "    new-comment"))
+	assert.Contains(t, stripANSI(lines[6]), "title")
+	assert.Contains(t, stripANSI(lines[6]), "Edit the title")
 	assert.Equal(t, 80, lipgloss.Width(lines[1]))
 	assert.Contains(t, lines[1], promptCursorWithStyle(styles.Default.MenuPrompt))
-	assert.Equal(t, 80, lipgloss.Width(lines[5]))
-	assert.Equal(t, "(3/19)", stripANSI(lines[11]))
+	assert.Equal(t, 80, lipgloss.Width(lines[6]))
+	assert.Equal(t, "(4/20)", stripANSI(lines[11]))
 	assert.NotContains(t, stripANSI(view), "▲")
 	assert.NotContains(t, stripANSI(view), "▼")
 	assert.Equal(t, styles.InputBackground, styles.Default.MenuPrompt.GetBackground())
@@ -50,9 +50,9 @@ func TestMenuCounterHidesBelowTenOptionsAndFollowsSelection(t *testing.T) {
 	m := NewModel()
 	m.state = ChangeDetailsState
 	m.openCommandDropdown()
-	m.dropdown.highlighted = 17
+	m.dropdown.highlighted = 18
 	lines := strings.Split(stripANSI(m.dropdownView(80)), "\n")
-	assert.Equal(t, "(18/18)", lines[len(lines)-1])
+	assert.Equal(t, "(19/19)", lines[len(lines)-1])
 	assert.Contains(t, strings.Join(lines, "\n"), "brief-clarify")
 
 	m.dropdown.options = m.dropdown.options[:9]
@@ -60,7 +60,7 @@ func TestMenuCounterHidesBelowTenOptionsAndFollowsSelection(t *testing.T) {
 	view := stripANSI(m.dropdownView(80))
 	assert.Len(t, strings.Split(view, "\n"), 12) // three prompt rows and all nine options
 	assert.NotContains(t, view, "(9/9)")
-	assert.Contains(t, view, "retry")
+	assert.Contains(t, view, "active")
 }
 
 func TestEveryCommandMenuItemHasHelp(t *testing.T) {

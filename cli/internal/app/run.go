@@ -83,7 +83,6 @@ func RunProgramWithIO(args []string, in io.Reader, out io.Writer, options Progra
 	programOptions := []tea.ProgramOption{
 		tea.WithInput(in),
 		tea.WithOutput(out),
-		tea.WithMouseCellMotion(),
 	}
 	programOptions = append(programOptions, tea.WithContext(ctx))
 	program := tea.NewProgram(model, programOptions...)

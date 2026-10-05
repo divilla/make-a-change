@@ -1,5 +1,108 @@
 # Backend refactor checkpoint — 016 final failure integration
 
+
+## Comment restoration and historical activation (2026-10-03, current)
+
+User additionally authorized wiring `sp_doc_active_set` to HTTP and identified the
+development database in `backend/config/dev.yaml`. New `doc/active-set` accepts a
+stored ID, resolves its owner/type, rejects comments400 and missing IDs404, and
+calls the existing procedure without creating a copy or changing the schema.
+Comment undelete remains a separate metadata-only operation. CLI spec031 records
+local-time/date placement, hidden deleted comments, colored embedded bat history,
+Left/Right navigation and Esc/Ctrl+C exit. ChangeDetailsScreen shows only
+updated_at; history shows created_at, updated_at and deleted_at, all in local
+time as yyyy-mm-dd hh:mm. The only inactive epic requirement is exclusion from
+the ChangeDetailsScreen Epic selection list; epic browsing/reactivation is out
+of scope. No CLI implementation has started.
+
+| Command on final Go source | Exit | Result |
+| --- | ---: | --- |
+| Formatter on changed files, then focused doc/server tests | 0 | Diff inspected; focused tests pass. |
+| `make -C backend check` | 0 | Formatting, lint, vet, race and tooling pass; writable temporary lint cache used. |
+| `make -C backend coverage` | 0 | Unit1224/1238 (98.8691%);95% gate passes. |
+| `make -C backend deps-audit` | 0 | No vulnerabilities found. |
+| First `make -C backend api-test` | 2 (APIHydra101) | Failed doc post assertion after activation fixture changed its expected active selection; no valid API profile. |
+| Final `make -C backend api-test` | 0 | All1131 requests in19 files pass; API1121/1238 (90.5493%);90% gate passes. |
+| `make -C backend tooling-test` after fixture correction | 0 | Python35 tests and actual suite/capture/ownership/route validator pass. |
+| `git diff --check` and spec link/acceptance-ID check | 0 | No whitespace or local-link errors. |
+
+| Production package | Unit covered/total | API covered/total |
+| --- | ---: | ---: |
+| `mch_api/cmd/server` | 79/93 | 77/93 |
+| `mch_api/internal/app` | 51/51 | 41/51 |
+| `mch_api/internal/change` | 315/315 | 296/315 |
+| `mch_api/internal/config` | 100/100 | 96/100 |
+| `mch_api/internal/doc` | 244/244 | 219/244 |
+| `mch_api/internal/domain` | 0/0 | 0/0 |
+| `mch_api/internal/epic` | 143/143 | 131/143 |
+| `mch_api/internal/health` | 21/21 | 16/21 |
+| `mch_api/internal/project` | 125/125 | 117/125 |
+| `mch_api/internal/testcase` | 105/105 | 97/105 |
+| `mch_api/pkg/config` | 31/31 | 23/31 |
+| `mch_api/pkg/markdown` | 10/10 | 8/10 |
+
+Unit has14 uncovered cmd/server statements; other production packages are100%
+covered (domain0/0). API has117 uncovered statements, including defensive
+validation and database failure/scan paths. Exact uncovered statements/functions,
+source hashes and independent raw counters are under `.coverage/{unit,api}`.
+No failed/incomplete campaign is combined with passing measurements. Final API
+restores its expected cleanup state; no skips or cleanup failures remain.
+
+The API campaign explicitly loads the development connection from config/dev.yaml,
+using localhost15432 database `changes` and an owned server on19080. Only captured
+test-owned IDs are mutated. No direct SQL test fixture, DB reset/lifecycle action,
+other-server shutdown, Git publication or promotion occurred. There is no inferred
+use of `changes_test`; its only checked-in references are in backup scripts.
+The previous failed campaign's raw artifacts remain in `/tmp/031-api-failed-01`
+and its stdout in `/tmp/031-backend-api-test.failed-01.log`. Final command logs
+are `/tmp/031-backend-{check,coverage,deps-audit,api-test,tooling}.log`.
+
+Source is d1d8ae5 plus the current uncommitted endpoint/test diff. Documentation was
+finalized after measurement; production Go and unit-test hashes remain unchanged.
+The API profile uses the corrected final APIHydra suite. The earlier unit profile
+predates only that API fixture cleanup, not any production/unit-test change.
+
+Next action: resolve spec031's remaining product choices and finalize the spec.
+
+## Comment undelete (2026-10-03, pre-designation evidence)
+
+User explicitly requested `/comment-undelete` while preparing CLI spec031.
+`POST /api/v1/doc/comment-undelete` accepts a positive ID and returns empty204,
+clearing only comment deletion metadata. Already live comments succeed; missing
+or non-comment IDs return404. Identity, owner, body, provenance and created/updated
+timestamps remain unchanged. No SQL schema, database lifecycle, CLI production,
+Git publication or promotion action occurred.
+
+| Command actually run | Exit | Result |
+| --- | ---: | --- |
+| `go test ./internal/doc ./cmd/server -count=1` from backend | 0 | Focused tests pass. |
+| Pinned formatter on changed Go files, initially from root | 3 | Wrong relative paths; no files modified. |
+| Same formatter on changed Go files from backend | 0 | Formatted only the changed files; diff inspected. |
+| `make -C backend check` | 0 | Formatting, lint, vet, race and tooling pass; lint emitted sandbox read-only-cache warnings. |
+| `make -C backend coverage` | 0 | Fresh unit statements 1205/1219 (98.8515%); 95% gate passes. |
+| `make -C backend deps-audit` | 0 | No vulnerabilities found. |
+| `git diff --check` | 0 | No whitespace errors. |
+| `make -C backend api-test` | Not run | No development/test database designated in this session. API statement coverage unmeasured. |
+
+Package gaps: cmd/server 79/93 (14 uncovered statements), unchanged from the
+previous baseline; all other production packages are fully covered, including
+doc225/225. Domain contains zero executable statements. Raw unit profiles, exact
+package totals, uncovered functions and provenance are in `.coverage/unit/`.
+Source is based on `d1d8ae5` plus the current uncommitted endpoint/test diff.
+Command output is in `/tmp/031-backend-{check,coverage,deps-audit}.log`.
+
+The APIHydra doc suite adds 30 endpoint-only requests using captured owned IDs,
+covering project/epic/change restoration, repeated requests, preserved fields,
+absence from active docs, non-comment404, bad input400 and wrong-method405.
+Static suite validation passes and the route ledger/audit now contains46 routes.
+These HTTP cases are authored, not run; missing-ID404 and database errors remain
+unit-covered. Backend completion remains incomplete until the designated API
+campaign passes and fresh API coverage is measured. CLI spec031 still records
+unresolved date/history and historical-document/epic activation contracts.
+
+Next action: obtain the development/test database designation for the API campaign
+and resolve spec031's remaining questions before CLI implementation.
+
 ## API error-suite refresh (2026-10-02)
 
 User requested missing errors that can be tested with APIHydra. This test-only

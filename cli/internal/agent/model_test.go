@@ -36,11 +36,11 @@ func (a *briefAPI) CreateChange(_ context.Context, in dto.ChangeCreateInput) (in
 		return 0, a.createErr
 	}
 	a.change = dto.Change{ID: 21, ProjectID: in.ProjectID}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: strings.TrimSpace(in.Brief), Current: true}}
+	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: strings.TrimSpace(in.Brief)}}
 	return 21, nil
 }
 
-func (a *briefAPI) CurrentDocuments(context.Context, int, string) ([]dto.Document, error) {
+func (a *briefAPI) ActiveDocuments(context.Context, int, string) ([]dto.Document, error) {
 	a.reads++
 	if a.readErr != nil {
 		return nil, a.readErr
@@ -54,7 +54,7 @@ func (a *briefAPI) InsertDocument(_ context.Context, in dto.DocumentInput) (int,
 		return 0, a.insertErr
 	}
 	id := 31 + len(a.inserts)
-	a.docs = []dto.Document{{ID: id, RefID: in.RefID, RefTable: "change", DocType: in.DocType, Body: strings.TrimSpace(in.Body), Current: true}}
+	a.docs = []dto.Document{{ID: id, RefID: in.RefID, RefTable: "change", DocType: in.DocType, Body: strings.TrimSpace(in.Body)}}
 	return id, nil
 }
 
@@ -82,7 +82,7 @@ func (r *briefRunner) Run(_ context.Context, req Request) (Output, string, error
 func TestP803ControllerForwardsProgressChannel(t *testing.T) {
 	a := validAPI()
 	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Text", Current: true}}
+	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Text"}}
 	m := Existing(7, 21)
 	m.Draft, m.BackendBrief, m.DocumentID = "Text", "Text", 31
 	progress := make(chan string, 1)
@@ -109,7 +109,7 @@ func TestP803ControllerOwnsRunnerPathsAndRejectsMissingArrays(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			a := validAPI()
 			a.change = dto.Change{ID: 21, ProjectID: 7}
-			a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Original", Current: true}}
+			a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Original"}}
 			root := briefTestRoot(t)
 			m, _ := doStep(t, Existing(7, 21), a, nil, Preflight)
 			runner := &briefRunner{results: []Output{tc.out}}
@@ -146,7 +146,7 @@ func TestP803ControllerOwnsRunnerPathsAndRejectsMissingArrays(t *testing.T) {
 func TestP803ControllerRefusesUnownedScratchPath(t *testing.T) {
 	a := validAPI()
 	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Original", Current: true}}
+	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Original"}}
 	root := briefTestRoot(t)
 	base := filepath.Join(root, ".mch", "tmp")
 	require.NoError(t, os.WriteFile(base, []byte("user file"), 0o600))
@@ -245,7 +245,7 @@ func TestP802CreatedBriefConflictBeforeRunner(t *testing.T) {
 func TestP804MultipleQuestionsAnswersAndResolveLoops(t *testing.T) {
 	a := validAPI()
 	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Original", Current: true}}
+	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Original"}}
 	m := Existing(7, 21)
 	m, _ = doStep(t, m, a, nil, Preflight)
 	r := &briefRunner{results: []Output{
@@ -344,7 +344,7 @@ func TestP804QuestionIDsMatchAnswerInputSyntax(t *testing.T) {
 func TestP804NonReadyWithoutBlockersStaysRecoverable(t *testing.T) {
 	a := validAPI()
 	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Original", Current: true}}
+	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Original"}}
 	m := Existing(7, 21)
 	m, _ = doStep(t, m, a, nil, Preflight)
 	r := &briefRunner{results: []Output{{RewrittenBrief: "Original", Questions: []Question{}, Unresolved: []string{}}}}
@@ -418,7 +418,7 @@ func TestP806MissingCatalogAndCurrentBriefRecovery(t *testing.T) {
 	require.Equal(t, "Supplied missing brief", a.inserts[0].Body)
 	m, _ = doStep(t, m, a, nil, Refresh)
 	require.Equal(t, "Supplied missing brief", m.BackendBrief)
-	a.docs = []dto.Document{{ID: 31, RefID: 99, RefTable: "change", DocType: "brief", Current: true}}
+	a.docs = []dto.Document{{ID: 31, RefID: 99, RefTable: "change", DocType: "brief"}}
 	m, _ = doStep(t, m, a, nil, Preflight)
 	require.Equal(t, Failed, m.Phase)
 	require.ErrorContains(t, m.Err, "owner")
@@ -427,7 +427,7 @@ func TestP806MissingCatalogAndCurrentBriefRecovery(t *testing.T) {
 func TestP802NewCreateAndExistingHumanInsertPayloads(t *testing.T) {
 	a := validAPI()
 	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Existing", Current: true}}
+	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Existing"}}
 	m := Existing(7, 21)
 	m, _ = doStep(t, m, a, nil, Preflight)
 	require.Equal(t, "Existing", m.Original)
@@ -447,7 +447,7 @@ func TestP802NewCreateAndExistingHumanInsertPayloads(t *testing.T) {
 func TestP802OriginalBriefExactEditorAndNoOp(t *testing.T) {
 	a := validAPI()
 	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Tabs\tand\nlines", Current: true}}
+	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Tabs\tand\nlines"}}
 	m := Existing(7, 21)
 	m, _ = doStep(t, m, a, nil, Preflight)
 	m, run := m.Begin(context.Background(), Write)
@@ -463,7 +463,7 @@ func TestP802OriginalBriefExactEditorAndNoOp(t *testing.T) {
 func TestP805WhitespaceOnlyHumanAndAgentChangesDoNotAppend(t *testing.T) {
 	a := validAPI()
 	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "text", Current: true}}
+	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "text"}}
 	m, _ := doStep(t, Existing(7, 21), a, nil, Preflight)
 	m = m.EditBrief("text\n")
 	require.Equal(t, "text\n", m.Original)
@@ -493,7 +493,7 @@ func TestP805WhitespaceOnlyHumanAndAgentChangesDoNotAppend(t *testing.T) {
 func TestP802ExistingFirstUserEditRemainsOriginalAfterAgentRewrite(t *testing.T) {
 	a := validAPI()
 	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Backend brief", Current: true}}
+	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Backend brief"}}
 	m, _ := doStep(t, Existing(7, 21), a, nil, Preflight)
 	userBrief := "\tUser brief\n```sh\nprint example\n```\n"
 	m = m.EditBrief(userBrief)
@@ -547,7 +547,7 @@ func TestP802FailedWriteRetainsDraftAndBusyDeduplication(t *testing.T) {
 func TestP805CommittedBriefSurvivesRepeatedFailedRefresh(t *testing.T) {
 	a := validAPI()
 	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Before", Current: true}}
+	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Before"}}
 	m := Existing(7, 21)
 	m, _ = doStep(t, m, a, nil, Preflight)
 	m = m.EditBrief("After")
@@ -570,7 +570,7 @@ func TestP805CommittedBriefSurvivesRepeatedFailedRefresh(t *testing.T) {
 func TestP805RefreshRetryKeepsUnsavedEditInDraft(t *testing.T) {
 	a := validAPI()
 	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Before", Current: true}}
+	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Before"}}
 	m := Existing(7, 21)
 	m, _ = doStep(t, m, a, nil, Preflight)
 	m = m.EditBrief("Committed")
@@ -605,7 +605,7 @@ func TestP805RefreshRetryKeepsUnsavedEditInDraft(t *testing.T) {
 func TestP804EditsInvalidateReadinessAndStaleOutput(t *testing.T) {
 	a := validAPI()
 	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Original", Current: true}}
+	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Original"}}
 	m := Existing(7, 21)
 	m, _ = doStep(t, m, a, nil, Preflight)
 	r := &briefRunner{results: []Output{{RewrittenBrief: "Original", Questions: []Question{}, Unresolved: []string{}, ReadyForSpec: true}}}
@@ -637,7 +637,7 @@ func TestP804UnchangedRewriteRevalidatesBeforeReady(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			a := validAPI()
 			a.change = dto.Change{ID: 21, ProjectID: 7}
-			a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Original", Current: true}}
+			a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Original"}}
 			m := Existing(7, 21)
 			m, _ = doStep(t, m, a, nil, Preflight)
 			r := &briefRunner{results: []Output{{RewrittenBrief: "Original", Questions: []Question{}, Unresolved: []string{}, ReadyForSpec: true}}}
@@ -671,7 +671,7 @@ func TestP806MissingBacklogWrongOwnerAndConflict(t *testing.T) {
 	m, _ = doStep(t, m, a, nil, Preflight)
 	require.ErrorContains(t, m.Err, "selected project")
 	a.change.ProjectID = 7
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Before", Current: true}}
+	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Before"}}
 	m, _ = doStep(t, m, a, nil, Preflight)
 	m = m.EditBrief("After")
 	a.docs[0].ID = 99
@@ -683,7 +683,7 @@ func TestP806MissingBacklogWrongOwnerAndConflict(t *testing.T) {
 func TestP806ConflictingCurrentRowsNeverStartRunner(t *testing.T) {
 	a := validAPI()
 	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Text", Current: true}, {ID: 32, RefID: 21, RefTable: "change", DocType: "spec", Body: "S1", Current: true}, {ID: 33, RefID: 21, RefTable: "change", DocType: "spec", Body: "S2", Current: true}}
+	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Text"}, {ID: 32, RefID: 21, RefTable: "change", DocType: "spec", Body: "S1"}, {ID: 33, RefID: 21, RefTable: "change", DocType: "spec", Body: "S2"}}
 	m := Existing(7, 21)
 	m, step := doStep(t, m, a, nil, Preflight)
 	require.ErrorContains(t, m.Err, "conflicting current spec")

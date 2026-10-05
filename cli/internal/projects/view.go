@@ -108,7 +108,7 @@ func DetailsView(project dto.Project, width int) string {
 	}
 	lines = append(lines, detailWrappedLines("Name", project.Name, styles.Default.AccentCyan, 80)...)
 	lines = append(lines,
-		detailLine("Config", project.Config, projectDetailValueStyle),
+		detailLine("Config", project.ConfigSlug, projectDetailValueStyle),
 		detailLine("Last ref", strconv.FormatInt(int64(project.LastRef), 10), projectDetailValueStyle),
 		detailLine("Changes", strconv.Itoa(project.ChangeCount), projectDetailValueStyle),
 		detailLine("Created", FormatTimestamp(project.CreatedAt), projectDetailTimestampStyle),

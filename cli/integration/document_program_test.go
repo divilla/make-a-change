@@ -42,6 +42,8 @@ func TestCLIProgramOrdinaryDocumentEditor(t *testing.T) {
 					change := programChange(12, "Existing")
 					change["change_types"] = []string{"bugfix"}
 					switch r.URL.Path {
+					case "/api/v1/doc/comment-list":
+						writeProgramJSON(w, []any{})
 					case "/api/v1/project/config":
 						writeProgramJSON(w, programProjectConfig())
 					case "/api/v1/project/details":
@@ -50,7 +52,7 @@ func TestCLIProgramOrdinaryDocumentEditor(t *testing.T) {
 						writeProgramJSON(w, []any{change})
 					case "/api/v1/change/details":
 						writeProgramJSON(w, change)
-					case "/api/v1/doc/current":
+					case "/api/v1/doc/list-active":
 						writeProgramJSON(w, []any{programDocument(field, saved)})
 					case "/api/v1/test-case/list":
 						writeProgramJSON(w, []any{})
@@ -101,9 +103,9 @@ func TestCLIProgramOrdinaryDocumentEditor(t *testing.T) {
 				if field == "spec" {
 					session.send(t, "/edit-spec\r")
 				} else {
-					down := 8
+					down := 6
 					if field == "pr" {
-						down = 10
+						down = 8
 					}
 					session.send(t, strings.Repeat("\x1b[B", down)+"\r")
 				}
@@ -164,6 +166,8 @@ func testDocumentEditorWaitsForDetail(t *testing.T, failed bool) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/config":
 			writeProgramJSON(w, programProjectConfig())
 		case "/api/v1/project/details":
@@ -179,7 +183,7 @@ func testDocumentEditorWaitsForDetail(t *testing.T, failed bool) {
 				}
 			}
 			writeProgramJSON(w, programChange(12, "Existing"))
-		case "/api/v1/doc/current":
+		case "/api/v1/doc/list-active":
 			writeProgramJSON(w, []any{programDocument("spec", original)})
 		case "/api/v1/test-case/list":
 			writeProgramJSON(w, []any{})
@@ -200,14 +204,14 @@ func testDocumentEditorWaitsForDetail(t *testing.T, failed bool) {
 	t.Setenv("EDITOR", script)
 	session.navigate(t, "/changes\r", "Rows 1-1 of 1")
 	session.navigate(t, "\r", "loading change")
-	session.navigate(t, "/edit-spec\r", "Load change details before editing")
+	session.navigate(t, "/edit-spec\r", "Load change details before editi")
 	assert.NoFileExists(t, capture, "pending detail must not launch the editor")
 	unblock()
 	if failed {
 		session.waitFor(t, "status load failed")
-		frames := session.output.count("Load change details before editing")
+		frames := session.output.count("Load change details before editi")
 		session.send(t, "/edit-spec\r")
-		session.output.waitForCount(t, "Load change details before editing", frames+1)
+		session.output.waitForCount(t, "Load change details before editi", frames+1)
 		assert.NoFileExists(t, capture, "failed detail must not launch the editor")
 		session.navigate(t, "/return\r", "Rows 1-1 of 1")
 		session.send(t, "\r")

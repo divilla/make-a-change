@@ -24,16 +24,18 @@ func (m Model) View() string {
 	width := terminalWidth(m.width)
 	if epicIndex != 0 {
 		height := m.epicViewportHeight(lines)
-		switch m.state {
-		case ChangesListState:
+		switch {
+		case m.historyOpen:
+			lines[epicIndex] = m.history.View(width, height)
+		case m.state == ChangesListState:
 			lines[epicIndex] = changes.TableViewport(m.changeList, m.changeFilters(), width, height, phaseColorMap(m.optionCatalog.phases))
-		case ChangeDetailsState:
+		case m.state == ChangeDetailsState:
 			lines[epicIndex] = changes.DetailsViewport(m.changeList, width, height, phaseColorMap(m.optionCatalog.phases))
-		case DocumentState:
+		case m.state == DocumentState:
 			lines[epicIndex] = documents.View(m.document, width, height)
-		case EpicDetailsState:
+		case m.state == EpicDetailsState:
 			lines[epicIndex] = epics.DetailsViewport(m.epicList, width, height)
-		case BackendConfigListState, BackendConfigDetailsState, BackendConfigFormState, BackendConfigDeleteState:
+		case isConfigurationState(m.state):
 			lines[epicIndex] = configurations.View(m.configurations, width, height)
 		default:
 			lines[epicIndex] = epics.TableView(m.epicList, width, height)
@@ -47,6 +49,20 @@ func (m Model) viewLines() ([]string, int) {
 	width := terminalWidth(m.width)
 	lines := []string{m.headerLine(width)}
 	epicIndex := 0
+	if m.historyOpen {
+		metadata := m.history.Metadata()
+		if m.history.Preview {
+			metadata = "Viewing " + m.history.Type
+		}
+		lines = append(lines, ansi.Truncate(metadata, width, ""), "")
+		epicIndex = len(lines) - 1
+		if m.hasDropdown() {
+			lines = append(lines, m.dropdownView(width))
+		}
+		lines = append(lines, m.inputBand(width), m.errorLine(width))
+		lines = append(lines, styles.Default.Footer.Width(width).Render(m.footerText()))
+		return lines, epicIndex
+	}
 	if m.state == MainHelpState {
 		lines = append(lines, "Selected project: /brief-new starts brief clarification for a new change.\nUse /changes to browse and select an existing change, then /brief-clarify.")
 	}
@@ -113,6 +129,9 @@ func (m Model) viewLines() ([]string, int) {
 	if m.state == HealthState {
 		lines = append(lines, "", health.View(m.health))
 	}
+	if m.helpQuery != "" {
+		lines = append(lines, styles.Default.Success.Render("Highlight: "+m.helpQuery))
+	}
 	if m.state == FindInputState {
 		lines = append(lines, "")
 		lines = append(lines, m.inputBand(width))
@@ -130,20 +149,25 @@ func (m Model) viewLines() ([]string, int) {
 		}
 		lines = append(lines, m.inputBand(width))
 	}
-	if m.err != "" {
-		lines = append(lines, styles.Default.Error.Render("Error: "+m.visibleDocumentText(m.err)))
-	}
-	if m.helpQuery != "" {
-		lines = append(lines, styles.Default.Success.Render("Highlight: "+m.helpQuery))
-	}
-	if m.state != ChangesListState && m.state != ChangeDetailsState {
-		lines = append(lines, "")
-	}
+
+	lines = append(lines, m.errorLine(width))
 	lines = append(lines, styles.Default.Footer.Width(width).Render(m.footerText()))
 	if m.quitting {
 		lines = append(lines, styles.Default.Success.Render("done"))
 	}
 	return lines, epicIndex
+}
+
+func (m Model) errorLine(width int) string {
+	if m.err == "" {
+		return ""
+	}
+	value := "Error: " + documents.SafeLine(strings.ReplaceAll(strings.ReplaceAll(m.err, "\r", " "), "\n", " "))
+	if cells := ansi.StringWidth(value); cells > width {
+		tail := max(0, width/2)
+		value = ansi.Truncate(value, max(0, width-tail-1), "") + "…" + ansi.Cut(value, cells-tail, cells)
+	}
+	return styles.Default.Error.Render(value)
 }
 
 func (m Model) epicViewportHeight(lines []string) int {
@@ -163,6 +187,12 @@ func (m Model) headerLine(width int) string {
 }
 
 func (m Model) headerRight() string {
+	if m.historyOpen {
+		if m.history.Preview {
+			return styles.Default.Foreground.Render("ItemViewScreen")
+		}
+		return styles.Default.Foreground.Render("DocumentHistoryScreen")
+	}
 	title := screenTitle(m.state)
 	if before, _, ok := strings.Cut(title, " - "); ok {
 		title = before
@@ -233,6 +263,12 @@ func firstLineWidth(value string) int {
 }
 
 func (m Model) helpText() string {
+	if m.historyOpen {
+		if m.history.Preview {
+			return "<up/down> scroll  |  <pgup/pgdown> page  |  <esc> or <ctrl+c> return"
+		}
+		return m.history.Help()
+	}
 	if m.hasDropdown() {
 		if m.dropdown.kind == dropdownConfirm {
 			return "<return> select  |  <esc> or <ctrl+c> cancel"
@@ -251,9 +287,30 @@ func (m Model) helpText() string {
 		}
 		return documents.Help(m.document)
 	case ChangesListState:
-		return "Type to filter changes  |  <ctrl+n> new change  |  <return> view  |  </> command"
+		if m.changeList.Inactive {
+			return "Inactive changes | Space activate | /retry reload | Esc/Ctrl+C return | Up/Down select | Type to filter"
+		}
+		return "Ctrl+H inactive changes | Type to filter changes  |  <ctrl+n> new change  |  <return> view  |  </> command"
 	case ChangeDetailsState:
-		return "<ctrl+n> new testcase  |  <return> edit  |  <space> toggle  |  <del> delete  |  <ctrl+ins> copy  |  </> command"
+		row, ok := changes.DetailRowAtSelection(m.changeList.Detail, m.changeList.DetailSelected)
+		if ok {
+			switch {
+			case row.DocumentType != "" || row.TestCaseID != "":
+				help := "<return> editor  |  <space> view  |  <del> delete"
+				if row.TestCaseID != "" {
+					help = "<return> editor  |  <space> toggle done  |  <del> delete"
+				}
+				if !row.Comment {
+					help += "  |  <h> or <ctrl+h> history"
+				}
+				return help + "  |  <ctrl+n> new testcase  |  </> command"
+			case row.Label == "Active":
+				return "<space> toggle active  |  </> command"
+			case row.Label == "ID" || row.Label == "Ref UUID":
+				return "<ctrl+ins> copy  |  <ctrl+n> new testcase  |  </> command"
+			}
+		}
+		return "<return> edit  |  <ctrl+ins> copy  |  </> command"
 	case TestCaseCreateState:
 		return testcases.CreateForm().Help
 	case TestCaseUpdateState:
@@ -404,7 +461,7 @@ func promptValueLines(value string) []string {
 func (m Model) footerText() string {
 	currentProject := "Current Project: " + m.currentProjectFooter()
 	if m.status != "" {
-		return fmt.Sprintf("%s  |  status %s  |  %s  |  %s", m.helpText(), m.visibleDocumentText(m.status), currentProject, footerColorStrip())
+		return fmt.Sprintf("status %s  |  %s  |  %s  |  %s", m.visibleDocumentText(m.status), m.helpText(), currentProject, footerColorStrip())
 	}
 	return m.helpText() + "  |  " + currentProject + "  |  " + footerColorStrip()
 }
@@ -499,7 +556,7 @@ func (m Model) changeTableRows() int {
 	lines, _ := m.viewLines()
 	extra := 4
 	if m.state == ChangeDetailsState {
-		extra = 2
+		extra = 0
 	}
 	return max(1, m.epicViewportHeight(lines)-extra)
 }

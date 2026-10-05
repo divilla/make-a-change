@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	projectJSON = `{"id":7,"name":"Seven","config":"custom","last_ref":42,"created_at":"2026-09-28T10:00:00Z","updated_at":"2026-09-28T11:00:00Z","change_count":3}`
+	projectJSON = `{"id":7,"name":"Seven","config_slug":"custom","active":true,"last_ref":42,"created_at":"2026-09-28T10:00:00Z","updated_at":"2026-09-28T11:00:00Z","change_count":3}`
 	configJSON  = `{"slug":"custom","project_docs":["readme"],"epic_docs":["brief"],"change_docs":["brief","spec"],"change_phases":["todo","done"],"change_colors":["12"],"change_types":["fix","feature"]}`
 )
 
@@ -32,7 +32,7 @@ func TestP201ProjectRoutesShapesAndExactlyOneRequest(t *testing.T) {
 			p := rows[0]
 			assert.Equal(t, 7, p.ID)
 			assert.Equal(t, int32(42), p.LastRef)
-			assert.Equal(t, "custom", p.Config)
+			assert.Equal(t, "custom", p.ConfigSlug)
 			assert.Equal(t, 3, p.ChangeCount)
 			assert.Equal(t, "Seven", p.Name)
 			assert.Equal(t, 2026, p.CreatedAt.Year())

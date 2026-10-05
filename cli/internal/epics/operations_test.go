@@ -76,7 +76,7 @@ func TestP302EpicOperationsValidationFormsAndPresentation(t *testing.T) {
 	}
 	e := dto.Epic{ID: 3, ProjectID: 7, Name: "Exact\nname", DoneTC: 2, TotalTC: 8, Completed: 63, ChangeCount: 4, CreatedAt: time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 9, 28, 11, 0, 0, 0, time.UTC)}
 	m := Model{ProjectID: 7, Detail: e, DetailLoaded: true, Rows: []dto.Epic{e, {ID: 4, ProjectID: 7, Name: "Other"}}}
-	for _, part := range []string{"ID: 3", "Project ID: 7", "Name: Exact\nname", "Done TC: 2", "Total TC: 8", "Completed: 63", "Changes: 4", "Created: 2026-09-28 10:00:00Z", "Modified: 2026-09-28 11:00:00Z"} {
+	for _, part := range []string{"ID: 3", "Project ID: 7", "Name: Exact\nname", "Done TC: 2", "Total TC: 8", "Completed: 63", "Changes: 4", "Created: " + e.CreatedAt.Local().Format("2006-01-02 15:04"), "Modified: " + e.UpdatedAt.Local().Format("2006-01-02 15:04")} {
 		assert.Contains(t, DetailsView(m, 160), part)
 	}
 	assert.Contains(t, TableView(m, 160, 24), "3  Exact name  2/8  63  4")

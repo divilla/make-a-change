@@ -1,10 +1,10 @@
 # Backend route, schema and error ledger — validation-cause repair
 
 Authority: read-only `../../docs/backend-architecture.md`, `../../db/init.sql`
-and `../../db/seed.sql`. The current inventory is **45 registered method/path
-pairs**: 13 change, eight doc, five config, 12 project/epic, five testcase and two
-health operations. APIHydra exercises all 45 with successful status and response
-assertions. The numbered P/R sections preserve historical refactor evidence;
+and `../../db/seed.sql`. The current inventory is **47 registered method/path
+pairs**: 13 change, ten doc, five config, 12 project/epic, five testcase and two
+health operations. The current APIHydra campaign passes1131 requests covering
+all47 operations; unit/API statement coverage is1224/1238 and1121/1238 respectively. The numbered P/R sections preserve historical refactor evidence;
 the current schema alignment below supersedes their older API/SQL contracts.
 No authentication middleware or session/token implementation is added.
 
@@ -16,6 +16,29 @@ owned instrumented server against the user-designated development database,
 without SQL setup or database lifecycle management. The 90% statement gate remains
 strict and independent of unit coverage. See [the suite guide](../apih-tests/coverage.md)
 and [the checkpoint](backend-refactor-checkpoint.md) for fresh measurements.
+
+## Historical document activation — 2026-10-03
+
+`POST /api/v1/doc/active-set` accepts a positive stored document ID and returns
+empty204. Service reads the stored owner/type; comment IDs return400 and missing
+IDs404. Repository calls `sp_doc_active_set(text,bigint,text,bigint)` with those
+stored values, selecting/restoring that same ID without a new version. The
+existing procedure owns selection and restoration metadata; no schema change or
+insert-time catalog validation is added. Lookup and CALL are separate statements,
+not an atomic transaction. Tests cover contexts, validation, lookup/CALL failures
+and all three owners. APIHydra selects old/deleted versions and independently
+verifies identity, body, provenance, creation time and active-selection reads.
+
+## Comment undelete — 2026-10-03
+
+`POST /api/v1/doc/comment-undelete` accepts `{"id": <positive integer>}` and
+returns empty204. One parameterized UPDATE clears `deleted_by` and `deleted_at`
+only for `doc_type=comment`. Identity, owner, body, provenance, created_at and
+updated_at remain unchanged; repeated undelete of a live comment succeeds.
+Missing/non-comment IDs return404; malformed or invalid IDs return400.
+Comments do not enter `doc_active`. APIHydra cases cover owned project/epic/change
+comments, repeat requests, preserved fields, active-list exclusion, non-comment404
+and input/method errors. No SQL schema change or database reset is needed.
 
 ## Schema alignment — 2026-10-02
 
@@ -422,11 +445,13 @@ change_types; phases reject values outside change_phases. Config update replaces
 Config deletion locks project writes while checking references and deleting.
 
 | POST | /api/v1/doc/list | 200 all history, including comments and soft-deleted docs; ref_id/ref_table; id DESC | current | doc/02-main.yaml |
+| POST | /api/v1/doc/active-set | 204 empty; ID request; resolve stored owner/type, reject comments400, missing404; CALL sp_doc_active_set selects/restores the same ID | current | pass (doc/02-main.yaml) |
 | POST | /api/v1/doc/list-active | 200 selected docs from vw_doc_active; doc_id DESC; nullable deleted_at | current | doc/02-main.yaml |
 | POST | /api/v1/doc/details | 200 one doc by id; 404 absent | current | doc/02-main.yaml |
 | POST | /api/v1/doc/insert | 201 ID only; append and select active document; fn_doc_insert(text,bigint,text,text,bool) | current | doc/02-main.yaml |
 | POST | /api/v1/doc/comment-list | 200 all comments for ref_table/ref_id, including soft-deleted history; id DESC | current | pass (doc/02-main.yaml) |
 | POST | /api/v1/doc/comment-insert | 201 ID only; validated live parent; fn_doc_comment_insert; no active selection | current | pass (doc/02-main.yaml) |
+| POST | /api/v1/doc/comment-undelete | 204 empty; ID request; clear comment deletion metadata, preserve identity/content/provenance/timestamps; already live succeeds; missing/non-comment404 | current | pass (doc/02-main.yaml) |
 | POST | /api/v1/doc/comment-update | 204 empty; explicit body, including empty string; fn_doc_comment_update; missing/non-comment404 | current | pass (doc/02-main.yaml) |
 | POST | /api/v1/doc/delete | 204 empty; fn_doc_delete retains history and removes active selection; missing404 | current | pass (doc/02-main.yaml); missing unit-tested |
 | POST | /api/v1/config/list | 200 configs ordered by slug | current | config/02-main.yaml |

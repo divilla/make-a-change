@@ -11,8 +11,9 @@ import (
 
 // API exposes individual document operations.
 type API interface {
-	CurrentDocuments(context.Context, int, string) ([]dto.Document, error)
+	ActiveDocuments(context.Context, int, string) ([]dto.Document, error)
 	InsertDocument(context.Context, dto.DocumentInput) (int, error)
+	ListComments(context.Context, int, string) ([]dto.Document, error)
 }
 
 // ScreenAPI adds history, details and configuration to ordinary document access.
@@ -31,7 +32,18 @@ type Access struct {
 
 // Load reads all current versions without manufacturing absent documents.
 func (a Access) Load(ctx context.Context, id int) ([]dto.Document, error) {
-	return a.API.CurrentDocuments(ctx, id, "change")
+	rows, err := a.API.ActiveDocuments(ctx, id, "change")
+	if err != nil {
+		return nil, err
+	}
+	if err = ValidateActive(rows, id, "change"); err != nil {
+		return nil, err
+	}
+	comments, err := a.API.ListComments(ctx, id, "change")
+	if err != nil {
+		return nil, err
+	}
+	return append(rows, comments...), nil
 }
 
 // Save validates a configured type and appends one human-edited version.

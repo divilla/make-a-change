@@ -8,6 +8,7 @@ import (
 // API is the change feature's single-operation backend capability.
 type API interface {
 	ListChangeRows(context.Context, int) ([]dto.Change, error)
+	ListInactiveChanges(context.Context, int) ([]dto.Change, error)
 	GetChange(context.Context, int) (dto.Change, error)
 	CreateChange(context.Context, dto.ChangeCreateInput) (int, error)
 	UpdateChangeTitle(context.Context, int, string) error
@@ -15,7 +16,7 @@ type API interface {
 	UpdateChangePRUrl(context.Context, int, string) error
 	UpdateChangeTypes(context.Context, int, []string) error
 	UpdateChangePhase(context.Context, int, string) error
-	UpdateChangeOpen(context.Context, int, bool) error
+	UpdateChangeActive(context.Context, int, bool) error
 	UpdateChangeEpic(context.Context, int, *int) error
 	UpdateChangeAfterChange(context.Context, int, *int) error
 	DeleteChange(context.Context, int) error

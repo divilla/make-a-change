@@ -68,13 +68,14 @@ var commandDescriptions = map[string]string{
 	"/health-legacy":   "Check the legacy health route",
 	"/health-v1":       "Check the v1 health route",
 	"/help":            "Show help for this screen",
+	"/new-comment":     "Create an independent comment",
 	"/new-change":      "Create a change",
 	"/new-config":      "Create a backend configuration",
 	"/new-document":    "Append a document",
 	"/new-epic":        "Create an epic",
 	"/new-project":     "Create a project",
 	"/new-testcase":    "Create a test case",
-	"/open":            "Toggle the change's open state",
+	"/active":          "Toggle the change's active state",
 	"/phase":           "Choose a phase",
 	"/phase-filter":    "Filter changes by phase",
 	"/pr-url":          "Set the pull request URL",
@@ -106,6 +107,23 @@ func commandOptions(state State) []dto.Option {
 func commandAllowed(state State, command string) bool {
 	for _, allowed := range commandsByState[state] {
 		if allowed == command {
+			return true
+		}
+	}
+	return false
+}
+
+func (m Model) commandOptions(state State) []dto.Option {
+	options := commandOptions(state)
+	if state == ChangesListState && m.changeList.Inactive {
+		options = append(options, dto.Option{ID: "/retry", Label: "/retry"})
+	}
+	return options
+}
+
+func (m Model) commandAllowed(state State, command string) bool {
+	for _, option := range m.commandOptions(state) {
+		if option.ID == command {
 			return true
 		}
 	}

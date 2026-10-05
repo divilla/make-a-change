@@ -215,3 +215,29 @@ func TestDocRepositoryInsertAndProject(t *testing.T) {
 		}
 	}
 }
+
+func TestCommentUndeleteRepositoryRestrictsTypeAndPreservesContent(t *testing.T) {
+	for _, cause := range []error{nil, pgx.ErrNoRows, context.Canceled, errors.New("write failed")} {
+		p := newBoundary(t)
+		p.args = []any{8}
+		p.row = valueRow{t: t, values: []any{8}, err: cause}
+		err := (&Repo{pool: p}).CommentUndelete(p.ctx, domain.DocIDRequest{ID: 8})
+		if errors.Is(cause, pgx.ErrNoRows) {
+			require.ErrorIs(t, err, app.ErrDocNotFound)
+		} else {
+			require.ErrorIs(t, err, cause)
+		}
+		require.Equal(t, "update public.doc set deleted_by = null, deleted_at = null where id = $1 and doc_type = 'comment' returning id", p.sql)
+	}
+}
+
+func TestActiveSetRepositoryCallsExistingProcedure(t *testing.T) {
+	for _, cause := range []error{nil, context.Canceled, errors.New("procedure failed")} {
+		p := newBoundary(t)
+		p.args = []any{"change", 7, "spec", 8}
+		p.err = cause
+		err := (&Repo{pool: p}).ActiveSet(p.ctx, domain.Doc{ID: 8, RefID: 7, RefTable: "change", DocType: "spec"})
+		require.ErrorIs(t, err, cause)
+		require.Equal(t, "call public.sp_doc_active_set($1::text,$2::bigint,$3::text,$4::bigint)", p.sql)
+	}
+}

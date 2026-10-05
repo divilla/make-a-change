@@ -12,9 +12,11 @@ import (
 type Repository interface {
 	List(context.Context, domain.DocListRequest) ([]domain.Doc, error)
 	ListActive(context.Context, domain.DocListRequest) ([]domain.Doc, error)
+	ActiveSet(context.Context, domain.Doc) error
 	CommentList(context.Context, domain.DocListRequest) ([]domain.Doc, error)
 	CommentInsert(context.Context, domain.DocCommentInsertRequest) (domain.DocIDRequest, error)
 	CommentUpdate(context.Context, domain.DocCommentUpdateRequest) error
+	CommentUndelete(context.Context, domain.DocIDRequest) error
 	Delete(context.Context, domain.DocIDRequest) error
 	Details(context.Context, domain.DocIDRequest) (domain.Doc, error)
 	Project(context.Context, domain.DocListRequest) (domain.ProjectIDRequest, error)
@@ -70,6 +72,21 @@ func (s *Service) ListActive(ctx context.Context, req domain.DocListRequest) ([]
 		docs[i].HTML = s.renderer.Render(docs[i].Body)
 	}
 	return docs, nil
+}
+
+// ActiveSet selects the stored version for its own owner and type, without creating a copy.
+func (s *Service) ActiveSet(ctx context.Context, req domain.DocIDRequest) error {
+	if req.ID <= 0 {
+		return app.ErrDocInvalidInput
+	}
+	d, err := s.repo.Details(ctx, req)
+	if err != nil {
+		return err
+	}
+	if d.DocType == "comment" {
+		return app.ErrDocInvalidReference
+	}
+	return s.repo.ActiveSet(ctx, d)
 }
 
 // Details returns one doc by its own ID, including historical docs.
@@ -148,6 +165,14 @@ func (s *Service) CommentUpdate(ctx context.Context, req domain.DocCommentUpdate
 		return app.ErrDocInvalidInput
 	}
 	return s.repo.CommentUpdate(ctx, req)
+}
+
+// CommentUndelete restores an existing comment without changing its content or identity.
+func (s *Service) CommentUndelete(ctx context.Context, req domain.DocIDRequest) error {
+	if req.ID <= 0 {
+		return app.ErrDocInvalidInput
+	}
+	return s.repo.CommentUndelete(ctx, req)
 }
 
 // Delete retains document history and removes its active selection in the database.

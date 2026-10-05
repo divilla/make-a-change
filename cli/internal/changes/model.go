@@ -2,13 +2,13 @@ package changes
 
 import (
 	"cli/internal/dto"
+	"cli/internal/ui"
 	"context"
 	"fmt"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // Filters stores active change list filter selections.
@@ -42,6 +42,7 @@ type Model struct {
 	DetailSelected int
 	DetailOffset   int
 	Loading        bool
+	Inactive       bool
 }
 
 // DetailRow is one row in the Change details table.
@@ -53,6 +54,11 @@ type DetailRow struct {
 	TestCaseID   string
 	TestCaseText string
 	TestCaseDone bool
+	DocumentType string
+	DocumentID   int
+	Comment      bool
+	NoWrap       bool
+	Timestamp    string
 }
 
 // ParsedSpec stores metadata extracted from spec markdown.
@@ -243,42 +249,82 @@ func DetailRows(change dto.ChangeView) []DetailRow {
 		return nil
 	}
 	rows := []DetailRow{
-		{Label: "Slug", Text: displayNullable(change.RefSlug), Selectable: true},
 		{Label: "Epic", Text: displayNullable(change.EpicName), Selectable: true},
 		{Label: "Phase", Text: change.ChangePhase, Selectable: true},
 		{Label: "Types", Text: strings.Join(change.ChangeTypes, "|"), Selectable: true},
-		{Label: "After Change", Text: displayNullable(change.AfterChangeName), Selectable: true, DividerAfter: true},
+		{Label: "Active", Text: testCaseDoneIcon(change.Active), Selectable: true},
+		{Label: "Timestamps", Text: "Created: " + formatListTimestamp(change.Created) + " -=- Modified: " + formatListTimestamp(change.Modified), DividerAfter: true},
 		{Label: "Title", Text: change.Title, Selectable: true, DividerAfter: true},
-		{Label: "Brief", Text: change.Brief, Selectable: true, DividerAfter: true},
-		{Label: "Spec", Text: change.Spec, Selectable: true, DividerAfter: true},
 	}
-	for i, testCase := range change.TestCases {
-		label := fmt.Sprintf("%s (#%d)", testCase.Scenario, testCase.ID)
-		if !testCase.CreatedAt.IsZero() && !testCase.UpdatedAt.IsZero() {
-			label += fmt.Sprintf("  created %s  updated %s", testCase.CreatedAt.Format(time.RFC3339), testCase.UpdatedAt.Format(time.RFC3339))
+	for _, kind := range change.DocumentTypes {
+		if kind == "comment" {
+			continue
 		}
-		rows = append(rows, DetailRow{
-			Label:        testCaseDoneIcon(testCase.Done),
-			Text:         label,
+		row := DetailRow{Text: "[ ] " + kind, Selectable: true, DocumentType: kind, NoWrap: true}
+		for _, d := range change.Documents {
+			if d.DocType == kind {
+				row.DocumentID = d.ID
+				row.Text = "[✓] " + kind
+				if !d.UpdatedAt.IsZero() {
+					row.Timestamp = d.UpdatedAt.Local().Format("2006-01-02 15:04")
+				}
+			}
+		}
+		if len(rows) == 6 {
+			row.Label = "Docs"
+		}
+		rows = append(rows, row)
+	}
+	if len(rows) == 6 {
+		rows = append(rows, DetailRow{Label: "Docs", Text: "-"})
+	}
+	rows[len(rows)-1].DividerAfter = true
+	for i, testCase := range change.TestCases {
+		check := "[ ]"
+		if testCase.Done {
+			check = "[✓]"
+		}
+		row := DetailRow{
+			Text:         check + " " + ui.SafeText(normalizeNewlines(testCase.Scenario)) + fmt.Sprintf(" (#%d)", testCase.ID),
 			Selectable:   true,
-			DividerAfter: i == len(change.TestCases)-1,
 			TestCaseID:   strconv.Itoa(testCase.ID),
 			TestCaseText: testCase.Scenario,
 			TestCaseDone: testCase.Done,
-		})
-	}
-	for _, d := range change.Documents {
-		if d.DocType != "brief" && d.DocType != "spec" && d.DocType != "pr" {
-			rows = append(rows, DetailRow{Label: "Doc " + d.DocType, Text: d.Body, Selectable: true, DividerAfter: true})
 		}
+		if i == 0 {
+			row.Label = "Testcases"
+		}
+		rows = append(rows, row)
 	}
+	if len(change.TestCases) == 0 {
+		rows = append(rows, DetailRow{Label: "Testcases", Text: "-"})
+	}
+	rows[len(rows)-1].DividerAfter = true
+	rows = append(rows, DetailRow{Label: "Completed", Text: fmt.Sprintf("---=== %d/%d - %d%% ===---", change.Done, change.Total, change.Completed), DividerAfter: true})
+	commentStart := len(rows)
+	for _, d := range change.Comments {
+		if d.DeletedAt != nil {
+			continue
+		}
+		row := DetailRow{Text: "- " + strings.ReplaceAll(ui.SafeText(normalizeNewlines(d.Body)), "\n", " "), Selectable: true, DocumentType: "comment", DocumentID: d.ID, Comment: true, NoWrap: true}
+		if !d.UpdatedAt.IsZero() {
+			row.Timestamp = d.UpdatedAt.Local().Format("2006-01-02 15:04")
+			row.Text = row.Timestamp + " " + row.Text
+		}
+		if len(rows) == commentStart {
+			row.Label = "Comments"
+		}
+		rows = append(rows, row)
+	}
+	if len(rows) == commentStart {
+		rows = append(rows, DetailRow{Label: "Comments", Text: "-", Selectable: true, Comment: true, DocumentType: "comment"})
+	}
+	rows[len(rows)-1].DividerAfter = true
 	rows = append(rows,
-		DetailRow{Label: "PR", Text: change.PR, Selectable: true, DividerAfter: true},
-		DetailRow{Label: "PR URL", Text: change.PRUrl, Selectable: true},
-		DetailRow{Label: "Complete", Text: fmt.Sprintf("%d/%d - %d%%", change.Done, change.Total, change.Completed), Selectable: true},
-		DetailRow{Label: "Open", Text: testCaseDoneIcon(change.Open), Selectable: true},
-		DetailRow{Label: "Created", Text: formatListTimestamp(change.Created), Selectable: true},
-		DetailRow{Label: "Modified", Text: formatListTimestamp(change.Modified), Selectable: true},
+		DetailRow{Label: "After Change", Text: displayNullable(change.AfterChangeName), Selectable: true},
+		DetailRow{Label: "Ref UUID", Text: displayNullable(change.RefUUID), Selectable: true},
+		DetailRow{Label: "Slug", Text: displayNullable(change.RefSlug), Selectable: true},
+		DetailRow{Label: "PR URL", Text: displayNullable(change.PRUrl), Selectable: true},
 	)
 	return rows
 }
@@ -286,7 +332,6 @@ func DetailRows(change dto.ChangeView) []DetailRow {
 func fixedDetailRows(change dto.ChangeView) []DetailRow {
 	return []DetailRow{
 		{Label: "ID", Text: change.ID, Selectable: true},
-		{Label: "Ref UUID", Text: change.RefUUID, Selectable: true},
 	}
 }
 
@@ -404,7 +449,7 @@ func testCaseDoneIcon(value bool) string {
 
 // DetailColumnWidths returns label and text widths for the rendered details table.
 func DetailColumnWidths(change dto.ChangeView, width int) (int, int) {
-	contentWidth := width - 2
+	contentWidth := width
 	if width <= 4 {
 		contentWidth = 20
 	}
@@ -479,6 +524,13 @@ func selectableDetailRowAtOffset(rows []DetailRow, offset int, textWidth int) in
 }
 
 func detailRowTextLines(row DetailRow, textWidth int) []string {
+	if row.NoWrap {
+		value := row.Text
+		if row.DocumentType != "" && !row.Comment {
+			value = padRightDisplay(row.Timestamp, len("2006-01-02 15:04")) + " - " + value
+		}
+		return strings.Split(value, "\n")
+	}
 	value := strings.TrimSpace(row.Text)
 	if value == "" {
 		value = "-"
@@ -492,14 +544,7 @@ func detailRowTextLines(row DetailRow, textWidth int) []string {
 		}
 		textLines = append(textLines, wrapped...)
 	}
-	if detailRowShouldTruncate(row) && len(textLines) > 15 {
-		textLines = append(append([]string(nil), textLines[:15]...), "...")
-	}
 	return textLines
-}
-
-func detailRowShouldTruncate(row DetailRow) bool {
-	return row.Label == "Brief" || row.Label == "Spec" || row.Label == "PR"
 }
 
 func detailDividerAfter(row DetailRow) bool {

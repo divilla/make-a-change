@@ -25,6 +25,8 @@ func TestCLIProgramTestCaseLifecycle(t *testing.T) {
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/details":
 			writeProgramJSON(w, programProject(7, "Program Project"))
 		case "/api/v1/project/config":
@@ -41,7 +43,7 @@ func TestCLIProgramTestCaseLifecycle(t *testing.T) {
 			change["done_tc"] = done
 			change["total_tc"] = len(rows)
 			writeProgramJSON(w, change)
-		case "/api/v1/doc/current":
+		case "/api/v1/doc/list-active":
 			writeProgramJSON(w, []any{})
 		case "/api/v1/test-case/list":
 			require.Equal(t, map[string]any{"change_id": float64(12)}, payload)
@@ -76,18 +78,19 @@ func TestCLIProgramTestCaseLifecycle(t *testing.T) {
 	defer server.Close()
 	root := t.TempDir()
 	writeProgramConfig(t, root, server.URL)
-	s := startProgram(t, root, "")
+	s := startProgram(t, root, "Edited scenario")
 	s.navigate(t, "/changes\r", "Rows 1-1 of 1")
 	s.navigate(t, "\r", "no test cases")
 	s.navigate(t, "/new-testcase\r", "TestCaseCreateScreen")
 	s.navigate(t, "\x1b[200~/delete literal\x1b[201~\r", "saved test case")
-	// Two identity rows and eight ordinary detail rows precede the testcase.
-	s.send(t, strings.Repeat("\x1b[B", 10)+"\r")
+	// Identity, five editable metadata fields and three docs precede the testcase.
+	s.send(t, strings.Repeat("\x1b[B", 9)+"\r")
 	s.waitFor(t, "TestCaseUpdateScreen")
-	s.navigate(t, "\x15Edited scenario\r", "saved test case")
+	s.waitFor(t, "saved test case")
 	s.waitFor(t, "Edited scenario")
-	s.navigate(t, " ", "✅")
-	s.navigate(t, " ", "❌")
+	s.navigate(t, " ", "[✓] Edited scenario")
+	s.navigate(t, " ", "[ ] Edited scenario")
+	s.navigate(t, "h", "testcase history unavailable")
 	s.navigate(t, "\x1b[3~", "Are you sure?")
 	s.navigate(t, "\r", "deleted test case")
 	s.finishFromDetails(t)
@@ -110,6 +113,8 @@ func TestCLIProgramTestCaseCommittedWriteAndStaleRecovery(t *testing.T) {
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/details":
 			writeProgramJSON(w, programProject(7, "Program Project"))
 		case "/api/v1/project/config":
@@ -120,7 +125,7 @@ func TestCLIProgramTestCaseCommittedWriteAndStaleRecovery(t *testing.T) {
 			change["done_tc"] = 0
 			change["total_tc"] = len(rows)
 			writeProgramJSON(w, change)
-		case "/api/v1/doc/current":
+		case "/api/v1/doc/list-active":
 			writeProgramJSON(w, []any{})
 		case "/api/v1/test-case/list":
 			if failList > 0 {
@@ -162,9 +167,9 @@ func TestCLIProgramTestCaseCommittedWriteAndStaleRecovery(t *testing.T) {
 	s.navigate(t, "/new-testcase\r", "TestCaseCreateScreen")
 	s.navigate(t, "saved once\r", "saved test case; refresh failed")
 	s.navigate(t, "/retry\r", "read unavailable 1")
-	require.Contains(t, s.output.String()[strings.LastIndex(s.output.String(), "Error:"):], "saved test case; refresh failed (#31)")
+	require.Contains(t, s.output.String(), "saved test case; refresh failed (#31)")
 	s.navigate(t, "/retry\r", "read unavailable 0")
-	require.Contains(t, s.output.String()[strings.LastIndex(s.output.String(), "Error:"):], "saved test case; refresh failed (#31)")
+	require.Contains(t, s.output.String(), "saved test case; refresh failed (#31)")
 	s.navigate(t, "/retry\r", "saved test case; refreshed test cases")
 	s.waitFor(t, "#31")
 	s.navigate(t, "/retry\r", "loaded change")
@@ -190,6 +195,8 @@ func TestCLIProgramTestCaseShutdownCancelsRequest(t *testing.T) {
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/project/details":
 			writeProgramJSON(w, programProject(7, "Program Project"))
 		case "/api/v1/project/config":
@@ -198,7 +205,7 @@ func TestCLIProgramTestCaseShutdownCancelsRequest(t *testing.T) {
 			writeProgramJSON(w, []any{programChange(12, "Existing")})
 		case "/api/v1/change/details":
 			writeProgramJSON(w, programChange(12, "Existing"))
-		case "/api/v1/doc/current":
+		case "/api/v1/doc/list-active":
 			writeProgramJSON(w, []any{})
 		case "/api/v1/test-case/list":
 			mu.Lock()
@@ -257,6 +264,8 @@ func TestCLIProgramTestCaseKeyboardCancelsBusyRequest(t *testing.T) {
 					require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
 					w.Header().Set("Content-Type", "application/json")
 					switch r.URL.Path {
+					case "/api/v1/doc/comment-list":
+						writeProgramJSON(w, []any{})
 					case "/api/v1/project/details":
 						writeProgramJSON(w, programProject(7, "Program Project"))
 					case "/api/v1/project/config":
@@ -265,7 +274,7 @@ func TestCLIProgramTestCaseKeyboardCancelsBusyRequest(t *testing.T) {
 						writeProgramJSON(w, []any{programChange(12, "Existing")})
 					case "/api/v1/change/details":
 						writeProgramJSON(w, programChange(12, "Existing"))
-					case "/api/v1/doc/current":
+					case "/api/v1/doc/list-active":
 						writeProgramJSON(w, []any{})
 					case "/api/v1/test-case/list":
 						mu.Lock()

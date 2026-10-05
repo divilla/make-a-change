@@ -305,8 +305,7 @@ func DetailsView(m Model, width int, pageSize int, phaseColors ...PhaseColors) s
 	if len(rows) == 0 {
 		return ""
 	}
-	tableWidth := innerTableWidth(width)
-	contentWidth := max(20, tableWidth)
+	contentWidth := max(20, width)
 	labelWidth, textWidth := DetailColumnWidths(m.Detail, width)
 
 	allLines := make([]string, 0, len(rows))
@@ -340,7 +339,7 @@ func DetailsView(m Model, width int, pageSize int, phaseColors ...PhaseColors) s
 		lines = append(lines, detailBlankLine(labelWidth, textWidth))
 	}
 	content := ui.TruncateBlock(strings.Join(lines, "\n"), contentWidth)
-	return boxedTable(content, contentWidth)
+	return content
 }
 
 func activePhaseColors(values []PhaseColors) PhaseColors {
@@ -408,15 +407,39 @@ func detailTableRowLines(row DetailRow, labelWidth int, textWidth int, selected 
 			label = row.Label
 		}
 		labelText := padLeftDisplay(tableText(label, labelWidth), labelWidth)
-		valueText := padRightDisplay(tableText(text, textWidth), textWidth)
-		line := labelText + " │ " + valueText
+		style := detailValueStyle(row, phaseColors)
+		labelStyle := styles.Default.Muted
 		if selected && row.Selectable {
-			lines = append(lines, detailSelectedStyle(row, phaseColors).Render(line))
-			continue
+			style = detailSelectedStyle(row, phaseColors)
+			labelStyle = labelStyle.Background(styles.MutedPurple)
 		}
-		lines = append(lines, styles.Default.Muted.Render(labelText+" │ ")+detailValueStyle(row, phaseColors).Render(valueText))
+		value := detailStyledValue(row, padRightDisplay(text, textWidth), style, selected && row.Selectable)
+		lines = append(lines, labelStyle.Render(labelText+" │ ")+value)
 	}
 	return lines
+}
+
+func detailStyledValue(row DetailRow, value string, style lipgloss.Style, selected bool) string {
+	checkStyle := lipgloss.NewStyle().Foreground(styles.AccentGreen)
+	stampStyle := lipgloss.NewStyle().Foreground(styles.AccentCyan)
+	if row.DocumentType != "" && strings.HasPrefix(row.Timestamp, time.Now().Local().Format("2006-01-02")+" ") {
+		stampStyle = stampStyle.Foreground(styles.AccentPurple)
+	}
+	if selected {
+		checkStyle = checkStyle.Background(styles.MutedPurple)
+		stampStyle = stampStyle.Background(styles.MutedPurple)
+	}
+	prefix := ""
+	if row.Timestamp != "" {
+		if before, after, found := strings.Cut(value, row.Timestamp); found {
+			prefix = style.Render(before) + stampStyle.Render(row.Timestamp)
+			value = after
+		}
+	}
+	if before, after, found := strings.Cut(value, "✓"); found && !row.Comment {
+		return prefix + style.Render(before) + checkStyle.Render("✓") + style.Render(after)
+	}
+	return prefix + style.Render(value)
 }
 
 func detailDividerLine(labelWidth int, textWidth int) string {
@@ -428,9 +451,17 @@ func detailBlankLine(labelWidth int, textWidth int) string {
 }
 
 func detailValueStyle(row DetailRow, phaseColors PhaseColors) lipgloss.Style {
+	if row.DocumentType != "" {
+		return lipgloss.NewStyle().Foreground(styles.Foreground)
+	}
+	if row.TestCaseID != "" {
+		return lipgloss.NewStyle().Foreground(styles.AccentWhite)
+	}
 	switch row.Label {
+	case "Timestamps":
+		return lipgloss.NewStyle().Foreground(styles.AccentCyan)
 	case "Slug":
-		return styles.Default.AccentCyan
+		return lipgloss.NewStyle().Foreground(styles.AccentGreen)
 	case "Phase":
 		return phaseStyle(row.Text, phaseColors)
 	case "Title":
@@ -439,30 +470,15 @@ func detailValueStyle(row DetailRow, phaseColors PhaseColors) lipgloss.Style {
 		return lipgloss.NewStyle().Foreground(styles.AccentPurple)
 	case "Agent Edit":
 		return booleanIconStyle(row.Text)
-	case "Complete":
-		return lipgloss.NewStyle().Foreground(styles.AccentBlue)
+	case "Complete", "Completed":
+		return lipgloss.NewStyle().Foreground(styles.AccentBlue).Bold(true)
 	default:
 		return styles.Default.Foreground
 	}
 }
 
 func detailSelectedStyle(row DetailRow, phaseColors PhaseColors) lipgloss.Style {
-	switch row.Label {
-	case "Slug":
-		return styles.Default.AccentCyan.Background(styles.MutedPurple)
-	case "Phase":
-		return phaseStyle(row.Text, phaseColors).Background(styles.MutedPurple)
-	case "Title":
-		return lipgloss.NewStyle().Foreground(styles.Foreground).Background(styles.MutedPurple)
-	case "Types":
-		return lipgloss.NewStyle().Foreground(styles.AccentPurple).Background(styles.MutedPurple)
-	case "Agent Edit":
-		return booleanIconStyle(row.Text).Background(styles.MutedPurple)
-	case "Complete":
-		return lipgloss.NewStyle().Foreground(styles.AccentBlue).Background(styles.MutedPurple)
-	default:
-		return styles.Default.Selection
-	}
+	return detailValueStyle(row, phaseColors).Background(styles.MutedPurple)
 }
 
 func booleanIconStyle(value string) lipgloss.Style {
@@ -534,7 +550,7 @@ func formatListTimestamp(value string) string {
 	for _, layout := range layouts {
 		parsed, err := time.Parse(layout, value)
 		if err == nil {
-			return parsed.Format("2006-01-02 15.04")
+			return parsed.Local().Format("2006-01-02 15:04")
 		}
 	}
 	return "not a date"
@@ -558,7 +574,7 @@ func DetailsViewport(m Model, width, height int, colors PhaseColors) string {
 	if height <= 0 {
 		return ""
 	}
-	v := DetailsView(m, width, max(1, height-2), colors)
+	v := DetailsView(m, width, max(1, height), colors)
 	lines := strings.Split(v, "\n")
 	if len(lines) > height {
 		return strings.Join(lines[:height], "\n")

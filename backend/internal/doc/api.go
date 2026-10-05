@@ -21,11 +21,13 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 	a := &API{g: e.Group("/api").Group("/v1").Group("/doc"), s: s}
 	a.g.POST("/list", a.list)
 	a.g.POST("/list-active", a.listActive)
+	a.g.POST("/active-set", a.activeSet)
 	a.g.POST("/details", a.details)
 	a.g.POST("/insert", a.insert)
 	a.g.POST("/comment-list", a.commentList)
 	a.g.POST("/comment-insert", a.commentInsert)
 	a.g.POST("/comment-update", a.commentUpdate)
+	a.g.POST("/comment-undelete", a.commentUndelete)
 	a.g.POST("/delete", a.delete)
 	return a
 }
@@ -58,6 +60,20 @@ func (a *API) listActive(c *echo.Context) error {
 		return app.HTTPError(err)
 	}
 	return c.JSON(http.StatusOK, result)
+}
+
+func (a *API) activeSet(c *echo.Context) error {
+	var req domain.DocIDRequest
+	if err := c.Bind(&req); err != nil {
+		return app.PayloadError(err, "invalid doc active set payload")
+	}
+	if v := validate.Struct(req); !v.Validate() {
+		return app.HTTPError(app.ValidationError(v.Errors, app.ErrDocInvalidInput))
+	}
+	if err := a.s.ActiveSet(c.Request().Context(), req); err != nil {
+		return app.HTTPError(err)
+	}
+	return c.NoContent(http.StatusNoContent)
 }
 
 func (a *API) details(c *echo.Context) error {
@@ -129,6 +145,20 @@ func (a *API) commentUpdate(c *echo.Context) error {
 		return app.HTTPError(app.ValidationError(v.Errors, app.ErrDocInvalidInput))
 	}
 	if err := a.s.CommentUpdate(c.Request().Context(), req); err != nil {
+		return app.HTTPError(err)
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (a *API) commentUndelete(c *echo.Context) error {
+	var req domain.DocIDRequest
+	if err := c.Bind(&req); err != nil {
+		return app.PayloadError(err, "invalid doc comment undelete payload")
+	}
+	if v := validate.Struct(req); !v.Validate() {
+		return app.HTTPError(app.ValidationError(v.Errors, app.ErrDocInvalidInput))
+	}
+	if err := a.s.CommentUndelete(c.Request().Context(), req); err != nil {
 		return app.HTTPError(err)
 	}
 	return c.NoContent(http.StatusNoContent)

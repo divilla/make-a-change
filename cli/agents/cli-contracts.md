@@ -49,9 +49,9 @@ is removed in P0.
 ## Backend route inventory and action migration
 
 Observed directly from `NewAPI` registrations in backend `internal/*/api.go`.
-The current client still assumes removed routes and entity responses. These
-fixtures prove the legacy behavior only; P2 must revise transport assertions to
-current typed requests/statuses before feature migrations. Create returns 201
+The typed client follows these current operations. Earlier pass notes below
+record the migration from removed routes and entity responses; 031 updates the
+affected transport, fixtures and reachable document actions. Create returns 201
 with an ID (config insertion returns a slug); update/delete return 204. Document
 history/current/insert replaces change artifact fields; selected-project config
 replaces global option routes. No SQL or backend internals belong in CLI tests.
@@ -76,7 +76,7 @@ replaces global option routes. No SQL or backend internals belong in CLI tests.
 | POST | `/api/v1/change/update-epic` | Changes P4: update-epic |
 | POST | `/api/v1/change/update-after-change` | Changes P4: update-after-change |
 | POST | `/api/v1/change/update-phase` | Changes P4: update-phase |
-| POST | `/api/v1/change/update-open` | Changes P4: update-open |
+| POST | `/api/v1/change/update-active` | Changes P4: update-active |
 | POST | `/api/v1/change/update-types` | Changes P4: update-types |
 | POST | `/api/v1/change/update-title` | Changes P4: update-title |
 | POST | `/api/v1/change/update-slug` | Change details slug editor sends only a nonempty `[a-z0-9_-]` suffix in `slug`; list/details return the full nullable `ref_slug` (`006-some-slug` or `1116-some-slug`), whose reference prefix is fixed by the view. |
@@ -88,7 +88,7 @@ replaces global option routes. No SQL or backend internals belong in CLI tests.
 | POST | `/api/v1/test-case/update-done` | Testcases P5: update-done |
 | POST | `/api/v1/test-case/delete` | Testcases P5: delete |
 | POST | `/api/v1/doc/list` | Documents P6; workflow P8–P9: list |
-| POST | `/api/v1/doc/current` | Documents P6; workflow P8–P9: current |
+| POST | `/api/v1/doc/list-active` | Documents P6; workflow P8–P9 and 031: active selection |
 | POST | `/api/v1/doc/details` | Documents P6; workflow P8–P9: details |
 | POST | `/api/v1/doc/insert` | Documents P6; workflow P8–P9: insert |
 | POST | `/api/v1/config/list` | Configurations P7: list |
@@ -98,6 +98,14 @@ replaces global option routes. No SQL or backend internals belong in CLI tests.
 | POST | `/api/v1/config/delete` | Configurations P7: delete |
 | GET | `/api/v1/health` | Health P7: health check |
 | GET | `/api/health` | Health P7: compatibility health check |
+| POST | `/api/v1/epic/list-inactive` | Backend 030; inactive epic browsing deferred outside 031 |
+| POST | `/api/v1/change/list-inactive` | 031: list-inactive |
+| POST | `/api/v1/doc/active-set` | 031: active-set |
+| POST | `/api/v1/doc/comment-list` | 031: comment-list |
+| POST | `/api/v1/doc/comment-insert` | 031: comment-insert |
+| POST | `/api/v1/doc/comment-update` | 031: comment-update |
+| POST | `/api/v1/doc/comment-undelete` | 031: comment-undelete |
+| POST | `/api/v1/doc/delete` | 031: delete |
 <!-- routes:end -->
 
 ## Existing integration assertions
@@ -383,7 +391,7 @@ literal bytes and exactly-once attempts rather than scheduling a second save.
 
 Remaining legacy adapter ownership (no compatibility aliases were added):
 `ListEpics` and permissive epic options → P3; `ListChangeRows`, `GetChange`,
-`CreateChange`, `DeleteChange`, title/types/phase/open/epic/PR-URL updates → P4;
+`CreateChange`, `DeleteChange`, title/types/phase/active/epic/PR-URL updates → P4;
 `CreateTestCase`, `UpdateTestCase`, `UpdateTestCaseDone`, `DeleteTestCase` → P5;
 `UpdateChangeDef`, `UpdateChangeSpec`, `UpdateChangePR` → P6 document migration.
 Their legacy map decoders remain only for those unported operations. Backend
@@ -604,7 +612,7 @@ its associated failed refresh; recovery or unrelated navigation removes it.
 
 Dependency-driven P6 support is intentionally included: `documents.Access` validates
 selected-project configured types and exposes ordinary current/insert capabilities.
-Change details use `/doc/current`'s array and separate `/test-case/list`; `/brief`,
+Change details use `/doc/list-active`'s array and separate `/test-case/list`; `/brief`,
 `/edit-spec` and `/document` append document versions with human provenance.
 Configured custom document types are also selectable. Generic owner navigation,
 history/details and full document management remain P6. Testcase mutation contracts
@@ -615,14 +623,14 @@ and are not evidence of current backend mutation compatibility.
 | --- | --- | --- |
 | P4-01 eleven typed operations, exact payload/status, one request, malformed data, cancellation | `TestP401AllChangeOperationsExactTypedPayloadsAndOneRequest`, `TestP401MalformedChangeFieldsAndStatusCauses`, `TestP401ChangeCancellationAndUUIDOmission`, `TestP401InvalidIDsNeverRequest`; retained P2 transport deadline/status/cause/redirect tests | `TestCLIProgramChangeCRUDAndPartialSuccess`, `TestCLIProgramChangeMalformedReadRecovery`; adapter counters remain unit-only |
 | P4-02 every returned field, nullable identity/associations, int64 completion, separate presentation | `TestP402EveryReturnedFieldAndLiteralNoOp`, `TestP401MalformedChangeFieldsAndStatusCauses`, `TestP404ChangeViewportsFitAndExposeEveryField`, retained change table/detail assertions | `TestCLIProgramChangeCRUDAndPartialSuccess`, `TestShellNavigationEditorAndScrolling` show actual server completion and nullable fields |
-| P4-03 list/details/create/delete and seven field updates, help, forms, explicit title/brief/UUID, catalogs, clears/false/empty, HTTP(S) URL | `TestP403EachChangeActionAndValidation`, `TestP403InvalidFormsAndAbsentCatalogsNeverWrite`, `TestP403ExplicitCreateFieldsRetainRawBrief`, `TestP403NullableAssociationForm`; retained phase/epic/type/open/title keyboard tests and exact command lists | `TestCLIProgramChangeCRUDAndPartialSuccess` drives all eleven routes, ordered catalogs, null clears, false open, empty type set, UUID and plain brief creation; retained document editor program |
+| P4-03 list/details/create/delete and seven field updates, help, forms, explicit title/brief/UUID, catalogs, clears/false/empty, HTTP(S) URL | `TestP403EachChangeActionAndValidation`, `TestP403InvalidFormsAndAbsentCatalogsNeverWrite`, `TestP403ExplicitCreateFieldsRetainRawBrief`, `TestP403NullableAssociationForm`; retained phase/epic/type/active/title keyboard tests and exact command lists | `TestCLIProgramChangeCRUDAndPartialSuccess` drives all eleven routes, ordered catalogs, null clears, false active, empty type set, UUID and plain brief creation; retained document editor program |
 | P4-04 ownership, viewports, literal values, scoped outcomes, empty find, stale/project/entity/revision identity and shutdown | `TestP404ChangeEmptyFindAndObsoleteResults`, `TestP404ChangeReadCannotOverwriteDraftOrSelectedProject`, `TestP404StaleResultsCanceledWorkAndInvisibleRows`, `TestP404ChangeViewportsFitAndExposeEveryField`, `TestP404ChangeLongRenderingAndLiteralTitleNoOp`; package boundary checks | `TestCLIProgramChangeDelayedScopeAndShutdown`, `TestCLIProgramChangeReloadBlocksCachedRows`, CRUD recovery program and real PTY |
 | P4-05 independently committed steps, failed later writes/reads, read-only retry, busy duplicate prevention, raw/literal editor bytes and unchanged no-op | `TestP405CommittedStepsSurviveLaterFailureAndRetryOnlyReads`, `TestP405CancellationAfterCommitRetainsStepAndLiteralValue`; retained `TestOrdinaryDocumentSaveRetainsCommittedTextAfterFollowUpFailure`, `TestChangeCreateRetainsCommittedChangeAfterTypeFailure`, `TestArtifactDraftSurvivesFailedSaveAndRetry`, `TestEditorRetryKeepsLiteralData`, P1 configuration drain and P2/P3 partial-success regressions | `TestCLIProgramChangeCRUDAndPartialSuccess`, `TestCLIProgramOrdinaryDocumentEditor`, retained project/epic/save-drain programs |
 | P4-06 current/insert document DTOs, configured ordinary editors, separate testcase read, no successful insert replay | `TestP406DocumentCurrentInsertAndSeparateTestCases`, `TestP406MalformedDocumentAndTestcaseReads`, `TestP406ConfiguredDocumentAccessAndExactBytes`, `TestP406ConfiguredDocumentSelectorAndNoCatalog`; retained editor exact bytes/tabs/long-document and metadata tests | `TestCLIProgramOrdinaryDocumentEditor` now asserts current document reads and exact insert payloads/201 IDs; follow-up type failures never repeat insertion |
 | P4-07 keyboard effects/results, malformed response, lifecycle, test reuse, manifests | All preceding P4 tests, existing manifest inventory and architecture tooling | Four new manifest-selected change programs plus the extended `TestShellNavigationEditorAndScrolling` use fake servers/owned processes only |
 
 Field mapping: the P4-01 route test asserts IDs/project IDs, UUID omission/value,
-phase/types/title/open/PR URL, nullable epic/prerequisite and create brief payloads.
+phase/types/title/active/PR URL, nullable epic/prerequisite and create brief payloads.
 The P4-02 test verifies returned `ref_slug`/epic identity and completion separately
 from derived values; malformed-field cases cover **each** list/detail wire field,
 including required nullable presence, timestamp types and wide counts. The viewport
@@ -829,3 +837,159 @@ checks list and detail styling. `TestCLIProgramChangeCRUDAndPartialSuccess`
 and `TestCLIProgramChangeMalformedReadRecovery` use Main to reload the list.
 `TestChangeDeleteRefreshFailureOffersListReloadPath` checks that a failed list
 refresh after deletion gives an available reload action in its status.
+
+## 031 document migration assertion mapping
+
+Authority: [031 specification](../../agent/specs/031-cli-docs-refactor.md).
+Current routes above replace removed current/open operations. No wire selection
+flag is inferred; comments remain independently mutable. Backend 031 endpoints
+were already implemented and verified before this CLI pass; their source and
+APIHydra suite are retained unchanged.
+
+| Requirement | Meaningful unit assertions |
+| --- | --- |
+| 031-01 | `Test031DocumentWireContract`, `Test031DocumentReadRoutesAndOwnerValidation` |
+| 031-02 | `Test031CommentRoutesPayloadsAndStatuses` |
+| 031-03 | `Test031ProjectEpicChangeWireContracts`, `Test031UpdateActiveRouteAndFalse`, `Test031ActiveCommandLabelAndHelp` |
+| 031-04 | `TestP602OwnerCatalogsAndEmptyReadAccess`, `Test031OwnerCatalogsAndProjectSwitch` |
+| 031-05 | `Test031ActiveDocumentSelectionAndDuplicateTypes` |
+| 031-06 | `Test031BriefPreviewAndFullEditorSeed`, `Test031FullBriefReturnAndDocumentEditorScope`, `Test031DocumentSlotCreateEditCancelAndNoOp` |
+| 031-07 | `Test031ConfiguredDocumentSlotsAndCheckColor` |
+| 031-08 | `Test031DocumentSlotCreateEditCancelAndNoOp` |
+| 031-09 | `Test031DocumentDeleteConfirmationLayoutAndColors`, `Test031DocumentDeleteConfirmCancelAndMissingSlotNoOp` |
+| 031-10 | `Test031CommentPreviewNoWrapAndFullBody`, `Test031CommentTimestampLayout` |
+| 031-11 | `Test031NewCommentFirstCommandAndIndependentInsert` |
+| 031-12 | `Test031CommentEditEmptyBodyAndConfirmedDelete`, `Test031CommentEditingUsesFullBodyAndEmptyUpdate` |
+| 031-13 | `Test031DocumentHistoryTypeScopeOrderAndArrowBounds`, `Test031HistoryShowsCreatedUpdatedAndDeletedTimestamps`, `Test031HistoryTimestampTopLineAndDeletedAccentRed` |
+| 031-14 | `Test031HistoryBatArgumentsAndExactBody`, `Test031HistoryBatFailureCancellationAndCleanup`, `Test031HistoryPreservesBatANSIColorsAndVisibleWidth`, `Test031HistoryEscapeCtrlCAndSelectionRestoration` |
+| 031-15 | `Test031HistoricalDocumentActivation`, `Test031DeletedCommentRestoration` |
+| 031-16 | `Test031InactiveListRoutesKeyboardAndScope`, `Test031InactiveChangeSpaceActivationAndFooter` |
+| 031-17 | `Test031ProjectEpicDeleteDeactivationOutcomes` |
+| 031-18 | `TestP602ProjectEpicChangeNavigationAndScope`, `Test031RetainedOwnerHistory`, `TestP802OriginalBriefExactEditorAndNoOp`, `TestP805CommittedBriefSurvivesRepeatedFailedRefresh`, `TestP806ConflictingCurrentRowsNeverStartRunner` |
+| 031-19 | `Test031MutationPartialSuccessAndReadOnlyRetry`, `Test031RetryBelongsToTheLatestCommittedOperation`, `Test031LateResultIsolationAndBusyDeduplication`, `Test031LateEditorResultCannotChangeAnotherDocument`, `Test031FullBriefReturnAndDocumentEditorScope`, `Test031DocumentHistoryAndDeleteKeyFocus` |
+| 031-20 | `Test031HistoricalDocumentActivation`, `Test031ScenarioManifestIncludesDocsAndInactiveLists` |
+| 031-21 | `TestCommentAndDeleteAPIContracts`, `TestCommentUndeleteAPIRequiresPositiveID`, `TestCommentUndeleteValidationAndRepositoryErrors`, `TestCommentUndeleteRepositoryRestrictsTypeAndPreservesContent` |
+| 031-22 | `TestActiveSetAPIContract`, `TestActiveSetUsesStoredOwnerAndRejectsComments`, `TestActiveSetRepositoryCallsExistingProcedure` |
+| 031-23 | `Test031DeletedCommentsHistoryAndEmptySectionAccess` |
+| 031-24 | `Test031AllDisplayedTimestampsUseLocalTime`, `Test031ChangeDetailsShowsOnlyUpdatedAt` |
+| 031-25 | `Test031ChangeDetailsEpicSelectionExcludesInactiveEpics` |
+
+`TestCLIProgram031DocumentCommentsAndHistory` drives configured slots, comment
+create/edit/empty update, confirmed/cancelled deletion, document and comment
+history and same-ID restoration. `TestCLIProgram031InactiveChangesAndEpicSelection`
+drives inactive activation and excludes inactive epic options.
+`TestCLIProgram031BatFailureKeepsHistoryAndReturns` proves visible process failure,
+read-only retry and return. All three are in the terminal manifest.
+`TestShellNavigationEditorAndScrolling` additionally proves these keys at the PTY
+boundary, real bat syntax ANSI colors during scrolling/version changes, red
+metadata, purple confirmation, footer feedback and terminal restoration.
+Existing brief, configuration, testcase and health program assertions are retained.
+
+031 review fixes: `Test031CommentCommitClosesEditorBeforeRefreshRecovery` proves
+031-11/12/19 for insertion and updates with either active-document or comment
+refresh failure, including Enter and typed read-only `/retry` recovery.
+`Test031FailedCommentWriteRetainsExactEditorDraft` preserves failed-write retry
+bytes. `Test031InactiveReturnReloadsActiveRowsAndPreservesSelection` and
+`Test031InactiveReturnRestartsCanceledActiveLoad` prove 031-16 for fresh active
+rows, saved filters, selection by ID and rejection of late canceled results.
+`Test031OwnerHistoryReturnKeepsScrolledSelectionVisible` proves 031-14/18 for
+Esc and Ctrl+C after opening a scrolled owner-list record with Return.
+The inactive complete-program scenario now checks the activated row and fresh
+active-list request; the real PTY scenario checks the refreshed list count after
+activation and return.
+
+031 review fixes 02: `Test031DeleteRefreshPreservesListModeAndReadOnlyRecovery`
+proves 031-16/19 for active and inactive post-delete endpoint selection, committed
+deletion with a failed refresh, retained rows and read-only recovery without
+replaying deletion. `Test031HistoryActivationRejectsPendingDetailSnapshot`
+proves 031-15/19 by pausing `/retry` after its old active-document read, opening
+history with Ctrl+H, activating an older version and refreshing on Esc/Ctrl+C.
+History entry cancels the originating read; a collaborator that returns its old
+snapshot despite cancellation cannot overwrite the refreshed document or feedback.
+
+031 review fixes 03: `Test031HistoryExitReconcilesPendingMutation` proves
+031-14/15/19 for Esc/Ctrl+C during activation and comment restoration, pausing
+the write, retained-history read, active-selection read or printer. It checks
+committed feedback, owner refresh, read-only recovery after refresh failure,
+busy-input deduplication and rejection of duplicate results.
+`Test031OwnerHistoryExitDrainsQueuedMutationResult` checks the retained
+`/documents` return path when the mutation result is queued behind the exit key.
+`TestCLIProgram031DocumentCommentsAndHistory` now cancels pending reads after
+both same-ID writes and verifies the returned screen's committed feedback.
+`TestChangesCommandLoadsAndRendersBackendRows` derives both timestamp assertions
+from the active local timezone; UTC and Europe/Zagreb verification cover 031-24.
+
+031 review fixes 07: history rendering permits complete SGR syntax-color
+sequences and filters other terminal controls before clipping and scroll bounds.
+`Test031HistoryFiltersTerminalControlsPreservingSGR` covers OSC clipboard and
+hyperlink commands, CSI display/cursor/mode controls, ESC/DCS/SOS/PM/APC, C0/C1,
+malformed/incomplete sequences and invalid UTF-8 while retaining Unicode and
+bat colors. `Test031HistoryFiltersBeforeScrollingAndClipping` proves multiline
+control payloads cannot affect scrolling or clipping.
+`Test031HistoryRootViewFiltersDocumentAndCommentControls` checks the root view
+for both history types and preserves stored bodies. The existing manifest
+scenario `TestCLIProgram031DocumentCommentsAndHistory` now passes stored OSC 52
+and erase-scrollback controls through real bat and verifies filtered terminal
+output. Existing history color/resize/version tests and the real PTY scenario
+continue to cover syntax colors under 031-14/20. HTTP contracts are unchanged.
+
+031 review fixes 08: `Test031HistoryExpandsTabsBeforeClipping` proves 031-14
+for repeated/leading tabs, clipping inside a tab, wide/combining text and SGR
+changes around tabs, including inherited colors after scrolling. Tab expansion
+matches the root Lip Gloss surface's four-space default and affects display text
+only. `Test031HistoryTabsKeepFooterWithinTerminal` verifies document/comment
+history fits the terminal at widths 20/40/80 after resize and paging, keeps the
+footer visible, and preserves syntax colors, stored bodies and captured output.
+
+031 review fixes 10: `Test031InactiveActivationRefreshReadOnlyRetry` proves
+031-16/19 for typed and dropdown inactive-list retry after committed activation,
+repeated read failure, successful recovery, retained project/filter scope and
+exactly one activation write. Retry reads no active rows; returning to active
+changes restores the ordinary menu without `/retry`. The existing manifest
+scenario `TestCLIProgram031InactiveChangesAndEpicSelection` now exercises two
+failed inactive reads and keyboard recovery against the fake HTTP backend,
+asserting one activation, four inactive reads and no premature active-list read.
+The footer and architecture describe this reachable read-only recovery; current
+HTTP contracts remain unchanged.
+
+## Change detail layout and selected-item actions (2026-10-04)
+
+The user-requested layout replaces the previous brief/comment previews: Brief is
+an ordinary configured Docs slot; comments render a single line with newlines
+replaced by spaces. The 2026-10-05 follow-up prints comments as
+`<modified_at> - <body>`, with local modified timestamps in AccentCyan and bodies
+in pure-white Foreground (`styles.Foreground`, `#FFFFFF`), including selected rows.
+Saved Docs likewise show `<modified_at> - [✓] <type>` with cyan timestamps,
+pure-white text and green checks. Docs reserve the 16-column timestamp and
+separator even when missing, aligning checked and unchecked boxes.
+Doc/comment timestamps are AccentPurple for today in local time and AccentCyan
+for other dates.
+Created/Modified share a cyan Timestamps row. Testcases
+are white with green small checks; completion is bold blue and the slug
+value is AccentGreen, including when selected. Ref UUID,
+Slug and After Change move below Comments. The user's follow-up explicitly
+accepts a visible error for testcase history until the backend supports it.
+Backend contracts are unchanged. Space toggles testcase completion and views
+selected docs/comments (updated by the user's 2026-10-05 follow-up).
+Enter launches the editor, Delete confirms before mutation,
+and H/Ctrl+H enters document history. Escape/Ctrl+C exits both viewer modes.
+
+| Requested behavior | Unit evidence | Complete-program/PTY evidence |
+| --- | --- | --- |
+| Reserved AccentRed error row on every screen, safe one-line errors | `TestErrorRowReservedAcrossScreens` | existing recovery programs and real PTY |
+| Terminal double-click selection and native Ctrl+Shift+C copy | program removes mouse capture | `TestCLIProgramSelectedItemViewer`, `TestShellNavigationEditorAndScrolling` assert no mouse-enable sequences |
+| Layout/order, section dividers, check/text/timestamp/completion colors | `TestDetailIdentityOrderColorsAndTitleDivider`, `TestDetailLayoutColorsAndSectionDividers`, `TestBriefIsADocumentSlotWithFullBodyRetained`, updated comment preview/control tests | `TestCLIProgramSelectedItemViewer`, `TestCLIProgram031DocumentCommentsAndHistory` |
+| Docs show modified timestamp before check/type, timestamp color, pure-white text and green checks | `Test031ConfiguredDocumentSlotsAndCheckColor`, `TestDetailLayoutColorsAndSectionDividers` | `TestCLIProgramSelectedItemViewer` |
+| Docs align checked/unchecked boxes for present/missing timestamps and empty slots | `TestDocCheckboxesAlignWithMissingTimestamps`, `Test031ConfiguredDocumentSlotsAndCheckColor` | shared renderer in complete programs |
+| Local-today doc/comment timestamps are AccentPurple; other dates AccentCyan | `TestDetailItemTimestampTodayUsesAccentPurple` (UTC inputs rendered in UTC+14; yesterday/today/tomorrow, normal/selected) | shared renderer in complete programs |
+| Single-line comments show modified timestamp before body, timestamp color and pure-white body | `Test031CommentTimestampLayout`, `Test031CommentPreviewNoWrapAndFullBody`, `Test031CommentPreviewEscapesTerminalControls` | `TestCLIProgramSelectedItemViewer` |
+| Enter launches editors for docs/testcases/comments | `TestEnterOpensEditorForAllSelectedItemKinds`, existing editor/save tests | `TestCLIProgramOrdinaryDocumentEditor`, `TestCLIProgramTestCaseLifecycle`, `TestCLIProgram031DocumentCommentsAndHistory` |
+| Space views doc/comment bodies through bat without mutation; scrolling and both exit keys | `TestSelectedItemsViewFullBodyAndReturnWithoutMutation`, `TestSelectedItemViewErrorAndEmptySlot`, `TestViewRejectsStaleScope` | `TestCLIProgramSelectedItemViewer`, `TestCLIProgramTestCaseLifecycle` |
+| Delete confirms and preserves existing mutation/refresh behavior | existing document/comment confirmation tests and `TestChangeDetailsTestcaseDeleteConfirmsAndRefreshes` | `TestCLIProgram031DocumentCommentsAndHistory`, `TestCLIProgramTestCaseLifecycle`, real PTY |
+| H/Ctrl+H history and explicit testcase-history error | `TestHistoryKeysOnDocsAndUnavailableTestcases`, existing history lifecycle tests | `TestCLIProgramSelectedItemViewer`, `TestCLIProgramTestCaseLifecycle`, existing retained-history programs and PTY |
+| Footer follows selected item; Space toggles testcase completion | `TestSelectedItemFooterActions`, `TestChangeDetailsTestCaseSpaceTogglesAndReloads` | `TestCLIProgramTestCaseLifecycle`, `TestShellNavigationEditorAndScrolling` |
+
+The manifest adds the complete-program `TestCLIProgramSelectedItemViewer` scenario.
+It uses owned processes and a fake HTTP backend; no live backend or database is
+accessed. Tests of native terminal behavior establish absence of application mouse
+capture, while word selection and copy remain the terminal's own bindings.

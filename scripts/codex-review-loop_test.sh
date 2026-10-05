@@ -43,8 +43,18 @@ git -C "$repo" add initial.txt "$specification" scripts/codex-review-loop.pl \
 	scripts/lib/mch/Progress.pm scripts/lib/mch/GitAuth.pm scripts/git-auth.sh scripts/commit-agent.pl
 git -C "$repo" commit -q -m initial
 git -C "$repo" push -q -u origin master
-git -C "$repo" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/master
+git -C "$repo" branch stage
+git -C "$repo" push -q origin stage
+git -C "$repo" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/stage
 git -C "$repo" branch develop
+git -C "$repo" checkout -q -b dev
+printf '%s\n' 'development base' >"$repo/dev.txt"
+git -C "$repo" add dev.txt
+git -C "$repo" commit -q -m 'development base'
+git -C "$repo" push -q origin dev
+git -C "$repo" checkout -q master
+# Keep local dev stale to prove that reviews use the remote-tracking dev tip.
+git -C "$repo" branch -f dev master
 
 cat >"$fake_bin/codex" <<'EOF'
 #!/usr/bin/env bash
@@ -90,7 +100,7 @@ if [[ ${1-} == exec && ${2-} == review && ${3-} == --json ]]; then
 		esac
 	done
 	[[ "$base" == "$CODEX_TEST_EXPECTED_BASE" ]]
-	[[ "$model" == gpt-6-sol ]]
+	[[ "$model" == gpt-6.1-sol ]]
 	[[ "$effort" == high && "$tier" == default ]]
 	[[ -n "$output" ]]
 	if [[ ${CODEX_TEST_FAIL_REVIEW-} == 1 ]]; then
@@ -170,7 +180,7 @@ if [[ ${1-} == exec && ${2-} == --json ]]; then
 			;;
 		esac
 	done
-	[[ "$model" == gpt-6-sol ]]
+	[[ "$model" == gpt-6.1-sol ]]
 	[[ "$effort" == high && "$tier" == default ]]
 	[[ -n "$output" ]]
 	[[ "$prompt" == "$CODEX_TEST_EXPECTED_FIX_PROMPT" ]]
@@ -205,8 +215,10 @@ review_count="$test_root/review-count"
 fix_count="$test_root/fix-count"
 helper_executed="$test_root/helper-executed"
 output="$test_root/output"
-pinned_base=$(git -C "$repo" rev-parse origin/master)
-expected_fix_prompt="\$change-fix-findings $specification Do not commit or push; the caller handles commits."
+pinned_base=$(git -C "$repo" rev-parse origin/dev)
+[[ "$pinned_base" != $(git -C "$repo" rev-parse origin/stage) ]]
+[[ "$pinned_base" != $(git -C "$repo" rev-parse dev) ]]
+expected_fix_prompt="\$change-fix-findings $specification"
 (
 	cd "$repo"
 	PATH="$fake_bin:$PATH" \
@@ -225,19 +237,19 @@ findings_dir=${findings_file%/*}
 
 grep -Fxq "Repository: $repo" "$output"
 grep -Fxq 'Branch: master' "$output"
-grep -Fxq 'Base: origin/master' "$output"
+grep -Fxq 'Base: origin/dev' "$output"
 grep -Fxq "Pinned base: $pinned_base" "$output"
 grep -Fxq "Specification: $specification" "$output"
 settings=" -c 'model_reasoning_effort=\"high\"' -c 'service_tier=\"default\"'"
-grep -Fxq "Review options: --base $pinned_base --model gpt-6-sol$settings" "$output"
+grep -Fxq "Review options: --base $pinned_base --model gpt-6.1-sol$settings" "$output"
 grep -Fxq "Findings: $findings_file" "$output"
 awk -v repo="$repo" -v base="$pinned_base" -v findings="$findings_file" -v settings="$settings" '
 $0 == "Repository: " repo {
 	if ((getline line) <= 0 || line != "Specification: agent/specs/test-spec.md") exit 1
 	if ((getline line) <= 0 || line != "Branch: master") exit 1
-	if ((getline line) <= 0 || line != "Base: origin/master") exit 1
+	if ((getline line) <= 0 || line != "Base: origin/dev") exit 1
 	if ((getline line) <= 0 || line != "Pinned base: " base) exit 1
-	if ((getline line) <= 0 || line != "Review options: --base " base " --model gpt-6-sol" settings) exit 1
+	if ((getline line) <= 0 || line != "Review options: --base " base " --model gpt-6.1-sol" settings) exit 1
 	if ((getline line) <= 0 || line != "Findings: " findings) exit 1
 	if ((getline line) <= 0 || line != "") exit 1
 	if ((getline line) <= 0 || line != "=== Review pass 01 ===") exit 1
@@ -266,18 +278,18 @@ awk '
 END { if (commands != 3 || inputs != 1) exit 1 }
 ' "$output"
 printf -v expected_review_command \
-	'codex exec review --json --base %q --model gpt-6-sol%s -o %q' \
+	'codex exec review --json --base %q --model gpt-6.1-sol%s -o %q' \
 	"$pinned_base" "$settings" "$findings_file"
 grep -Fxq "$expected_review_command" "$output"
 fix_result_file="$findings_dir/fix-result.md"
-expected_fix_command="codex exec --json --model gpt-6-sol$settings -o $fix_result_file '$expected_fix_prompt'"
+expected_fix_command="codex exec --json --model gpt-6.1-sol$settings -o $fix_result_file '$expected_fix_prompt'"
 expected_fix_input="< $findings_file"
 grep -Fxq "$expected_fix_command" "$output"
 grep -Fxq "$expected_fix_input" "$output"
 printed_fix_command=$(grep -Fx "$expected_fix_command" "$output")
 eval "set -- $printed_fix_command"
 [[ $# -eq 12 && $1 == codex && $2 == exec && $3 == --json &&
-	$4 == --model && $5 == gpt-6-sol && $6 == -c &&
+	$4 == --model && $5 == gpt-6.1-sol && $6 == -c &&
 	$7 == 'model_reasoning_effort="high"' && $8 == -c &&
 	$9 == 'service_tier="default"' && ${10} == -o &&
 	${11} == "$fix_result_file" && ${12} == "$expected_fix_prompt" ]]
@@ -320,6 +332,7 @@ git -C "$repo" show HEAD:scripts/commit-agent.pl | grep -Fq 'helper was executed
 [[ -z $(git -C "$repo" status --short) ]]
 ! git -C "$repo" ls-files --error-unmatch -- findings.md >/dev/null 2>&1
 [[ $(git -C "$repo" rev-parse origin/master) != "$pinned_base" ]]
+[[ $(git -C "$repo" rev-parse origin/dev) == "$pinned_base" ]]
 
 explicit_base_output="$test_root/explicit-base-output"
 develop_base=$(git -C "$repo" rev-parse develop)
@@ -336,9 +349,9 @@ explicit_findings_dir=${explicit_findings_file%/*}
 
 grep -Fxq 'Base: develop' "$explicit_base_output"
 grep -Fxq "Pinned base: $develop_base" "$explicit_base_output"
-grep -Fxq "Review options: --base $develop_base --model gpt-6-sol$settings" "$explicit_base_output"
+grep -Fxq "Review options: --base $develop_base --model gpt-6.1-sol$settings" "$explicit_base_output"
 printf -v expected_review_command \
-	'codex exec review --json --base %q --model gpt-6-sol%s -o %q' \
+	'codex exec review --json --base %q --model gpt-6.1-sol%s -o %q' \
 	"$develop_base" "$settings" "$explicit_findings_file"
 grep -Fxq "$expected_review_command" "$explicit_base_output"
 [[ $(<"$review_count") == 3 ]]
@@ -432,7 +445,7 @@ grep -Fxq '  (none)' "$no_fix_output"
 grep -Fxq 'Cannot modify the protected skeleton without explicit user direction.' "$no_fix_output"
 grep -Fxq 'codex-review-loop: codex made no repository changes; see the fix result above' "$no_fix_error"
 no_fix_findings_file=$(sed -n 's/^Findings: //p' "$no_fix_output" | head -n 1)
-grep -Fxq "codex exec --json --model gpt-6-sol$settings -o ${no_fix_findings_file%/*}/fix-result.md '$expected_fix_prompt'" "$no_fix_output"
+grep -Fxq "codex exec --json --model gpt-6.1-sol$settings -o ${no_fix_findings_file%/*}/fix-result.md '$expected_fix_prompt'" "$no_fix_output"
 grep -Fxq "< $no_fix_findings_file" "$no_fix_output"
 [[ ! -e "${no_fix_findings_file%/*}" ]]
 [[ -z $(git -C "$repo" status --short) ]]
@@ -558,11 +571,17 @@ assert_rejected_invocation stdin_custom_review_prompt \
 	'custom review instructions cannot be combined with --base' \
 	"$specification" -
 
+git -C "$repo" update-ref -d refs/remotes/origin/dev
+assert_rejected_invocation missing_dev \
+	'cannot resolve review base origin/dev to a commit' \
+	"$specification"
+git -C "$repo" update-ref refs/remotes/origin/dev "$pinned_base"
+
 interrupt_output="$test_root/interrupt-output"
 interrupt_error="$test_root/interrupt-error"
 interrupt_child_pid="$test_root/interrupt-child-pid"
 interrupt_child_terminated="$test_root/interrupt-child-terminated"
-interrupt_base=$(git -C "$repo" rev-parse origin/master)
+interrupt_base=$(git -C "$repo" rev-parse origin/dev)
 set +e
 (
 	cd "$repo"

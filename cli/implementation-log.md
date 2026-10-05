@@ -95,3 +95,29 @@
 
 2026-30-09 22:54 cli-check-cleanup
 +33 -31 code - +0 -0 tests --- format the remaining two Go files and add package comments so the full CLI check passes
+
+2026-03-10 19:30 031-cli-docs-refactor
++1437 -135 code - +2019 -230 tests --- spec
++106 -2 code - +202 -4 tests --- review fixes 01
++90 -7 code - +135 -0 tests --- review fixes 02
++135 -17 code - +241 -12 tests --- review fixes 03
++106 -2 code - +139 -0 tests --- review fixes 04
++113 -1 code - +139 -0 tests --- review fixes 05
++123 -33 code - +125 -0 tests --- review fixes 06
++109 -3 code - +96 -0 tests --- review fixes 07
++83 -0 code - +63 -1 tests --- review fixes 08
++75 -1 code - +79 -0 tests --- review fixes 09
++115 -9 code - +105 -8 tests --- review fixes 10
+
+2026-04-10 23:33 cli-detail-layout-and-terminal-selection
++258 -114 code - +546 -216 tests --- reserve AccentRed errors, restore native terminal selection/copy, reorganize change details and colors, add bat item views/editor/history shortcuts and selection help, retain testcase history error and move completion to D; check, audit and independent 80%/70% coverage gates pass
+
+2026-05-10 00:26 cli-testcase-space-and-green-slug
++19 -28 code - +55 -27 tests --- restore Space checkbox toggling and selection help; keep doc/comment views and testcase-history error; color slug AccentGreen; check, audit, unit 5705/6540 and terminal 5042/6540 pass after fixing shared test fixture
+
+2026-05-10 00:46 cli-doc-comment-timestamp-format
++35 -33 code - +79 -7 tests --- prefix Docs/comments with local modified timestamps; AccentPurple for today, AccentCyan otherwise, primary following text and green Docs checks; preserve one-line comments and item actions; check/audit pass, unit 5709/6544 and terminal 5045/6544 pass after rerunning campaigns with fixed ledger inputs
+
+2026-05-10 00:55 cli-white-aligned-docs
++3 -3 code - +23 -3 tests --- pure-white Foreground for Docs/comments and reserve timestamp space for all Docs checkboxes; retain purple/cyan timestamps and green checks; corrected display-column test; check/audit pass, unit 5709/6544 and terminal 5045/6544 pass
+

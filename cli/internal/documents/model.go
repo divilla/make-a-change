@@ -54,6 +54,7 @@ type Model struct {
 	DraftType, DraftBody string
 	DraftAgentEdit       bool
 	CommittedID          int
+	Committed            string
 	Status               string
 	Err, CatalogErr      error
 	cancel               context.CancelFunc
@@ -171,7 +172,13 @@ func (m Model) begin(ctx context.Context, api ScreenAPI, op Operation, input dto
 	m.Revision++
 	m.Busy, m.Loaded, m.DetailLoaded = true, false, false
 	m.Err = nil
+	if op != Refresh {
+		m.Committed = ""
+	}
 	m.Status = "loading documents"
+	if op == Refresh && m.Committed != "" {
+		m.Status = m.Committed + "; refreshing documents"
+	}
 	if op == Refresh && m.CommittedID > 0 {
 		m.Status = fmt.Sprintf("saved document #%d; refreshing documents", m.CommittedID)
 	}
@@ -218,7 +225,7 @@ func (m Model) begin(ctx context.Context, api ScreenAPI, op Operation, input dto
 		if r.RefreshErr != nil {
 			return r
 		}
-		r.Current, r.RefreshErr = api.CurrentDocuments(work, ownerID, table)
+		r.Current, r.RefreshErr = api.ActiveDocuments(work, ownerID, table)
 		if r.RefreshErr != nil {
 			return r
 		}
@@ -264,6 +271,9 @@ func (m Model) Apply(r Result) (Model, bool) {
 	}
 	if r.Err != nil {
 		m.Err, m.Status = r.Err, "document operation failed"
+		if r.Operation == Refresh && m.Committed != "" {
+			m.Status = m.Committed + "; refresh failed; /retry reads only"
+		}
 		return m, true
 	}
 	if r.Operation == Details {
@@ -288,6 +298,8 @@ func (m Model) Apply(r Result) (Model, bool) {
 		m.Err = r.RefreshErr
 		if m.CommittedID > 0 {
 			m.Status = fmt.Sprintf("saved document #%d; refresh failed; /retry reads only", m.CommittedID)
+		} else if m.Committed != "" {
+			m.Status = m.Committed + "; refresh failed; /retry reads only"
 		} else {
 			m.Status = "document refresh failed; /retry reads only"
 		}
@@ -314,6 +326,9 @@ func (m Model) Apply(r Result) (Model, bool) {
 	m.Loaded, m.Err = true, nil
 	if r.Operation != Insert && m.CommittedID == 0 {
 		m.Status = "loaded documents"
+		if m.Committed != "" {
+			m.Status = m.Committed + "; refreshed documents"
+		}
 	}
 	if m.CommittedID > 0 {
 		m.Status = fmt.Sprintf("saved document #%d; refreshed documents", m.CommittedID)
@@ -356,4 +371,14 @@ func (m Model) Scroll(delta, width, height int) Model {
 	lines := viewLines(m, width)
 	m.Offset = max(0, min(max(0, len(lines)-height), m.Offset+delta))
 	return m
+}
+
+// IsActive tests membership in the server-selected active list.
+func (m Model) IsActive(id int) bool {
+	for _, d := range m.Current {
+		if d.ID == id {
+			return true
+		}
+	}
+	return false
 }

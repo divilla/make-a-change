@@ -202,12 +202,57 @@ validator and ownership rule were not relaxed. A second tooling run still expose
 the filename issue before it was removed. Neither failed tooling check was recorded
 as passing; no HTTP campaign failed during this refresh.
 
+### Comment undelete cases — 2026-10-03 (initial authoring evidence)
+
+The route inventory now contains 46 operations after adding
+`POST /api/v1/doc/comment-undelete`. The doc group adds 30 requests: restoration
+and repeated undelete of owned project/epic/change comments, preserved identity,
+owner, empty body, provenance and creation/edit timestamps, exclusion from active
+documents, endpoint-only cleanup, non-comment404, invalid/malformed input400 and
+wrong-method405. Static suite ownership/capture/route validation passes.
+These cases have not run against a live server in this session. The preceding
+45-operation/1060-request campaign remains historical; no fresh API operation or
+statement coverage is claimed for the new endpoint. A designated development/test
+database is required before the owned instrumented backend campaign can run.
+
+### Comment restoration and version activation — 2026-10-03 (current)
+
+The current route inventory is47 operations. The suite adds71 requests in the doc
+main file, for1131 requests across19 executable files, covering comment undelete
+and `doc/active-set` through captured owned IDs for project/epic/change documents.
+Existing body, ID, provenance and creation time are preserved; comment undelete
+also preserves edit time. Restored documents use the existing procedure's edit
+and deletion metadata semantics. Repeated requests, invalid IDs, comment/non-comment
+route guards, active-list exclusion and cleanup state are asserted.
+
+All four required backend targets pass on the final Go source: check, coverage,
+deps-audit and api-test (exit0 each). Separate fresh unit coverage is1224/1238
+(98.8691%), and API coverage is1121/1238 (90.5493%);95%/90% gates pass. Unit doc
+is244/244; API doc is219/244. Detailed package totals, uncovered functions and
+source provenance remain under `.coverage/{unit,api}` and in the checkpoint.
+Tooling tests also pass after the last fixture cleanup correction.
+
+The user identified `backend/config/dev.yaml` as the development target. The
+campaign explicitly uses that existing `changes` DB on localhost15432 and an owned
+instrumented server on19080; it neither resets the database nor stops the8080
+server. `changes_test` appears in backup scripts but is not the configured API
+target. Only test-created records are mutated.
+
+The initial full campaign failed a doc post assertion because the new activation
+scenario left a change document active instead of restoring the prior empty
+selection. That run provided no valid API coverage; raw diagnostics were preserved
+in `/tmp/031-api-failed-01` and `/tmp/031-backend-api-test.failed-01.log`. The fixture
+now explicitly deletes its own newly selected change document and verifies the
+empty selection. The full campaign was rerun and all1131 requests pass, without
+skips or cleanup failures. No assertion or coverage threshold was weakened.
+
 ### Remaining HTTP error gaps
 
 This is broader error coverage, not a claim that every possible API error is tested:
 
 - Missing-document `/doc/delete`404 and truly nonexistent-ID
-  `/doc/comment-update`404 remain unit-only. The suite exercises comment-update404
+  `/doc/comment-update`404 and `/doc/comment-undelete`404 remain unit-only.
+  The suite exercises comment-update/undelete404
   using an owned ordinary document, but soft deletion cannot produce an absent doc.
   No guessed positive mutation IDs are used.
 - Database outage503 on both health aliases, query/scan/iteration failures,
