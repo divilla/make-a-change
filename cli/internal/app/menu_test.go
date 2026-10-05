@@ -18,7 +18,7 @@ func TestCommandMenuLayoutAndColors(t *testing.T) {
 	m.state = ChangeDetailsState
 	m.openCommandDropdown()
 	m.dropdown.options = append(m.dropdown.options, dto.Option{ID: "/example", Label: "/example"})
-	require.Len(t, m.dropdown.options, 20)
+	require.Len(t, m.dropdown.options, 19)
 	m.dropdown.highlighted = 3
 
 	view := m.dropdownView(80)
@@ -33,7 +33,7 @@ func TestCommandMenuLayoutAndColors(t *testing.T) {
 	assert.Equal(t, 80, lipgloss.Width(lines[1]))
 	assert.Contains(t, lines[1], promptCursorWithStyle(styles.Default.MenuPrompt))
 	assert.Equal(t, 80, lipgloss.Width(lines[6]))
-	assert.Equal(t, "(4/20)", stripANSI(lines[11]))
+	assert.Equal(t, "(4/19)", stripANSI(lines[11]))
 	assert.NotContains(t, stripANSI(view), "▲")
 	assert.NotContains(t, stripANSI(view), "▼")
 	assert.Equal(t, styles.InputBackground, styles.Default.MenuPrompt.GetBackground())
@@ -50,10 +50,10 @@ func TestMenuCounterHidesBelowTenOptionsAndFollowsSelection(t *testing.T) {
 	m := NewModel()
 	m.state = ChangeDetailsState
 	m.openCommandDropdown()
-	m.dropdown.highlighted = 18
+	m.dropdown.highlighted = 17
 	lines := strings.Split(stripANSI(m.dropdownView(80)), "\n")
-	assert.Equal(t, "(19/19)", lines[len(lines)-1])
-	assert.Contains(t, strings.Join(lines, "\n"), "brief-clarify")
+	assert.Equal(t, "(18/18)", lines[len(lines)-1])
+	assert.Contains(t, strings.Join(lines, "\n"), "return")
 
 	m.dropdown.options = m.dropdown.options[:9]
 	m.dropdown.highlighted = 8

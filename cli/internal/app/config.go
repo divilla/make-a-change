@@ -22,11 +22,13 @@ type appConfig struct {
 	ConfigPath     string
 	BackendURL     string
 	ProjectID      int
+	Editor         string
 }
 
 type configFile struct {
 	BackendURL string `yaml:"backend_url"`
 	ProjectID  int    `yaml:"project_id"`
+	Editor     string `yaml:"editor,omitempty"`
 }
 
 func loadRepositoryConfig() (appConfig, error) {
@@ -72,7 +74,11 @@ func loadConfigFile(path string) (appConfig, error) {
 	if err != nil {
 		return appConfig{}, fmt.Errorf("load project_id from %s: %w", path, err)
 	}
-	return appConfig{BackendURL: backendURL, ProjectID: projectID}, nil
+	editor, err := cfg.StringOr("editor", "")
+	if err != nil {
+		return appConfig{}, fmt.Errorf("load editor from %s: %w", path, err)
+	}
+	return appConfig{BackendURL: backendURL, ProjectID: projectID, Editor: editor}, nil
 }
 
 func resolveGitRepositoryRoot(ctx context.Context) (string, error) {
@@ -96,6 +102,7 @@ func saveAppConfig(path string, cfg appConfig) error {
 	body, err := yaml.Marshal(configFile{
 		BackendURL: backendURL,
 		ProjectID:  cfg.ProjectID,
+		Editor:     cfg.Editor,
 	})
 	if err != nil {
 		return err

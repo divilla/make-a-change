@@ -40,13 +40,31 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 	require.NoError(t, exec.Command("git", "init", repoRoot).Run())
 	writeTerminalFile(t, filepath.Join(repoRoot, ".mch", "config.yaml"), "backend_url: "+backend.URL+"\nproject_id: 7\n", 0o644)
 	require.NoError(t, os.MkdirAll(filepath.Join(repoRoot, ".mch", "default", "prompts"), 0o755))
-	writeTerminalFile(t, filepath.Join(repoRoot, ".mch", "default", "prompts", "brief-rewrite.md"), "Clarify the brief and write structured output.\n", 0o644)
+	writeTerminalFile(t, filepath.Join(repoRoot, ".mch", "default", "prompts", "brief-rewrite.md"), "Rewrite [brief-file-path.md]\n", 0o644)
 
+	writeTerminalFile(t, filepath.Join(repoRoot, ".mch/default/prompts/spec-write.md"), "Write [brief-file-path.md]\n", 0o644)
 	stubDir := filepath.Join(testRoot, "bin")
 	require.NoError(t, os.MkdirAll(stubDir, 0o755))
 	writeTerminalFile(t, filepath.Join(stubDir, "editor"), "#!/bin/sh\nprintf '# PTY Change\\n\\nInitial brief\\n' > \"$1\"\n", 0o755)
-	writeTerminalFile(t, filepath.Join(stubDir, "codex"), "#!/bin/sh\nprintf '%s\\n' \"$$\" > \"$MCH_PTY_AGENT_PID\"\nprintf 'PTY agent started\\n'\nsleep 30\n", 0o755)
+	writeTerminalFile(t, filepath.Join(stubDir, "codex"), `#!/bin/sh
+if [ "$1" = -C ]; then
+ printf 'PTY interactive rewrite ready\n'
+ IFS= read -r answer
+ [ "$answer" = rewrite ] || exit 7
+ brief=$(printf '%s' "$3" | sed 's/^Rewrite //')
+ touch -m -d '2031-01-01 00:00:00' "$brief"
+ exit 0
+fi
+[ "$1" = exec ] && [ "$#" = 12 ] && [ "$8" = --sandbox ] && [ "$9" = workspace-write ] && [ "${10}" = --add-dir ] && [ "${11}" = "$(dirname "$7")" ] || exit 8
+printf '%s\n' "$$" > "$MCH_PTY_AGENT_PID"
+printf '\033[32mPTY spec started\033[0m\n'
+i=0
+while [ "$i" -lt 60 ]; do printf '\033[32mPTY spec row %s\033[0m\n' "$i"; i=$((i+1)); done
+sleep 30
+`, 0o755)
 
+	scratchTemp := filepath.Join(testRoot, "scratch-temp")
+	require.NoError(t, os.Mkdir(scratchTemp, 0o700))
 	childPIDPath := filepath.Join(testRoot, "mch.pid")
 	childExitPath := filepath.Join(testRoot, "mch.exit")
 	agentPIDPath := filepath.Join(testRoot, "agent.pid")
@@ -56,6 +74,8 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 	cmd.Dir = repoRoot
 	cmd.Env = append(os.Environ(),
 		"TERM=xterm-256color",
+		"COLORTERM=truecolor",
+		"TMPDIR="+scratchTemp,
 		"EDITOR="+filepath.Join(stubDir, "editor"),
 		"PATH="+stubDir+":"+os.Getenv("PATH"),
 		"MCH_PTY_BINARY="+binPath,
@@ -176,7 +196,7 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 	assert.Contains(t, historyOutput, "updated_at:")
 	assert.Contains(t, historyOutput, "\x1b[38;5;211mdeleted_at:")
 	syntaxColor := regexp.MustCompile(`\x1b\[38;2;[0-9;]+m`)
-	require.NotEmpty(t, syntaxColor.FindString(historyOutput), "captured bat syntax colors")
+	require.Eventually(t, func() bool { return syntaxColor.MatchString(capture.after(0)) }, time.Second, 10*time.Millisecond, "captured bat syntax colors")
 	offset := capture.len()
 	send("\x1b[6~\x1b[6~", "colored_line_20")
 	require.NotEmpty(t, syntaxColor.FindString(capture.after(offset)), "bat colors survive scrolling")
@@ -210,15 +230,14 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 	send("\r", "loaded change")
 	send(strings.Repeat("\x1b[B", 11)+"\r", "old-slug")
 	send(strings.Repeat("\x7f", 8)+"new-slug\r", "saved slug")
-	send("/brief-clarify\r", "brief ready for editing")
-	send("Temporary", "Temporary")
-	send("\x03", "status prompt cleared")
-	send("\x1b[6~", "Backend current brief")
-	send("\x1b[5~", "Original user brief")
-	send("\x05", "Original user brief: # PTY Change")
-	assert.Contains(t, capture.after(0), "\x1b[2J", "workflow editor restores terminal redraw")
-	send("/confirm\r", "agent stdout: PTY agent started")
-	send("\x1b", "loaded change")
+	send("/brief\r", "PTY interactive rewrite ready")
+	send("rewrite\r", "PTY spec row 59")
+	assert.Contains(t, capture.after(0), "AgentExecScreen")
+	assert.Contains(t, capture.after(0), "\x1b[32m", "live spec output retains color")
+	send("\x1b[5~", "PTY spec row")
+	send("\x1b[6~", "PTY spec row 59")
+	send("\x1b", "ChangeDetailsScreen")
+	assert.Contains(t, capture.after(0), "\x1b[2J", "editor and interactive rewrite restore terminal redraw")
 	pidBytes, err := os.ReadFile(agentPIDPath)
 	require.NoError(t, err)
 	pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
@@ -244,10 +263,10 @@ func TestShellNavigationEditorAndScrolling(t *testing.T) {
 	send(" ", "activated change #31")
 	send("\x03", "of 31")
 	send("/return\r", "MainScreen")
-	require.Eventually(t, func() bool {
-		entries, readErr := os.ReadDir(filepath.Join(repoRoot, ".mch", "tmp"))
-		return readErr == nil && len(entries) == 0
-	}, 3*time.Second, 20*time.Millisecond, "canceled clarification leaves no operation files")
+	draftPath := filepath.Join(scratchTemp, "mch", "0198a86f-9b8a-7d89-ae5b-6f25b528b04c", "brief.md")
+	draft, err := os.ReadFile(draftPath)
+	require.NoError(t, err)
+	require.Equal(t, "# PTY Change\n\nInitial brief", string(draft), "canceled spec writing retains the saved brief draft")
 	_, err = io.WriteString(stdin, "/quit\r")
 	require.NoError(t, err)
 	require.NoError(t, waitTerminal(done, 5*time.Second))
@@ -447,8 +466,8 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 			if request.RefTable == "change" {
 				require.Equal(t, 1, request.RefID)
 				require.Equal(t, "brief", request.DocType)
-				require.Equal(t, "# PTY Change\n\nInitial brief\n", request.Body)
-				require.False(t, request.AgentEdit)
+				require.Equal(t, "# PTY Change\n\nInitial brief", strings.TrimSpace(request.Body))
+				require.Equal(t, changeBriefID > 41, request.AgentEdit)
 				changeBrief = strings.TrimSpace(request.Body)
 				changeBriefID++
 				w.WriteHeader(201)

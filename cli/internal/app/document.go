@@ -104,6 +104,18 @@ func (m Model) applyDocumentResult(r documents.Result) (tea.Model, tea.Cmd) {
 	if r.Operation == documents.Insert && r.Err == nil && r.ID > 0 {
 		m.documentForm = false
 		m = m.setPromptValue("")
+		if m.document.OwnerTable == "change" {
+			m = m.retainSavedChangeDocument(r.Detail)
+		}
+		if m.document.OwnerTable == "change" && !m.document.DraftAgentEdit {
+			if m.document.DraftType == "spec" {
+				return m.syncSavedSpec(m.document.OwnerID, r.Detail.Body)
+			}
+			if m.document.DraftType == "brief" {
+				return m.startSavedBrief(m.document.OwnerID, r.Detail)
+			}
+		}
+		m = m.cleanupEditorDraft(m.document.ProjectID, r.Detail)
 		var cmd tea.Cmd
 		m.document, cmd = m.document.BeginRefresh(m.ctx, m.client)
 		m.status = m.document.Status

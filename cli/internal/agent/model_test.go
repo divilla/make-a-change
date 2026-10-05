@@ -4,689 +4,480 @@ import (
 	"cli/internal/dto"
 	"context"
 	"errors"
-	"os"
+	"fmt"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
-type briefAPI struct {
-	config                        dto.ProjectConfig
-	configErr                     error
-	change                        dto.Change
-	docs                          []dto.Document
-	creates                       []dto.ChangeCreateInput
-	inserts                       []dto.DocumentInput
-	createErr, insertErr, readErr error
-	reads                         int
+type flowAPI struct {
+	cfg     dto.ProjectConfig
+	change  dto.Change
+	docs    []dto.Document
+	creates []dto.ChangeCreateInput
+	inserts []dto.DocumentInput
+	fail    string
+	calls   []string
+	types   []string
+	typesID int
 }
 
-func (a *briefAPI) GetProjectConfig(context.Context, int) (dto.ProjectConfig, error) {
-	if a.configErr != nil {
-		return dto.ProjectConfig{}, a.configErr
+func (a *flowAPI) check(name string) error {
+	a.calls = append(a.calls, name)
+	if a.fail == name {
+		return errors.New(name + " failed")
 	}
-	return a.config, nil
+	return nil
 }
-func (a *briefAPI) GetChange(context.Context, int) (dto.Change, error) { return a.change, nil }
-func (a *briefAPI) CreateChange(_ context.Context, in dto.ChangeCreateInput) (int, error) {
+
+func (a *flowAPI) GetProjectConfig(context.Context, int) (dto.ProjectConfig, error) {
+	return a.cfg, a.check("config")
+}
+
+func (a *flowAPI) GetChange(context.Context, int) (dto.Change, error) {
+	return a.change, a.check("change")
+}
+
+func (a *flowAPI) ActiveDocuments(context.Context, int, string) ([]dto.Document, error) {
+	return a.docs, a.check("active")
+}
+
+func (a *flowAPI) CreateChange(_ context.Context, in dto.ChangeCreateInput) (int, error) {
+	if err := a.check("create"); err != nil {
+		return 0, err
+	}
 	a.creates = append(a.creates, in)
-	if a.createErr != nil {
-		return 0, a.createErr
-	}
-	a.change = dto.Change{ID: 21, ProjectID: in.ProjectID}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: strings.TrimSpace(in.Brief)}}
-	return 21, nil
+	return 12, nil
 }
 
-func (a *briefAPI) ActiveDocuments(context.Context, int, string) ([]dto.Document, error) {
-	a.reads++
-	if a.readErr != nil {
-		return nil, a.readErr
+func (a *flowAPI) InsertDocument(_ context.Context, in dto.DocumentInput) (int, error) {
+	if err := a.check("insert-" + in.DocType); err != nil {
+		return 0, err
 	}
-	return append([]dto.Document(nil), a.docs...), nil
-}
-
-func (a *briefAPI) InsertDocument(_ context.Context, in dto.DocumentInput) (int, error) {
 	a.inserts = append(a.inserts, in)
-	if a.insertErr != nil {
-		return 0, a.insertErr
+	return 40 + len(a.inserts), nil
+}
+
+func (a *flowAPI) UpdateChangeTypes(_ context.Context, id int, values []string) error {
+	if err := a.check("types"); err != nil {
+		return err
 	}
-	id := 31 + len(a.inserts)
-	a.docs = []dto.Document{{ID: id, RefID: in.RefID, RefTable: "change", DocType: in.DocType, Body: strings.TrimSpace(in.Body)}}
-	return id, nil
+	a.typesID, a.types = id, values
+	return nil
 }
 
-type briefRunner struct {
-	results  []Output
-	requests []Request
-	err      error
-	path     string
+type flowFiles struct {
+	body     map[string]string
+	stamps   map[string]dto.FileStamp
+	fail     string
+	cleaned  bool
+	prepared string
 }
 
-func (r *briefRunner) Run(_ context.Context, req Request) (Output, string, error) {
-	r.requests = append(r.requests, req)
-	if r.err != nil {
-		return Output{}, filepath.Dir(req.InputPath), r.err
+func (f *flowFiles) check(name string) error {
+	if f.fail == name {
+		return errors.New(name + " failed")
 	}
-	out := r.results[0]
-	r.results = r.results[1:]
-	out.InputRevision = req.Revision
-	if r.path != "" {
-		return out, r.path, nil
+	return nil
+}
+
+func (f *flowFiles) Prepare(ref, body string) (string, error) {
+	if err := f.check("prepare"); err != nil {
+		return "", err
 	}
-	return out, filepath.Dir(req.InputPath), nil
+	f.prepared = ref
+	f.body["/tmp/mch/ref/brief.md"] = body
+	f.stamps["/tmp/mch/ref/brief.md"] = dto.FileStamp{Exists: true, Time: time.Unix(1, 0)}
+	return "/tmp/mch/ref/brief.md", nil
 }
 
-func TestP803ControllerForwardsProgressChannel(t *testing.T) {
-	a := validAPI()
-	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Text"}}
-	m := Existing(7, 21)
-	m.Draft, m.BackendBrief, m.DocumentID = "Text", "Text", 31
-	progress := make(chan string, 1)
-	runner := &briefRunner{results: []Output{{RewrittenBrief: "Clear text", Questions: []Question{}, Unresolved: []string{}, ReadyForSpec: true}}}
-	_, run := m.Begin(context.Background(), Run, progress)
-	require.NotNil(t, run)
-	result := run(a, runner, briefTestRoot(t))
-	require.NoError(t, result.Err)
-	require.Len(t, runner.requests, 1)
-	require.Equal(t, (chan<- string)(progress), runner.requests[0].Progress)
+func (f *flowFiles) Read(path string) (string, error) {
+	return f.body[path], f.check("read-" + filepath.Base(path))
 }
 
-func TestP803ControllerOwnsRunnerPathsAndRejectsMissingArrays(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		out  Output
-		want string
-	}{
-		{"missing questions", Output{RewrittenBrief: "Ready", Unresolved: []string{}, ReadyForSpec: true}, "arrays"},
-		{"missing unresolved", Output{RewrittenBrief: "Ready", Questions: []Question{}, ReadyForSpec: true}, "arrays"},
-		{"wrong output directory", Output{RewrittenBrief: "Ready", Questions: []Question{}, Unresolved: []string{}, ReadyForSpec: true}, "outside its operation directory"},
-		{"valid empty arrays", Output{RewrittenBrief: "Ready", Questions: []Question{}, Unresolved: []string{}, ReadyForSpec: true}, ""},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			a := validAPI()
-			a.change = dto.Change{ID: 21, ProjectID: 7}
-			a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Original"}}
-			root := briefTestRoot(t)
-			m, _ := doStep(t, Existing(7, 21), a, nil, Preflight)
-			runner := &briefRunner{results: []Output{tc.out}}
-			if tc.name == "wrong output directory" {
-				runner.path = t.TempDir()
+func (f *flowFiles) Stamp(path string) (dto.FileStamp, error) {
+	return f.stamps[path], f.check("stamp-" + filepath.Base(path))
+}
+
+func (f *flowFiles) Prompt(root, name, path string) (string, error) {
+	return root + " " + name + " " + path, f.check(name)
+}
+func (f *flowFiles) Cleanup(string) error { f.cleaned = true; return f.check("cleanup") }
+
+type flowRunner struct {
+	files                                               *flowFiles
+	output                                              dto.AgentOutput
+	err                                                 error
+	execCalls                                           int
+	interactive                                         [][]string
+	changeBrief, touchBrief, resumeCreate, resumeModify bool
+	interactiveErr                                      string
+	execSpec                                            bool
+}
+
+func (r *flowRunner) Interactive(ctx context.Context, args ...string) *exec.Cmd {
+	r.interactive = append(r.interactive, args)
+	return exec.CommandContext(ctx, "fake", args...)
+}
+
+func (r *flowRunner) Exec(_ context.Context, _, path, _ string, _ chan<- string) (dto.AgentOutput, error) {
+	r.execCalls++
+	if r.execSpec {
+		r.files.body[filepath.Join(filepath.Dir(path), "spec.md")] = "# Spec\n## Testcases\n- Q → R"
+		r.files.stamps[filepath.Join(filepath.Dir(path), "spec.md")] = dto.FileStamp{Exists: true, Time: time.Unix(2, 0)}
+	}
+	return r.output, r.err
+}
+
+func (r *flowRunner) run(cmd *exec.Cmd) error {
+	if cmd.Args[1] == "resume" {
+		if r.resumeCreate || r.resumeModify {
+			r.files.body["/tmp/mch/ref/spec.md"] = "# Resumed\n## Testcases\n- Q → R"
+			r.files.stamps["/tmp/mch/ref/spec.md"] = dto.FileStamp{Exists: true, Time: time.Unix(3, 0)}
+		}
+		if r.interactiveErr == "resume" {
+			return errors.New("resume failed")
+		}
+	} else {
+		if r.changeBrief {
+			r.files.body["/tmp/mch/ref/brief.md"] = "# Rewrite"
+		}
+		if r.changeBrief || r.touchBrief {
+			r.files.stamps["/tmp/mch/ref/brief.md"] = dto.FileStamp{Exists: true, Time: time.Unix(2, 0)}
+		}
+		if r.interactiveErr == "rewrite" {
+			return context.Canceled
+		}
+	}
+	return nil
+}
+
+func flowFixture() (*flowAPI, *flowFiles, *flowRunner, Request) {
+	a := &flowAPI{cfg: dto.ProjectConfig{ChangeDocs: []string{"brief", "spec"}, ChangePhases: []string{"backlog"}}, change: dto.Change{ID: 12, ProjectID: 7, RefUUID: "ref"}, docs: []dto.Document{{ID: 31, RefID: 12, RefTable: "change", DocType: "brief", Body: "# Saved brief"}}}
+	f := &flowFiles{body: map[string]string{"/tmp/mch/ref/brief.md": "# User"}, stamps: map[string]dto.FileStamp{"/tmp/mch/ref/brief.md": {Exists: true, Time: time.Unix(1, 0)}}}
+	r := &flowRunner{files: f, output: dto.AgentOutput{Final: "Done.", SessionID: "run-session"}, changeBrief: true, execSpec: true}
+	req := Request{Root: "/repo", ProjectID: 7, Path: "/tmp/mch/ref/brief.md", Title: "User", Brief: "# User", UUID: "ref"}
+	return a, f, r, req
+}
+
+func Test032NewAndExistingSequenceAndProvenance(t *testing.T) {
+	for _, existing := range []bool{false, true} {
+		t.Run(fmt.Sprint(existing), func(t *testing.T) {
+			a, f, r, req := flowFixture()
+			if existing {
+				req.ChangeID = 12
 			}
-			next, run := m.Begin(context.Background(), Run)
-			require.NotNil(t, run)
-			result := run(a, runner, root)
-			require.Len(t, runner.requests, 1)
-			req := runner.requests[0]
-			dir := filepath.Dir(req.InputPath)
-			require.Equal(t, filepath.Join(root, ".mch", "tmp"), filepath.Dir(dir))
-			require.DirExists(t, dir)
-			require.Equal(t, filepath.Join(dir, "original.md"), req.OriginalPath)
-			require.Equal(t, filepath.Join(dir, "context.json"), req.ContextPath)
-			require.Equal(t, filepath.Join(dir, "questions.json"), req.QuestionsPath)
-			require.Equal(t, filepath.Join(dir, "answers.json"), req.AnswersPath)
-			require.Equal(t, filepath.Join(dir, "result.json"), req.OutputPath)
-			next, _, ok := next.Apply(result)
-			require.True(t, ok)
-			if tc.want != "" {
-				require.ErrorContains(t, next.Err, tc.want)
-				require.Equal(t, Failed, next.Phase)
-				require.NotEqual(t, Ready, next.Phase)
+			synced := 0
+			result := Run(context.Background(), a, f, r, req, r.run, nil, func(_ context.Context, id int, spec string) error {
+				require.Equal(t, 12, id)
+				require.Equal(t, "# Spec\n## Testcases\n- Q → R", spec)
+				require.Len(t, a.inserts, 2)
+				synced++
+				return nil
+			})
+			require.NoError(t, result.Err)
+			require.Equal(t, 1, synced)
+			require.True(t, f.cleaned)
+			require.Equal(t, 12, result.ChangeID)
+			require.Equal(t, [][]string{{"-C", "/repo", "/repo brief-rewrite /tmp/mch/ref/brief.md"}}, r.interactive)
+			require.Equal(t, []dto.DocumentInput{{RefID: 12, RefTable: "change", DocType: "brief", Body: "# Rewrite", AgentEdit: true}, {RefID: 12, RefTable: "change", DocType: "spec", Body: "# Spec\n## Testcases\n- Q → R", AgentEdit: true}}, a.inserts)
+			if existing {
+				require.Empty(t, a.creates)
+				require.Equal(t, "ref", f.prepared)
 			} else {
-				require.NoError(t, next.Err)
-				require.Equal(t, Review, next.Phase)
+				require.Equal(t, []dto.ChangeCreateInput{{ProjectID: 7, RefUUID: "ref", Title: "User", Brief: "# User"}}, a.creates)
+			}
+			require.Contains(t, result.Status, "testcases synchronized")
+		})
+	}
+}
+
+func Test032ModificationTimeControlsRewrite(t *testing.T) {
+	for _, touch := range []bool{false, true} {
+		t.Run(fmt.Sprint(touch), func(t *testing.T) {
+			a, f, r, req := flowFixture()
+			r.changeBrief = false
+			r.touchBrief = touch
+			result := Run(context.Background(), a, f, r, req, r.run, nil, func(context.Context, int, string) error { return nil })
+			require.NoError(t, result.Err)
+			if touch {
+				require.Len(t, a.inserts, 2)
+				require.Equal(t, "# User", a.inserts[0].Body)
+				require.Equal(t, 1, r.execCalls)
+			} else {
+				require.Empty(t, a.inserts)
+				require.Zero(t, r.execCalls)
+				require.Contains(t, result.Status, "brief unchanged")
 			}
 		})
 	}
 }
 
-func TestP803ControllerRefusesUnownedScratchPath(t *testing.T) {
-	a := validAPI()
-	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Original"}}
-	root := briefTestRoot(t)
-	base := filepath.Join(root, ".mch", "tmp")
-	require.NoError(t, os.WriteFile(base, []byte("user file"), 0o600))
-	m, _ := doStep(t, Existing(7, 21), a, nil, Preflight)
-	runner := &briefRunner{results: []Output{{RewrittenBrief: "Ready", Questions: []Question{}, Unresolved: []string{}, ReadyForSpec: true}}}
-	next, run := m.Begin(context.Background(), Run)
-	result := run(a, runner, root)
-	next, _, ok := next.Apply(result)
-	require.True(t, ok)
-	require.Equal(t, Failed, next.Phase)
-	require.ErrorContains(t, next.Err, "not an owned directory")
-	require.Empty(t, runner.requests)
-	content, err := os.ReadFile(base)
-	require.NoError(t, err)
-	require.Equal(t, "user file", string(content))
-}
-
-func validAPI() *briefAPI {
-	return &briefAPI{config: dto.ProjectConfig{ChangeDocs: []string{"brief", "spec"}, ChangePhases: []string{"backlog"}}}
-}
-
-func briefTestRoot(t *testing.T) string {
-	t.Helper()
-	root := t.TempDir()
-	require.NoError(t, os.Mkdir(filepath.Join(root, ".mch"), 0o700))
-	return root
-}
-
-func doStep(t *testing.T, m Model, a *briefAPI, r *briefRunner, step Step) (Model, Step) {
-	t.Helper()
-	next, run := m.Begin(context.Background(), step)
-	require.NotNil(t, run)
-	result := run(a, r, briefTestRoot(t))
-	var ok bool
-	next, step, ok = next.Apply(result)
-	require.True(t, ok)
-	return next, step
-}
-
-func TestP801ControllerPhasesAndOriginalInput(t *testing.T) {
-	m := New(7).EditIdentity("A title", "").EditBrief("\t# Brief\n```sh\nrm -rf example\n```\n")
-	require.Equal(t, "\t# Brief\n```sh\nrm -rf example\n```\n", m.Original)
-	a := validAPI()
-	m, step := doStep(t, m, a, nil, Preflight)
-	require.Empty(t, step)
-	require.Equal(t, Draft, m.Phase)
-	m, step = doStep(t, m, a, nil, Write)
-	require.Equal(t, Refresh, step)
-	require.Equal(t, 21, m.ChangeID)
-	require.Equal(t, 21, m.CommittedID)
-	require.Equal(t, "\t# Brief\n```sh\nrm -rf example\n```\n", a.creates[0].Brief)
-	m, step = doStep(t, m, a, nil, step)
-	require.Equal(t, Run, step)
-	require.Equal(t, 31, m.DocumentID)
-	require.Equal(t, "\t# Brief\n```sh\nrm -rf example\n```\n", m.Original)
-}
-
-func TestP802CommittedIdentitySurvivesReadAndAgentFailure(t *testing.T) {
-	a := validAPI()
-	m := New(7).EditIdentity("Title", "").EditBrief(" brief ")
-	m, _ = doStep(t, m, a, nil, Write)
-	a.readErr = errors.New("read down")
-	m, _ = doStep(t, m, a, nil, Refresh)
-	require.Equal(t, 21, m.CommittedID)
-	require.Equal(t, 21, m.ChangeID)
-	require.Len(t, a.creates, 1)
-	a.readErr = nil
-	m, step := doStep(t, m, a, nil, Write)
-	require.Equal(t, Run, step)
-	r := &briefRunner{err: errors.New("process failed")}
-	m, _ = doStep(t, m, a, r, Run)
-	require.Equal(t, Failed, m.Phase)
-	require.Contains(t, m.ScratchPath, filepath.Join(".mch", "tmp", "brief-"))
-	require.Len(t, a.creates, 1)
-}
-
-func TestP802CreatedBriefConflictBeforeRunner(t *testing.T) {
-	a := validAPI()
-	m := New(7).EditIdentity("Title", "").EditBrief(" brief ")
-	m, step := doStep(t, m, a, nil, Write)
-	require.Equal(t, Refresh, step)
-	a.docs[0].Body = "Another client's brief"
-	m, step = doStep(t, m, a, nil, Refresh)
-	require.Empty(t, step)
-	require.Equal(t, Failed, m.Phase)
-	require.Equal(t, Refresh, m.FailedStep)
-	require.ErrorContains(t, m.Err, "created brief is not the current document")
-	require.Equal(t, 21, m.CommittedID)
-	require.Equal(t, " brief ", m.Draft)
-	require.Len(t, a.creates, 1)
-	m, step = doStep(t, m, a, nil, Refresh)
-	require.Empty(t, step)
-	require.Len(t, a.creates, 1)
-}
-
-func TestP804MultipleQuestionsAnswersAndResolveLoops(t *testing.T) {
-	a := validAPI()
-	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Original"}}
-	m := Existing(7, 21)
-	m, _ = doStep(t, m, a, nil, Preflight)
-	r := &briefRunner{results: []Output{
-		{RewrittenBrief: "Rewrite one", Questions: []Question{{ID: "Q1", Text: "Which?", Context: "section A"}, {ID: "Q2", Text: "When?", Context: "section B"}}, Unresolved: []string{"Q1", "Q2"}},
-		{RewrittenBrief: "Rewrite two", Questions: []Question{{ID: "Q1", Text: "Which?", Context: "section A"}, {ID: "Q2", Text: "When?", Context: "section B"}}, Unresolved: []string{"Q2"}},
-		{RewrittenBrief: "Rewrite three", Questions: []Question{{ID: "Q1", Text: "Which?", Context: "section A"}, {ID: "Q2", Text: "When?", Context: "section B"}}, Unresolved: []string{}, ReadyForSpec: true},
-	}}
-	m, _ = doStep(t, m, a, r, Run)
-	require.Equal(t, Review, m.Phase)
-	var run func(API, Runner, string) Result
-	m, run = m.Approve(context.Background())
-	require.NotNil(t, run)
-	result := run(a, r, briefTestRoot(t))
-	m, step, ok := m.Apply(result)
-	require.True(t, ok)
-	require.Equal(t, Refresh, step)
-	require.True(t, a.inserts[0].AgentEdit)
-	m, _ = doStep(t, m, a, r, Refresh)
-	require.Equal(t, Answering, m.Phase)
-	m = m.Answer("Q1", "Alpha")
-	m, run = m.Resolve(context.Background())
-	require.Nil(t, run)
-	require.ErrorContains(t, m.Err, "Q2")
-	m = m.Answer("Q2", "Tomorrow")
-	m, run = m.Resolve(context.Background())
-	require.NotNil(t, run)
-	result = run(a, r, briefTestRoot(t))
-	m, _, ok = m.Apply(result)
-	require.True(t, ok)
-	require.Equal(t, "brief-resolve", r.requests[1].Prompt)
-	require.Equal(t, "Alpha", r.requests[1].Questions[0].Answer)
-	require.Equal(t, "Tomorrow", r.requests[1].Questions[1].Answer)
-	m, run = m.Approve(context.Background())
-	require.NotNil(t, run)
-	result = run(a, r, briefTestRoot(t))
-	m, _, ok = m.Apply(result)
-	require.True(t, ok)
-	m, _ = doStep(t, m, a, r, Refresh)
-	require.Equal(t, Answering, m.Phase)
-	m, run = m.Resolve(context.Background())
-	require.Nil(t, run)
-	require.ErrorContains(t, m.Err, "Q2")
-	m = m.Answer("Q2", "Confirmed tomorrow")
-	m, run = m.Resolve(context.Background())
-	require.NotNil(t, run)
-	result = run(a, r, briefTestRoot(t))
-	m, _, ok = m.Apply(result)
-	require.True(t, ok)
-	m, run = m.Approve(context.Background())
-	require.NotNil(t, run)
-	result = run(a, r, briefTestRoot(t))
-	m, _, ok = m.Apply(result)
-	require.True(t, ok)
-	m, _ = doStep(t, m, a, r, Refresh)
-	require.Equal(t, Ready, m.Phase)
-	require.Equal(t, "Original", m.Original)
-}
-
-func TestP804UnansweredAndConflictingBlockersCannotAdvance(t *testing.T) {
-	base := Output{InputRevision: 4, RewrittenBrief: "Draft", Questions: []Question{{ID: "Q", Text: "What?", Context: "line 1"}}, Unresolved: []string{"Q"}}
-	require.NoError(t, validateOutput(base, 4, nil))
-	bad := base
-	bad.ReadyForSpec = true
-	require.Error(t, validateOutput(bad, 4, nil))
-	bad = base
-	bad.Unresolved = nil
-	bad.ReadyForSpec = true
-	require.Error(t, validateOutput(bad, 4, nil))
-	bad = base
-	bad.Questions = append(bad.Questions, bad.Questions[0])
-	require.Error(t, validateOutput(bad, 4, nil))
-	bad = base
-	bad.InputRevision = 3
-	require.Error(t, validateOutput(bad, 4, nil))
-	bad = base
-	bad.Unresolved = []string{"unknown"}
-	require.Error(t, validateOutput(bad, 4, nil))
-	require.ErrorContains(t, validateOutput(Output{InputRevision: 4, RewrittenBrief: "Draft", Questions: []Question{}, Unresolved: []string{}}, 4, nil), "no unresolved blockers")
-}
-
-func TestP804QuestionIDsMatchAnswerInputSyntax(t *testing.T) {
-	base := Output{InputRevision: 4, RewrittenBrief: "Draft", Unresolved: []string{"Q1"}}
-	for _, id := range []string{" Q1 ", "phase:date", "Q\t1", "Q\n1"} {
-		t.Run(id, func(t *testing.T) {
-			out := base
-			out.Questions = []Question{{ID: id, Text: "When?", Context: "date"}}
-			out.Unresolved = []string{id}
-			require.ErrorContains(t, validateOutput(out, 4, nil), "incomplete question")
-		})
-	}
-	base.Questions = []Question{{ID: "phase date", Text: "When?", Context: "date"}}
-	base.Unresolved = []string{"phase date"}
-	require.NoError(t, validateOutput(base, 4, nil))
-}
-
-func TestP804NonReadyWithoutBlockersStaysRecoverable(t *testing.T) {
-	a := validAPI()
-	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Original"}}
-	m := Existing(7, 21)
-	m, _ = doStep(t, m, a, nil, Preflight)
-	r := &briefRunner{results: []Output{{RewrittenBrief: "Original", Questions: []Question{}, Unresolved: []string{}}}}
-	m, _ = doStep(t, m, a, r, Run)
-	require.Equal(t, Failed, m.Phase)
-	require.Equal(t, Run, m.FailedStep)
-	require.ErrorContains(t, m.Err, "no unresolved blockers")
-	require.Empty(t, m.Questions)
-	require.Empty(t, m.Candidate.RewrittenBrief)
-}
-
-func TestP804AnsweredPairsSurviveAgentOmissionAndFollowUp(t *testing.T) {
-	m := Existing(7, 21)
-	m.Phase = Review
-	m.Questions = []Question{{ID: "Q1", Text: "Which?", Context: "intro", Answer: "Alpha"}, {ID: "Q2", Text: "When?", Context: "timeline", Answer: "Tomorrow"}}
-	m.Candidate = Output{InputRevision: m.Revision, RewrittenBrief: "Draft", Questions: []Question{{ID: "Q2", Text: "When exactly?", Context: "timeline"}}, Unresolved: []string{"Q2"}}
-	m = m.finishCandidate()
-	require.Len(t, m.Questions, 2)
-	require.Equal(t, "Alpha", m.Questions[1].Answer)
-	require.True(t, m.NeedsAnswer["Q2"])
-	m, run := m.Resolve(context.Background())
-	require.Nil(t, run)
-	require.ErrorContains(t, m.Err, "Q2")
-	m = m.Answer("Q2", "Next Tuesday")
-	require.False(t, m.NeedsAnswer["Q2"])
-	require.Equal(t, "Alpha", m.Questions[1].Answer)
-}
-
-func TestP805StaleSelectionRevisionAndShutdownCancellation(t *testing.T) {
-	a := validAPI()
-	m := New(7).EditIdentity("Title", "").EditBrief("Original")
-	next, run := m.Begin(context.Background(), Preflight)
-	require.NotNil(t, run)
-	result := run(a, nil, briefTestRoot(t))
-	next = next.EditBrief("changed")
-	ignored, _, ok := next.Apply(result)
-	require.False(t, ok)
-	require.Equal(t, "changed", ignored.Draft)
-	ignored = ignored.Invalidate()
-	require.False(t, ignored.Busy)
-}
-
-func TestP806MissingCatalogAndCurrentBriefRecovery(t *testing.T) {
-	a := validAPI()
-	a.configErr = errors.New("catalog unavailable")
-	m := New(7)
-	m, _ = doStep(t, m, a, nil, Preflight)
-	require.ErrorContains(t, m.Err, "catalog unavailable")
-	require.Empty(t, a.creates)
-	a.configErr = nil
-	a.config.ChangeDocs = []string{"brief"}
-	m = New(7)
-	m, _ = doStep(t, m, a, nil, Preflight)
-	require.Equal(t, Failed, m.Phase)
-	require.ErrorContains(t, m.Err, "spec")
-	require.Empty(t, a.creates)
-	a.config.ChangeDocs = []string{"spec"}
-	m = New(7)
-	m, _ = doStep(t, m, a, nil, Preflight)
-	require.ErrorContains(t, m.Err, "brief")
-	a = validAPI()
-	a.change = dto.Change{ID: 21, ProjectID: 7}
-	m = Existing(7, 21)
-	m, _ = doStep(t, m, a, nil, Preflight)
-	require.Equal(t, Draft, m.Phase)
-	require.Empty(t, m.BackendBrief)
-	m = m.EditBrief("Supplied missing brief")
-	m, step := doStep(t, m, a, nil, Write)
-	require.Equal(t, Refresh, step)
-	require.False(t, a.inserts[0].AgentEdit)
-	require.Equal(t, "Supplied missing brief", a.inserts[0].Body)
-	m, _ = doStep(t, m, a, nil, Refresh)
-	require.Equal(t, "Supplied missing brief", m.BackendBrief)
-	a.docs = []dto.Document{{ID: 31, RefID: 99, RefTable: "change", DocType: "brief"}}
-	m, _ = doStep(t, m, a, nil, Preflight)
-	require.Equal(t, Failed, m.Phase)
-	require.ErrorContains(t, m.Err, "owner")
-}
-
-func TestP802NewCreateAndExistingHumanInsertPayloads(t *testing.T) {
-	a := validAPI()
-	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Existing"}}
-	m := Existing(7, 21)
-	m, _ = doStep(t, m, a, nil, Preflight)
-	require.Equal(t, "Existing", m.Original)
-	m = m.EditBrief("  edited\t\n```sh\nprint hi\n```\n")
-	require.Equal(t, "  edited\t\n```sh\nprint hi\n```\n", m.Original)
-	m, step := doStep(t, m, a, nil, Write)
-	require.Equal(t, Refresh, step)
-	require.Len(t, a.inserts, 1)
-	require.Equal(t, dto.DocumentInput{RefID: 21, RefTable: "change", DocType: "brief", Body: "  edited\t\n```sh\nprint hi\n```\n", AgentEdit: false}, a.inserts[0])
-	require.Equal(t, 32, m.CommittedID)
-	m, step = doStep(t, m, a, nil, Refresh)
-	require.Equal(t, Run, step)
-	require.Equal(t, "  edited\t\n```sh\nprint hi\n```\n", m.Original)
-	require.Equal(t, 32, m.DocumentID)
-}
-
-func TestP802OriginalBriefExactEditorAndNoOp(t *testing.T) {
-	a := validAPI()
-	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Tabs\tand\nlines"}}
-	m := Existing(7, 21)
-	m, _ = doStep(t, m, a, nil, Preflight)
-	m, run := m.Begin(context.Background(), Write)
-	require.NotNil(t, run)
-	require.Equal(t, Run, m.Pending)
-	require.Empty(t, a.inserts)
-	m = m.Invalidate()
-	m = m.EditBrief("manual change")
-	require.Equal(t, "manual change", m.Original)
-	require.Equal(t, "manual change", m.Draft)
-}
-
-func TestP805WhitespaceOnlyHumanAndAgentChangesDoNotAppend(t *testing.T) {
-	a := validAPI()
-	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "text"}}
-	m, _ := doStep(t, Existing(7, 21), a, nil, Preflight)
-	m = m.EditBrief("text\n")
-	require.Equal(t, "text\n", m.Original)
-	m, run := m.Begin(context.Background(), Write)
-	require.NotNil(t, run)
-	require.Equal(t, Run, m.Pending)
-	require.Empty(t, a.inserts)
-	runner := &briefRunner{results: []Output{{RewrittenBrief: " \ttext\n", Questions: []Question{}, Unresolved: []string{}, ReadyForSpec: true}}}
-	result := run(a, runner, briefTestRoot(t))
-	var ok bool
-	m, _, ok = m.Apply(result)
-	require.True(t, ok)
-	require.Equal(t, Review, m.Phase)
-	require.Equal(t, "text\n", runner.requests[0].Brief)
-	require.Equal(t, "text\n", runner.requests[0].Original)
-	m, verify := m.Approve(context.Background())
-	require.NotNil(t, verify)
-	require.Equal(t, Verify, m.Pending)
-	result = verify(a, runner, briefTestRoot(t))
-	m, _, ok = m.Apply(result)
-	require.True(t, ok)
-	require.Equal(t, Ready, m.Phase)
-	require.Equal(t, 31, m.DocumentID)
-	require.Empty(t, a.inserts)
-}
-
-func TestP802ExistingFirstUserEditRemainsOriginalAfterAgentRewrite(t *testing.T) {
-	a := validAPI()
-	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Backend brief"}}
-	m, _ := doStep(t, Existing(7, 21), a, nil, Preflight)
-	userBrief := "\tUser brief\n```sh\nprint example\n```\n"
-	m = m.EditBrief(userBrief)
-	require.Equal(t, "Backend brief", m.BackendBrief)
-	require.Equal(t, userBrief, m.Original)
-	m, step := doStep(t, m, a, nil, Write)
-	require.Equal(t, Refresh, step)
-	m, step = doStep(t, m, a, nil, step)
-	require.Equal(t, Run, step)
-	r := &briefRunner{results: []Output{{RewrittenBrief: "Agent rewrite", Questions: []Question{}, Unresolved: []string{}, ReadyForSpec: true}}}
-	m, _ = doStep(t, m, a, r, Run)
-	require.Equal(t, userBrief, r.requests[0].Original)
-	require.Equal(t, userBrief, r.requests[0].Brief)
-	m, run := m.Approve(context.Background())
-	require.NotNil(t, run)
-	result := run(a, r, briefTestRoot(t))
-	var ok bool
-	m, step, ok = m.Apply(result)
-	require.True(t, ok)
-	require.Equal(t, Refresh, step)
-	m, _ = doStep(t, m, a, r, step)
-	require.Equal(t, Ready, m.Phase)
-	require.Equal(t, "Agent rewrite", m.Draft)
-	require.Equal(t, userBrief, m.Original)
-	require.Equal(t, "Agent rewrite", m.BackendBrief)
-	m = m.EditBrief("Later user revision")
-	require.Equal(t, userBrief, m.Original)
-}
-
-func TestP802FailedWriteRetainsDraftAndBusyDeduplication(t *testing.T) {
-	a := validAPI()
-	a.createErr = errors.New("write failed")
-	m := New(7).EditIdentity("Title", "").EditBrief("Draft")
-	next, run := m.Begin(context.Background(), Write)
-	require.NotNil(t, run)
-	busy, duplicate := next.Begin(context.Background(), Write)
-	require.Nil(t, duplicate)
-	require.Equal(t, next.Generation, busy.Generation)
-	result := run(a, nil, briefTestRoot(t))
-	m, _, ok := next.Apply(result)
-	require.True(t, ok)
-	require.Equal(t, Failed, m.Phase)
-	require.Equal(t, Write, m.FailedStep)
-	require.Equal(t, "Draft", m.Draft)
-	require.Zero(t, m.ChangeID)
-	a.createErr = nil
-	m, _ = doStep(t, m, a, nil, Write)
-	require.Equal(t, 21, m.ChangeID)
-}
-
-func TestP805CommittedBriefSurvivesRepeatedFailedRefresh(t *testing.T) {
-	a := validAPI()
-	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Before"}}
-	m := Existing(7, 21)
-	m, _ = doStep(t, m, a, nil, Preflight)
-	m = m.EditBrief("After")
-	m, _ = doStep(t, m, a, nil, Write)
-	a.readErr = errors.New("refresh failed")
-	for range 2 {
-		m, _ = doStep(t, m, a, nil, Write)
-		require.Equal(t, 32, m.CommittedID)
-		require.Equal(t, Failed, m.Phase)
-		require.Equal(t, Refresh, m.FailedStep)
-	}
-	require.Len(t, a.inserts, 1)
-	a.readErr = nil
-	m, step := doStep(t, m, a, nil, Refresh)
-	require.Equal(t, Run, step)
-	require.Equal(t, 32, m.DocumentID)
-	require.Zero(t, m.CommittedID)
-}
-
-func TestP805RefreshRetryKeepsUnsavedEditInDraft(t *testing.T) {
-	a := validAPI()
-	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Before"}}
-	m := Existing(7, 21)
-	m, _ = doStep(t, m, a, nil, Preflight)
-	m = m.EditBrief("Committed")
-	m, step := doStep(t, m, a, nil, Write)
-	require.Equal(t, Refresh, step)
-	a.readErr = errors.New("refresh failed")
-	m, step = doStep(t, m, a, nil, Refresh)
-	require.Empty(t, step)
-	require.Equal(t, Failed, m.Phase)
-	require.Equal(t, 32, m.CommittedID)
-
-	m = m.EditBrief("Unsaved edit")
-	a.readErr = nil
-	m, step = doStep(t, m, a, nil, Write)
-	require.Empty(t, step)
-	require.Equal(t, Draft, m.Phase)
-	require.Equal(t, "Unsaved edit", m.Draft)
-	require.Equal(t, "Committed", m.BackendBrief)
-	require.Equal(t, 32, m.DocumentID)
-	require.Zero(t, m.CommittedID)
-	require.Len(t, a.inserts, 1)
-
-	m, step = doStep(t, m, a, nil, Write)
-	require.Equal(t, Refresh, step)
-	require.Len(t, a.inserts, 2)
-	require.Equal(t, "Unsaved edit", a.inserts[1].Body)
-	require.False(t, a.inserts[1].AgentEdit)
-	m, step = doStep(t, m, a, nil, Refresh)
-	require.Equal(t, Run, step)
-}
-
-func TestP804EditsInvalidateReadinessAndStaleOutput(t *testing.T) {
-	a := validAPI()
-	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Original"}}
-	m := Existing(7, 21)
-	m, _ = doStep(t, m, a, nil, Preflight)
-	r := &briefRunner{results: []Output{{RewrittenBrief: "Original", Questions: []Question{}, Unresolved: []string{}, ReadyForSpec: true}}}
-	m, _ = doStep(t, m, a, r, Run)
-	m, cmd := m.Approve(context.Background())
-	require.NotNil(t, cmd)
-	result := cmd(a, r, briefTestRoot(t))
-	m, _, _ = m.Apply(result)
-	require.Equal(t, Ready, m.Phase)
-	priorRevision := m.Revision
-	m = m.EditBrief("Edited")
-	require.Equal(t, Draft, m.Phase)
-	require.Greater(t, m.Revision, priorRevision)
-	require.Equal(t, "Edited", m.Original)
-	stale := Result{Generation: m.Generation - 1, Revision: priorRevision, ProjectID: 7, ChangeID: 21, Step: Run, Output: Output{ReadyForSpec: true}}
-	updated, _, ok := m.Apply(stale)
-	require.False(t, ok)
-	require.Equal(t, Draft, updated.Phase)
-}
-
-func TestP804UnchangedRewriteRevalidatesBeforeReady(t *testing.T) {
+func Test032ResumeUsesThisSessionAndSpecFile(t *testing.T) {
 	for _, tc := range []struct {
-		name, want string
-		change     func(*briefAPI)
+		name                  string
+		prior, create, modify bool
+		want                  string
 	}{
-		{name: "brief changed", want: "current brief changed", change: func(a *briefAPI) { a.docs[0].Body = "Other revision" }},
-		{name: "spec removed", want: "brief and spec", change: func(a *briefAPI) { a.config.ChangeDocs = []string{"brief"} }},
+		{name: "created", create: true}, {name: "modified", prior: true, modify: true}, {name: "missing", want: "error generating `spec`"}, {name: "unchanged file time", prior: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			a := validAPI()
-			a.change = dto.Change{ID: 21, ProjectID: 7}
-			a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Original"}}
-			m := Existing(7, 21)
-			m, _ = doStep(t, m, a, nil, Preflight)
-			r := &briefRunner{results: []Output{{RewrittenBrief: "Original", Questions: []Question{}, Unresolved: []string{}, ReadyForSpec: true}}}
-			m, _ = doStep(t, m, a, r, Run)
-			tc.change(a)
-			m, cmd := m.Approve(context.Background())
-			require.NotNil(t, cmd)
-			require.Equal(t, Verify, m.Pending)
-			result := cmd(a, r, briefTestRoot(t))
-			m, step, ok := m.Apply(result)
-			require.True(t, ok)
-			require.Empty(t, step)
-			require.Equal(t, Failed, m.Phase)
-			require.Equal(t, Verify, m.FailedStep)
-			require.ErrorContains(t, m.Err, tc.want)
-			require.Len(t, r.requests, 1)
-			require.Empty(t, a.inserts)
+			a, f, r, req := flowFixture()
+			r.output.Final = "Question?"
+			r.execSpec = tc.prior
+			r.resumeCreate = tc.create
+			r.resumeModify = tc.modify
+			syncCalls := 0
+			result := Run(context.Background(), a, f, r, req, r.run, nil, func(context.Context, int, string) error { syncCalls++; return nil })
+			require.Equal(t, []string{"resume", "run-session"}, r.interactive[1])
+			if tc.want != "" {
+				require.ErrorContains(t, result.Err, tc.want)
+				require.Len(t, a.inserts, 1)
+				require.Zero(t, syncCalls)
+				require.False(t, f.cleaned)
+			} else {
+				require.NoError(t, result.Err)
+				require.Len(t, a.inserts, 2)
+				require.Equal(t, f.body["/tmp/mch/ref/spec.md"], a.inserts[1].Body)
+				require.Equal(t, 1, syncCalls)
+			}
 		})
 	}
 }
 
-func TestP806MissingBacklogWrongOwnerAndConflict(t *testing.T) {
-	a := validAPI()
-	a.config.ChangePhases = []string{"review"}
-	m := New(7)
-	m, _ = doStep(t, m, a, nil, Preflight)
-	require.ErrorContains(t, m.Err, "backlog")
-	a = validAPI()
-	a.change = dto.Change{ID: 21, ProjectID: 8}
-	m = Existing(7, 21)
-	m, _ = doStep(t, m, a, nil, Preflight)
-	require.ErrorContains(t, m.Err, "selected project")
-	a.change.ProjectID = 7
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Before"}}
-	m, _ = doStep(t, m, a, nil, Preflight)
-	m = m.EditBrief("After")
-	a.docs[0].ID = 99
-	m, _ = doStep(t, m, a, nil, Write)
-	require.ErrorContains(t, m.Err, "current brief changed")
-	require.Empty(t, a.inserts)
+func TestSpecComparedWithActiveDocumentAfterAgentExit(t *testing.T) {
+	for _, resumed := range []bool{false, true} {
+		for _, state := range []string{"missing", "different", "identical", "outer whitespace", "read failure", "wrong owner", "duplicate"} {
+			t.Run(fmt.Sprintf("resumed=%t/%s", resumed, state), func(t *testing.T) {
+				a, f, r, req := flowFixture()
+				req.ChangeID = 12
+				body := "# Spec\n## Testcases\n- Q → R"
+				if resumed {
+					r.output.Final = "Please confirm."
+				}
+				interactive := func(cmd *exec.Cmd) error {
+					if err := r.run(cmd); err != nil {
+						return err
+					}
+					// Change the API result after preflight to require a fresh read.
+					doc := dto.Document{ID: 99, RefID: 12, RefTable: "change", DocType: "spec", Body: body}
+					switch state {
+					case "missing":
+						return nil
+					case "different":
+						doc.Body = "# Old spec"
+					case "outer whitespace":
+						doc.Body = "\n " + body + "\n\t"
+					case "read failure":
+						a.fail = "active"
+						return nil
+					case "wrong owner":
+						doc.RefID = 13
+					}
+					a.docs = []dto.Document{doc}
+					if state == "duplicate" {
+						a.docs = append(a.docs, doc)
+					}
+					return nil
+				}
+				syncCalls := 0
+				result := Run(context.Background(), a, f, r, req, interactive, nil, func(_ context.Context, id int, spec string) error {
+					require.Equal(t, 12, id)
+					require.Equal(t, body, spec)
+					syncCalls++
+					return nil
+				})
+				switch state {
+				case "read failure", "wrong owner", "duplicate":
+					require.Error(t, result.Err)
+					require.Len(t, a.inserts, 1)
+					require.Zero(t, syncCalls)
+					require.False(t, f.cleaned)
+				default:
+					require.NoError(t, result.Err)
+					require.Equal(t, 1, syncCalls)
+					require.True(t, f.cleaned)
+					if state == "identical" || state == "outer whitespace" {
+						require.Len(t, a.inserts, 1)
+						require.Equal(t, 99, result.Spec.ID)
+						require.Contains(t, result.Status, "spec unchanged")
+					} else {
+						require.Len(t, a.inserts, 2)
+						require.Equal(t, body, a.inserts[1].Body)
+					}
+				}
+			})
+		}
+	}
 }
 
-func TestP806ConflictingCurrentRowsNeverStartRunner(t *testing.T) {
-	a := validAPI()
-	a.change = dto.Change{ID: 21, ProjectID: 7}
-	a.docs = []dto.Document{{ID: 31, RefID: 21, RefTable: "change", DocType: "brief", Body: "Text"}, {ID: 32, RefID: 21, RefTable: "change", DocType: "spec", Body: "S1"}, {ID: 33, RefID: 21, RefTable: "change", DocType: "spec", Body: "S2"}}
-	m := Existing(7, 21)
-	m, step := doStep(t, m, a, nil, Preflight)
-	require.ErrorContains(t, m.Err, "conflicting current spec")
-	require.Equal(t, Failed, m.Phase)
-	require.Empty(t, step)
+func Test032FailuresStopDependentEffectsAndKeepDrafts(t *testing.T) {
+	for _, tc := range []struct {
+		name, api, files, interactive          string
+		execErr                                bool
+		final, id                              string
+		wantInserts, wantExec, wantInteractive int
+	}{
+		{name: "config", api: "config"},
+		{name: "create", api: "create"},
+		{name: "brief stamp", files: "stamp-brief.md"},
+		{name: "rewrite prompt", files: "brief-rewrite"},
+		{name: "cancel rewrite", interactive: "rewrite", wantInteractive: 1},
+		{name: "read rewritten brief", files: "read-brief.md", wantInteractive: 1},
+		{name: "insert brief", api: "insert-brief", wantInteractive: 1},
+		{name: "spec prompt", files: "spec-write", wantInserts: 1, wantInteractive: 1},
+		{name: "exec error with session", execErr: true, wantInserts: 1, wantExec: 1, wantInteractive: 1},
+		{name: "missing session", final: "Question", id: "", wantInserts: 1, wantExec: 1, wantInteractive: 1},
+		{name: "spec time", files: "stamp-spec.md", final: "Question", id: "session", wantInserts: 1, wantExec: 1, wantInteractive: 2},
+		{name: "resume failure", interactive: "resume", final: "Question", id: "session", wantInserts: 1, wantExec: 1, wantInteractive: 2},
+		{name: "read spec", files: "read-spec.md", wantInserts: 1, wantExec: 1, wantInteractive: 1},
+		{name: "insert spec", api: "insert-spec", wantInserts: 1, wantExec: 1, wantInteractive: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, f, r, req := flowFixture()
+			a.fail = tc.api
+			f.fail = tc.files
+			r.interactiveErr = tc.interactive
+			if tc.execErr {
+				r.err = errors.New("exec failed")
+			}
+			if tc.final != "" {
+				r.output = dto.AgentOutput{Final: tc.final, SessionID: tc.id}
+			}
+			syncCalls := 0
+			result := Run(context.Background(), a, f, r, req, r.run, nil, func(context.Context, int, string) error { syncCalls++; return nil })
+			require.Error(t, result.Err)
+			require.False(t, f.cleaned)
+			require.Len(t, a.inserts, tc.wantInserts)
+			require.Equal(t, tc.wantExec, r.execCalls)
+			require.Len(t, r.interactive, tc.wantInteractive)
+			require.Zero(t, syncCalls)
+			if len(a.creates) > 0 {
+				require.Equal(t, 12, result.ChangeID)
+				require.Contains(t, result.Err.Error(), "created change #12")
+			}
+			require.Contains(t, result.Err.Error(), "draft retained")
+		})
+	}
+}
+
+func Test032ExistingPreflightAndUnsupportedCatalogs(t *testing.T) {
+	for _, tc := range []string{"brief missing", "spec missing", "backlog missing", "change read", "active read", "owner", "doc owner", "no brief", "duplicate", "prepare"} {
+		t.Run(tc, func(t *testing.T) {
+			a, f, r, req := flowFixture()
+			req.ChangeID = 12
+			switch tc {
+			case "brief missing":
+				a.cfg.ChangeDocs = []string{"spec"}
+			case "spec missing":
+				a.cfg.ChangeDocs = []string{"brief"}
+			case "backlog missing":
+				req.ChangeID = 0
+				a.cfg.ChangePhases = nil
+			case "change read":
+				a.fail = "change"
+			case "active read":
+				a.fail = "active"
+			case "owner":
+				a.change.ProjectID = 8
+			case "doc owner":
+				a.docs[0].RefID = 99
+			case "no brief":
+				a.docs = nil
+			case "duplicate":
+				a.docs = append(a.docs, a.docs[0])
+			case "prepare":
+				f.fail = "prepare"
+			}
+			result := Run(context.Background(), a, f, r, req, r.run, nil, func(context.Context, int, string) error { return nil })
+			require.Error(t, result.Err)
+			require.Empty(t, a.creates)
+			require.Empty(t, a.inserts)
+			require.Empty(t, r.interactive)
+		})
+	}
+}
+
+func Test032SyncFailureKeepsSavedSpecAndStopsCleanup(t *testing.T) {
+	a, f, r, req := flowFixture()
+	result := Run(context.Background(), a, f, r, req, r.run, nil, func(context.Context, int, string) error { return errors.New("partial persistence") })
+	require.ErrorContains(t, result.Err, "partial persistence")
+	require.NotNil(t, result.Spec)
+	require.Equal(t, 42, result.Spec.ID)
+	require.Len(t, a.inserts, 2)
+	require.False(t, f.cleaned)
+	require.Contains(t, result.Status, "agent spec document #42 saved")
+	require.False(t, strings.Contains(result.Status, "synchronized"))
+}
+
+func Test032CanceledWorkflowCannotPersistAfterSuccessfulProcessExit(t *testing.T) {
+	a, f, r, req := flowFixture()
+	ctx, cancel := context.WithCancel(context.Background())
+	result := Run(ctx, a, f, r, req, func(cmd *exec.Cmd) error { err := r.run(cmd); cancel(); return err }, nil, func(context.Context, int, string) error { return nil })
+	require.ErrorIs(t, result.Err, context.Canceled)
+	require.Len(t, a.creates, 1)
+	require.Empty(t, a.inserts)
+	require.Zero(t, r.execCalls)
+	require.False(t, f.cleaned)
+	a, f, r, req = flowFixture()
+	result = Run(ctx, a, f, r, req, r.run, nil, func(context.Context, int, string) error { return nil })
+	require.ErrorIs(t, result.Err, context.Canceled)
+	require.Empty(t, a.calls)
+}
+
+func Test032CreationTypesValidateAndPersistBeforeRewrite(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		present bool
+		types   []string
+		fail    string
+		want    string
+	}{
+		{name: "absent"},
+		{name: "supported", present: true, types: []string{"feature", "fix"}},
+		{name: "explicit empty", present: true, types: []string{}},
+		{name: "unsupported", present: true, types: []string{"feature", "unknown"}, want: `type "unknown" is not configured`},
+		{name: "update failure", present: true, types: []string{"feature"}, fail: "types", want: "type update failed"},
+		{name: "later failure", present: true, types: []string{"feature"}, fail: "insert-brief", want: "insert-brief failed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, f, r, req := flowFixture()
+			a.cfg.ChangeTypes = []string{"feature", "fix"}
+			a.fail = tc.fail
+			req.ChangeTypes, req.ChangeTypesPresent = tc.types, tc.present
+			result := Run(context.Background(), a, f, r, req, func(cmd *exec.Cmd) error {
+				if tc.present {
+					require.Equal(t, 12, a.typesID)
+					require.Equal(t, tc.types, a.types)
+					require.Equal(t, []string{"config", "create", "types"}, a.calls)
+				}
+				return r.run(cmd)
+			}, nil, func(context.Context, int, string) error { return nil })
+			if tc.want == "" {
+				require.NoError(t, result.Err)
+			} else {
+				require.ErrorContains(t, result.Err, tc.want)
+				require.False(t, f.cleaned)
+			}
+			switch tc.name {
+			case "unsupported":
+				require.Empty(t, a.creates)
+				require.Equal(t, []string{"config"}, a.calls)
+				require.Empty(t, r.interactive)
+			case "update failure":
+				require.Equal(t, 12, result.ChangeID)
+				require.Contains(t, result.Err.Error(), "created change #12")
+				require.Empty(t, a.inserts)
+				require.Empty(t, r.interactive)
+				require.False(t, result.ChangeTypesSaved)
+			default:
+				require.Equal(t, tc.present, result.ChangeTypesSaved)
+				require.Equal(t, tc.types, result.ChangeTypes)
+			}
+		})
+	}
 }

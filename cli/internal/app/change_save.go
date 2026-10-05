@@ -216,7 +216,7 @@ func (m Model) applyChangeResult(r changes.Result) (tea.Model, tea.Cmd) {
 		m.testCase.Rows = append([]dto.TestCase(nil), next.Detail.TestCases...)
 		m.testCase.Loaded = true
 	}
-	if returning || (r.Operation != changes.Create && r.Operation != changes.Details && r.Operation != changes.List && r.Operation != changes.Delete) {
+	if returning || (r.Operation != changes.Details && r.Operation != changes.List && r.Operation != changes.Delete) {
 		m.changeList.DetailSelected = selected
 		m.changeList.DetailOffset = offset
 		if returning {
@@ -249,17 +249,15 @@ func (m Model) applyChangeResult(r changes.Result) (tea.Model, tea.Cmd) {
 	if m.state == ChangesListState && !m.changeList.Inactive {
 		m.status = strings.ReplaceAll(m.status, "/retry reads only", "return to Main and reopen /changes")
 	}
+	if r.Err == nil && r.SavedDocument != nil {
+		if r.SavedDocument.DocType == "spec" {
+			return m.syncSavedSpec(r.ID, r.SavedDocument.Body)
+		}
+		if r.SavedDocument.DocType == "brief" && r.RefreshErr == nil {
+			return m.startSavedBrief(r.ID, *r.SavedDocument)
+		}
+	}
 	return m, nil
-}
-
-func (m Model) saveChangeCreate() (tea.Model, tea.Cmd) {
-	return m.saveChangeCreateValue(m.promptValue())
-}
-
-func (m Model) saveChangeCreateValue(brief string) (tea.Model, tea.Cmd) {
-	m.changeList = m.changeList.PrepareCreate(brief)
-	in := m.changeList.Draft
-	return m.beginChange(changes.Create, 0, in)
 }
 
 func (m Model) saveChangeUpdate() (tea.Model, tea.Cmd) {
@@ -306,20 +304,7 @@ func (m Model) saveChangeDetailTextValue(value string) (tea.Model, tea.Cmd) {
 		in.DocumentType = "spec"
 	case detailEditPullRequest:
 		in.DocumentType = "pr"
-	case detailCreateTitle:
-		m.changeList.Draft.Title = value
-		m.detailEditField = ""
-		m = m.setPromptValue(m.changeList.Draft.Value)
-		raw := m.changeList.Draft.Value
-		m.editorDraft = &raw
-		return m, nil
-	case detailCreateUUID:
-		m.changeList.Draft.UUID = value
-		m.detailEditField = ""
-		m = m.setPromptValue(m.changeList.Draft.Value)
-		raw := m.changeList.Draft.Value
-		m.editorDraft = &raw
-		return m, nil
+
 	}
 	return m.beginChange(op, id, in)
 }

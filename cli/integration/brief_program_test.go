@@ -2,312 +2,447 @@ package integration_test
 
 import (
 	"cli/internal/agent"
-	"context"
+	"cli/pkg/briefprocess"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestCLIProgramBriefFailuresAndStaleCancellation(t *testing.T) {
-	var mu sync.Mutex
-	withSpec := false
-	created := 0
-	createAttempts := 0
-	readsFailed := 0
-	var writeAndReadCalls []string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		defer mu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		var body map[string]any
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		switch r.URL.Path {
-		case "/api/v1/doc/comment-list":
-			writeProgramJSON(w, []any{})
-		case "/api/v1/project/details":
-			writeProgramJSON(w, programProject(7, "Program Project"))
-		case "/api/v1/project/config":
-			cfg := programProjectConfig()
-			if !withSpec {
-				cfg["change_docs"] = []string{"brief"}
-			}
-			writeProgramJSON(w, cfg)
-		case "/api/v1/change/create":
-			writeAndReadCalls = append(writeAndReadCalls, "create")
-			createAttempts++
-			if createAttempts == 1 {
-				http.Error(w, "create down", http.StatusInternalServerError)
-				return
-			}
-			created++
-			require.Equal(t, "Draft", body["brief"])
-			w.WriteHeader(201)
-			writeProgramJSON(w, map[string]int{"id": 12})
-		case "/api/v1/change/details":
-			writeProgramJSON(w, programChange(12, "Title"))
-		case "/api/v1/doc/list-active":
-			writeAndReadCalls = append(writeAndReadCalls, "current")
-			if readsFailed < 2 {
-				readsFailed++
-				http.Error(w, "read down", 500)
-				return
-			}
-			d := programDocument("brief", "Draft")
-			writeProgramJSON(w, []any{d})
-		case "/api/v1/health":
-			writeProgramJSON(w, map[string]any{"status": "ok"})
-		default:
-			t.Errorf("unexpected route %s", r.URL.Path)
-			http.NotFound(w, r)
-		}
-	}))
-	defer server.Close()
-	root := t.TempDir()
-	writeProgramConfig(t, root, server.URL)
-	runner := &scriptedBriefRunner{err: errors.New("runner unavailable")}
-	s := startProgram(t, root, "", runner)
-	s.navigate(t, "/brief-new\r", "requires configured brief and spec")
-	mu.Lock()
-	require.Zero(t, created)
-	withSpec = true
-	mu.Unlock()
-	s.navigate(t, "/retry\r", "brief ready for editing")
-	s.send(t, "Draft\r")
-	s.navigate(t, "/title\r", "Input: title")
-	s.send(t, "Title\r")
-	s.navigate(t, "/confirm\r", "create down")
-	s.waitFor(t, "Draft")
-	mu.Lock()
-	require.Equal(t, []string{"create"}, writeAndReadCalls)
-	require.Zero(t, created)
-	mu.Unlock()
-	s.navigate(t, "/confirm\r", "committed ID 12")
-	s.send(t, "/confirm\r")
-	require.Eventually(t, func() bool { mu.Lock(); defer mu.Unlock(); return readsFailed == 2 }, 3*time.Second, 10*time.Millisecond)
-	s.navigate(t, "/retry\r", "runner unavailable")
-	runner.mu.Lock()
-	runner.err = nil
-	runner.results = []agent.Output{{RewrittenBrief: "Draft", Questions: []agent.Question{{ID: "Q1", Text: "Which?", Context: "intro"}, {ID: "Q1", Text: "When?", Context: "timeline"}}, Unresolved: []string{"Q1"}}, {}}
-	runner.mu.Unlock()
-	s.navigate(t, "/retry\r", "duplicate or incomplete question")
-	s.navigate(t, "/retry\r", "agent output is empty")
-	s.navigate(t, "/return\r", "MainScreen")
-	s.send(t, "/quit\r")
-	require.NoError(t, s.waitDone(t))
-	mu.Lock()
-	defer mu.Unlock()
-	require.Equal(t, 1, created, "read-only retries must not recreate the change")
-	require.Equal(t, 2, createAttempts)
-	require.Equal(t, 2, readsFailed)
-	require.Equal(t, []string{"create", "create", "current", "current", "current", "current", "current", "current"}, writeAndReadCalls)
-}
-
-type scriptedBriefRunner struct {
-	mu       sync.Mutex
-	results  []agent.Output
-	requests []agent.Request
-	err      error
-}
-
-type cancelBriefRunner struct{ started, canceled chan struct{} }
-
-func (r *cancelBriefRunner) Run(ctx context.Context, req agent.Request) (agent.Output, string, error) {
-	close(r.started)
-	<-ctx.Done()
-	close(r.canceled)
-	return agent.Output{InputRevision: req.Revision, RewrittenBrief: "Late ready", Questions: []agent.Question{}, Unresolved: []string{}, ReadyForSpec: true}, "/tmp/late-brief", nil
-}
-
-func TestCLIProgramBriefStaleCancellation(t *testing.T) {
-	var mu sync.Mutex
-	inserts := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		defer mu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		var body map[string]any
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		switch r.URL.Path {
-		case "/api/v1/doc/comment-list":
-			writeProgramJSON(w, []any{})
-		case "/api/v1/project/details":
-			writeProgramJSON(w, programProject(7, "Program Project"))
-		case "/api/v1/project/config":
-			writeProgramJSON(w, programProjectConfig())
-		case "/api/v1/change/list":
-			writeProgramJSON(w, []any{programChange(12, "Original")})
-		case "/api/v1/change/details":
-			writeProgramJSON(w, programChange(12, "Original"))
-		case "/api/v1/doc/list-active":
-			writeProgramJSON(w, []any{programDocument("brief", "Original")})
-		case "/api/v1/test-case/list":
-			writeProgramJSON(w, []any{})
-		case "/api/v1/doc/insert":
-			inserts++
-			w.WriteHeader(201)
-			writeProgramJSON(w, map[string]int{"id": 92})
-		default:
-			t.Errorf("unexpected route %s", r.URL.Path)
-			http.NotFound(w, r)
-		}
-	}))
-	defer server.Close()
-	root := t.TempDir()
-	writeProgramConfig(t, root, server.URL)
-	runner := &cancelBriefRunner{started: make(chan struct{}), canceled: make(chan struct{})}
-	s := startProgram(t, root, "", runner)
-	s.navigate(t, "/changes\r", "ChangesListScreen")
-	s.navigate(t, "\r", "loaded change")
-	s.navigate(t, "/brief-clarify\r", "brief ready for editing")
-	s.send(t, "/confirm\r")
-	select {
-	case <-runner.started:
-	case <-time.After(3 * time.Second):
-		t.Fatal("runner did not start")
+// programAgent uses owned local processes, including Bubble Tea's real terminal handoff.
+func programAgent(t *testing.T, root, mode string) agent.Runner {
+	t.Helper()
+	prompts := filepath.Join(root, ".mch/default/prompts")
+	require.NoError(t, os.MkdirAll(prompts, 0o700))
+	for _, name := range []string{"brief-rewrite", "spec-write"} {
+		require.NoError(t, os.WriteFile(filepath.Join(prompts, name+".md"), []byte(name+"\n[brief-file-path.md]"), 0o600))
 	}
-	s.navigate(t, "\x1b", "ChangeDetailsScreen")
-	select {
-	case <-runner.canceled:
-	case <-time.After(3 * time.Second):
-		t.Fatal("runner was not canceled")
-	}
-	require.NotContains(t, s.output.String(), "brief ready for spec writing")
-	s.finishFromDetails(t)
-	mu.Lock()
-	defer mu.Unlock()
-	require.Zero(t, inserts)
+	script := filepath.Join(root, "codex-test")
+	body := `#!/bin/sh
+set -eu
+mode='MODE'
+if [ "$1" = resume ]; then
+ [ "$2" = '0198a86f-9b8a-7d89-ae5b-6f25b528b04c' ] || exit 8
+ brief=$(cat "$0.brief-path")
+ if [ "$mode" != resume-missing ] && [ "$mode" != resume-existing ] && [ "$mode" != resume-identical ]; then
+  printf '# Resumed spec\n## Testcases\n- Click save → saved.\n' > "$(dirname "$brief")/spec.md"
+ fi
+ exit 0
+fi
+if [ "$1" = -C ]; then
+ brief=$(printf '%s' "$3" | tail -n 1)
+ printf '%s' "$brief" > "$0.brief-path"
+ if [ "$mode" != unchanged ]; then
+  printf '# Agent rewrite\nClarified body\n' > "$brief"
+  touch -m -d '2031-01-01 00:00:00' "$brief"
+ fi
+ exit 0
+fi
+[ "$1" = exec ] || exit 8
+[ "$#" = 12 ] && [ "$8" = --sandbox ] && [ "$9" = workspace-write ] && [ "${10}" = --add-dir ] || exit 8
+brief=$(printf '%s' "${12}" | tail -n 1)
+[ "${11}" = "$(dirname "$brief")" ] || exit 8
+printf '\033[32mLIVE spec progress\033[0m\n'
+sleep 0.1
+printf 'session id: 0198a86f-9b8a-7d89-ae5b-6f25b528b04c\n' >&2
+if [ "$mode" = exec-fail ]; then exit 3; fi
+if [ "$mode" = resume-existing ] || [ "$mode" = resume-identical ]; then
+ printf '# Generated spec\n## Testcases\n- Click save → saved.\n' > "$(dirname "$brief")/spec.md"
+ printf 'Question?' > "$7"
+elif [ "$mode" = resume ] || [ "$mode" = resume-missing ]; then
+ printf 'Question?' > "$7"
+else
+ printf '# Generated spec\n## Testcases\n- Click save → saved.\n' > "$(dirname "$brief")/spec.md"
+ printf 'Done.' > "$7"
+fi
+`
+	require.NoError(t, os.WriteFile(script, []byte(strings.ReplaceAll(body, "MODE", mode)), 0o700))
+	return briefprocess.Runner{Executable: script}
 }
 
-func (r *scriptedBriefRunner) Run(_ context.Context, req agent.Request) (agent.Output, string, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.requests = append(r.requests, req)
-	if r.err != nil {
-		return agent.Output{}, "/tmp/failed-brief", r.err
-	}
-	out := r.results[0]
-	r.results = r.results[1:]
-	out.InputRevision = req.Revision
-	return out, filepath.Dir(req.InputPath), nil
-}
-
-func TestCLIProgramBriefNewAndExistingPersistence(t *testing.T) {
-	var mu sync.Mutex
-	var calls []string
-	var created, inserted []map[string]any
-	failedInsertRefreshes := 0
-	doc := map[string]any(nil)
-	change := programChange(12, "Existing")
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		defer mu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		var body map[string]any
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		calls = append(calls, r.URL.Path)
-		switch r.URL.Path {
-		case "/api/v1/doc/comment-list":
-			writeProgramJSON(w, []any{})
-		case "/api/v1/test-case/list":
-			writeProgramJSON(w, []any{})
-		case "/api/v1/project/details":
-			writeProgramJSON(w, programProject(7, "Program Project"))
-		case "/api/v1/project/config":
-			writeProgramJSON(w, programProjectConfig())
-		case "/api/v1/change/list":
-			writeProgramJSON(w, []any{change})
-		case "/api/v1/change/details":
-			writeProgramJSON(w, change)
-		case "/api/v1/doc/list-active":
-			if len(inserted) == 4 && failedInsertRefreshes < 1 {
-				failedInsertRefreshes++
-				http.Error(w, "read down", http.StatusInternalServerError)
-				return
+func TestCLIProgram032BriefSpecFlow(t *testing.T) {
+	for _, mode := range []string{"done", "resume", "resume-existing", "resume-identical", "resume-missing", "unchanged", "exec-fail"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Setenv("TMPDIR", t.TempDir())
+			var mu sync.Mutex
+			var creates, inserts []map[string]any
+			var typesUpdates []map[string]any
+			var cases []map[string]any
+			active := map[string]map[string]any{}
+			change := programChange(12, "Editor title")
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
+				defer mu.Unlock()
+				w.Header().Set("Content-Type", "application/json")
+				var payload map[string]any
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+				switch r.URL.Path {
+				case "/api/v1/project/details":
+					writeProgramJSON(w, programProject(7, "Program Project"))
+				case "/api/v1/project/config":
+					writeProgramJSON(w, programProjectConfig())
+				case "/api/v1/change/list":
+					writeProgramJSON(w, []any{programChange(11, "Previously loaded change")})
+				case "/api/v1/change/create":
+					require.Equal(t, "POST", r.Method)
+					require.Equal(t, float64(7), payload["project_id"])
+					require.Equal(t, "Editor title", payload["title"])
+					require.Equal(t, "\n# Editor title\nTypes: feature", payload["brief"])
+					require.Regexp(t, `^[0-9a-f-]{36}$`, payload["ref_uuid"])
+					creates = append(creates, payload)
+					change["ref_uuid"] = payload["ref_uuid"]
+					active["brief"] = programDocument("brief", strings.TrimSpace(payload["brief"].(string)))
+					w.WriteHeader(201)
+					writeProgramJSON(w, map[string]any{"id": 12})
+				case "/api/v1/change/update-types":
+					require.Len(t, creates, 1)
+					require.Empty(t, inserts)
+					require.Equal(t, map[string]any{"id": float64(12), "change_types": []any{"feature"}}, payload)
+					typesUpdates = append(typesUpdates, payload)
+					change["change_types"] = payload["change_types"]
+					w.WriteHeader(http.StatusNoContent)
+				case "/api/v1/change/details":
+					if payload["id"] == float64(11) {
+						writeProgramJSON(w, programChange(11, "Previously loaded change"))
+					} else {
+						writeProgramJSON(w, change)
+					}
+				case "/api/v1/doc/list-active":
+					if payload["ref_id"] == float64(11) {
+						doc := programDocument("brief", "# Previously saved brief")
+						doc["ref_id"] = 11
+						writeProgramJSON(w, []any{doc})
+						return
+					}
+					rows := []any{}
+					for _, kind := range []string{"spec", "brief"} {
+						if doc := active[kind]; doc != nil {
+							rows = append(rows, doc)
+						}
+					}
+					writeProgramJSON(w, rows)
+				case "/api/v1/doc/comment-list":
+					writeProgramJSON(w, []any{})
+				case "/api/v1/doc/insert":
+					if payload["ref_id"] == float64(11) {
+						require.Equal(t, "spec", payload["doc_type"])
+						require.Equal(t, false, payload["agent_edit"])
+						http.Error(w, "editor save refused", http.StatusServiceUnavailable)
+						return
+					}
+					require.Equal(t, float64(12), payload["ref_id"])
+					require.Equal(t, "change", payload["ref_table"])
+					require.Equal(t, true, payload["agent_edit"])
+					inserts = append(inserts, payload)
+					doc := programDocument(payload["doc_type"].(string), strings.TrimSpace(payload["body"].(string)))
+					doc["id"] = 100 + len(inserts)
+					doc["agent_edit"] = true
+					active[payload["doc_type"].(string)] = doc
+					if mode == "resume-identical" && payload["doc_type"] == "brief" {
+						// Another save becomes active while the agent is running.
+						spec := programDocument("spec", "# Generated spec\n## Testcases\n- Click save → saved.")
+						spec["id"] = 200
+						active["spec"] = spec
+					}
+					w.WriteHeader(201)
+					writeProgramJSON(w, map[string]any{"id": doc["id"]})
+				case "/api/v1/test-case/list":
+					if payload["change_id"] == float64(11) {
+						writeProgramJSON(w, []any{})
+						return
+					}
+					require.Equal(t, float64(12), payload["change_id"])
+					if cases == nil {
+						cases = []map[string]any{}
+					}
+					writeProgramJSON(w, cases)
+				case "/api/v1/test-case/create":
+					require.Equal(t, map[string]any{"change_id": float64(12), "scenario": "Click save → saved."}, payload)
+					cases = append(cases, map[string]any{"id": 31, "change_id": 12, "scenario": payload["scenario"], "done": false, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T10:00:00Z"})
+					w.WriteHeader(201)
+					writeProgramJSON(w, map[string]any{"id": 31})
+				default:
+					t.Errorf("unexpected %s", r.URL.Path)
+					http.NotFound(w, r)
+				}
+			}))
+			t.Cleanup(server.Close)
+			root := t.TempDir()
+			writeProgramConfig(t, root, server.URL)
+			runner := programAgent(t, root, mode)
+			s := startProgram(t, root, "\n# Editor title\nTypes: feature", runner)
+			s.navigate(t, "/changes\r", "Rows 1-1 of 1")
+			s.navigate(t, "\r", "loaded change")
+			s.navigate(t, "/edit-spec\r", "editor save refused")
+			drafts, err := filepath.Glob(filepath.Join(os.TempDir(), "mch-project-*.md"))
+			require.NoError(t, err)
+			require.Len(t, drafts, 1)
+			s.navigate(t, "\x1b", "prompt cleared")
+			s.navigate(t, "/return\r", "ChangesListScreen")
+			s.send(t, "/new-change\r")
+			switch mode {
+			case "done", "resume", "resume-existing", "resume-identical":
+				s.waitFor(t, "testcases synchronized")
+			case "resume-missing":
+				s.waitFor(t, "Error generating `spec`")
+			case "exec-fail":
+				s.waitFor(t, "spec writing:")
+			case "unchanged":
+				s.waitFor(t, "brief unchanged")
 			}
-			if doc == nil {
-				writeProgramJSON(w, []any{})
+			s.waitFor(t, "ChangeDetailsScreen")
+			require.Equal(t, "\n# Editor title\nTypes: feature", readFile(t, drafts[0]), "another change's workflow must retain the failed editor save")
+			if mode == "exec-fail" || mode == "resume-missing" {
+				s.navigate(t, "/brief\r", "Load change details before")
+				s.navigate(t, "/retry\r", "loaded change")
+			}
+			if mode != "unchanged" {
+				require.Contains(t, s.output.String(), "AgentExecScreen")
+				s.waitFor(t, "LIVE spec progress")
+				require.Contains(t, s.output.String(), "\x1b[32m")
+			}
+			s.send(t, "/return\r")
+			s.finishFromChanges(t)
+			mu.Lock()
+			defer mu.Unlock()
+			require.Len(t, creates, 1)
+			require.Len(t, typesUpdates, 1)
+			expected := 2
+			switch mode {
+			case "unchanged":
+				expected = 0
+			case "resume-missing", "exec-fail", "resume-identical":
+				expected = 1
+			}
+			require.Len(t, inserts, expected)
+			if mode == "resume-identical" {
+				require.Contains(t, s.output.String(), "spec unchanged")
+				require.Equal(t, 200, active["spec"]["id"])
+			}
+			if expected == 2 || mode == "resume-identical" {
+				require.Len(t, cases, 1)
+				require.False(t, cases[0]["done"].(bool))
 			} else {
-				writeProgramJSON(w, []any{doc})
+				require.Empty(t, cases)
 			}
-		case "/api/v1/change/create":
-			created = append(created, body)
-			change["title"] = body["title"]
-			doc = programDocument("brief", strings.TrimSpace(body["brief"].(string)))
-			doc["ref_id"] = 12
-			w.WriteHeader(http.StatusCreated)
-			writeProgramJSON(w, map[string]int{"id": 12})
+			require.NotContains(t, s.output.String(), "ChangeCreateScreen")
+			require.NotContains(t, s.output.String(), "BriefScreen")
+		})
+	}
+}
+
+func TestCLIProgram032InvalidBriefAndCreationFailure(t *testing.T) {
+	for _, brief := range []string{"", "## Wrong", "# ", "text\n# Title", "# Save fails"} {
+		t.Run(fmt.Sprintf("%q", brief), func(t *testing.T) {
+			t.Setenv("TMPDIR", t.TempDir())
+			creates := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/api/v1/project/details":
+					writeProgramJSON(w, programProject(7, "Program Project"))
+				case "/api/v1/project/config":
+					writeProgramJSON(w, programProjectConfig())
+				case "/api/v1/change/list":
+					writeProgramJSON(w, []any{})
+				case "/api/v1/change/create":
+					creates++
+					http.Error(w, "creation refused", 500)
+				default:
+					t.Errorf("unexpected %s", r.URL.Path)
+					http.NotFound(w, r)
+				}
+			}))
+			t.Cleanup(server.Close)
+			root := t.TempDir()
+			writeProgramConfig(t, root, server.URL)
+			s := startProgram(t, root, brief, programAgent(t, root, "done"))
+			s.navigate(t, "/changes\r", "no changes")
+			s.send(t, "/new-change\r")
+			if brief == "# Save fails" {
+				s.waitFor(t, "/api/v1/change/create: 500")
+			} else {
+				s.waitFor(t, "brief title is required")
+			}
+			s.waitFor(t, "ChangesListScreen")
+			s.finishFromChanges(t)
+			if brief == "# Save fails" {
+				require.Equal(t, 1, creates)
+			} else {
+				require.Zero(t, creates)
+			}
+			paths, err := filepath.Glob(filepath.Join(os.TempDir(), "mch/*/brief.md"))
+			require.NoError(t, err)
+			require.Len(t, paths, 1)
+			require.Equal(t, brief, readFile(t, paths[0]))
+		})
+	}
+}
+
+func TestCLIProgram032ManualSpecAndEditedBrief(t *testing.T) {
+	for _, partial := range []bool{false, true} {
+		t.Run(fmt.Sprintf("partial=%t", partial), func(t *testing.T) {
+			testProgram032ManualSpecAndEditedBrief(t, partial)
+		})
+	}
+}
+
+func testProgram032ManualSpecAndEditedBrief(t *testing.T, partial bool) {
+	t.Setenv("TMPDIR", t.TempDir())
+	var mu sync.Mutex
+	q := "Click save → saved."
+	active := map[string]map[string]any{"brief": programDocument("brief", "# Original user brief"), "spec": programDocument("spec", "# Before")}
+	active["brief"]["id"] = 90
+	active["spec"]["id"] = 91
+	caseRow := func(id int, text string, done bool) map[string]any {
+		return map[string]any{"id": id, "change_id": 12, "scenario": text, "done": done, "created_at": "2026-09-28T10:00:00Z", "updated_at": "2026-09-28T11:00:00Z"}
+	}
+	checked := caseRow(2, q, true)
+	cases := []map[string]any{caseRow(1, q, false), checked, caseRow(3, "Old action → old result", false)}
+	var inserts []map[string]any
+	var deleted []int
+	creates := 0
+	syncFailure := partial
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		var payload map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		switch r.URL.Path {
+		case "/api/v1/project/details":
+			writeProgramJSON(w, programProject(7, "Program Project"))
+		case "/api/v1/project/config":
+			writeProgramJSON(w, programProjectConfig())
+		case "/api/v1/change/list":
+			writeProgramJSON(w, []any{programChange(12, "Existing change")})
+		case "/api/v1/change/details":
+			writeProgramJSON(w, programChange(12, "Existing change"))
+		case "/api/v1/doc/list-active":
+			rows := []any{}
+			if active["brief"]["id"].(int) > active["spec"]["id"].(int) {
+				rows = append(rows, active["brief"], active["spec"])
+			} else {
+				rows = append(rows, active["spec"], active["brief"])
+			}
+			writeProgramJSON(w, rows)
+		case "/api/v1/doc/comment-list":
+			writeProgramJSON(w, []any{})
 		case "/api/v1/doc/insert":
-			inserted = append(inserted, body)
-			doc = programDocument("brief", strings.TrimSpace(body["body"].(string)))
-			doc["id"] = 91 + len(inserted)
-			doc["agent_edit"] = body["agent_edit"]
-			w.WriteHeader(http.StatusCreated)
-			writeProgramJSON(w, map[string]int{"id": 91 + len(inserted)})
+			inserts = append(inserts, payload)
+			kind := payload["doc_type"].(string)
+			doc := programDocument(kind, strings.TrimSpace(payload["body"].(string)))
+			doc["id"] = 100 + len(inserts)
+			doc["agent_edit"] = payload["agent_edit"]
+			active[kind] = doc
+			w.WriteHeader(201)
+			writeProgramJSON(w, map[string]any{"id": doc["id"]})
+		case "/api/v1/test-case/list":
+			require.Equal(t, float64(12), payload["change_id"])
+			writeProgramJSON(w, cases)
+		case "/api/v1/test-case/delete":
+			id := int(payload["id"].(float64))
+			deleted = append(deleted, id)
+			if syncFailure && id == 3 {
+				http.Error(w, "testcase delete unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			for i, c := range cases {
+				if c["id"].(int) == id {
+					cases = append(cases[:i], cases[i+1:]...)
+					break
+				}
+			}
+			w.WriteHeader(204)
+		case "/api/v1/test-case/create":
+			creates++
+			http.Error(w, "unexpected testcase create", 500)
+		case "/api/v1/change/create":
+			t.Error("edited brief must not create another change")
+			http.Error(w, "unexpected change create", 500)
 		default:
-			t.Errorf("unexpected route %s", r.URL.Path)
+			t.Errorf("unexpected %s", r.URL.Path)
 			http.NotFound(w, r)
 		}
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 	root := t.TempDir()
 	writeProgramConfig(t, root, server.URL)
-	runner := &scriptedBriefRunner{results: []agent.Output{{RewrittenBrief: "Rewritten one", Questions: []agent.Question{{ID: "Q1", Text: "Which?", Context: "intro"}}, Unresolved: []string{"Q1"}}, {RewrittenBrief: "Rewritten two", Questions: []agent.Question{{ID: "Q2", Text: "When?", Context: "timeline"}}, Unresolved: []string{"Q2"}}, {RewrittenBrief: "Rewritten three", Questions: []agent.Question{{ID: "Q2", Text: "When?", Context: "timeline"}}, Unresolved: []string{}, ReadyForSpec: true}, {RewrittenBrief: "Existing human edit", Questions: []agent.Question{}, Unresolved: []string{}, ReadyForSpec: true}}}
-	s := startProgram(t, root, "Existing human edit", runner)
-	s.navigate(t, "/brief-new\r", "BriefScreen")
-	s.waitFor(t, "brief ready for editing")
-	s.send(t, "User brief\r")
-	s.navigate(t, "/title\r", "Input: title")
-	s.send(t, "New title\r")
-	s.navigate(t, "/confirm\r", "Agent proposed rewrite")
-	s.navigate(t, "/approve\r", "Question Q1")
-	s.waitFor(t, "brief ready for editing") // retained screen remains responsive after version refresh
-	s.navigate(t, "\x01", "Input: answer")
-	s.send(t, "Q1: Alpha\r")
-	s.navigate(t, "/resolve\r", "Rewritten two")
-	s.navigate(t, "/approve\r", "Unresolved: Q2")
-	s.navigate(t, "/resolve\r", "unanswered blocker")
-	s.send(t, "Q2: Tomorrow\r")
-	s.navigate(t, "/resolve\r", "Rewritten three")
-	s.navigate(t, "/approve\r", "brief ready for spec writing")
-	s.navigate(t, "/return\r", "MainScreen")
-	s.navigate(t, "/changes\r", "ChangesListScreen")
-	s.navigate(t, "\r", "ChangeDetailsScreen")
-	s.navigate(t, "/brief-clarify\r", "BriefScreen")
-	s.waitFor(t, "brief ready for editing")
-	s.navigate(t, "\x05", "brief edited")
-	s.navigate(t, "/confirm\r", "committed ID 95; retry read or agent step")
-	s.navigate(t, "/confirm\r", "Agent proposed rewrite: Existing human edit")
-	s.navigate(t, "/approve\r", "brief ready for spec writing")
-	s.navigate(t, "/return\r", "ChangeDetailsScreen")
-	s.finishFromDetails(t)
+	editor := filepath.Join(root, "editor")
+	require.NoError(t, os.WriteFile(editor, []byte("#!/bin/sh\ncp \"$0.text\" \"$1\"\n"), 0o700))
+	cfg := filepath.Join(root, ".mch/config.yaml")
+	require.NoError(t, os.WriteFile(cfg, []byte("backend_url: "+server.URL+"\nproject_id: 7\neditor: "+editor+"\n"), 0o600))
+	require.NoError(t, os.WriteFile(editor+".text", []byte("# Manual spec\n## Testcases\n- "+q), 0o600))
+	s := startProgram(t, root, "unused fallback editor", programAgent(t, root, "done"))
+	s.navigate(t, "/changes\r", "Rows 1-1 of 1")
+	s.navigate(t, "\r", "loaded change")
+	s.send(t, "/edit-spec\r")
+	if partial {
+		s.waitFor(t, "reads current details and testcases")
+		// Editing stays blocked while rows are stale; unit tests also cover toggling
+		// and deletion, including cancellation and failed refreshes.
+		s.navigate(t, "\r", "load change details with /retry before editing")
+		mu.Lock()
+		require.Len(t, inserts, 1)
+		require.Equal(t, "# Manual spec\n## Testcases\n- "+q, active["spec"]["body"])
+		require.Equal(t, []int{1, 3}, deleted)
+		require.Equal(t, []map[string]any{checked, caseRow(3, "Old action → old result", false)}, cases)
+		mu.Unlock()
+		s.navigate(t, "/retry\r", "loaded change")
+		mu.Lock()
+		require.Equal(t, []int{1, 3}, deleted, "retry must only read")
+		require.Len(t, inserts, 1)
+		syncFailure = false
+		mu.Unlock()
+	} else {
+		s.waitFor(t, "testcases synchronized")
+	}
+	drafts, err := filepath.Glob(filepath.Join(os.TempDir(), "mch-project-*.md"))
+	require.NoError(t, err)
+	if partial {
+		require.Len(t, drafts, 1, "failed synchronization retains the owning editor draft")
+	} else {
+		require.Empty(t, drafts, "successful synchronization cleans its owning editor draft")
+	}
+	mu.Lock()
+	require.Len(t, inserts, 1)
+	require.Equal(t, false, inserts[0]["agent_edit"])
+	require.Equal(t, []int{1, 3}, deleted)
+	if !partial {
+		require.Equal(t, []map[string]any{checked}, cases)
+	}
+	mu.Unlock()
+	require.NoError(t, os.WriteFile(editor+".text", []byte("# Human edited brief"), 0o600))
+	count := s.output.count("testcases synchronized")
+	s.send(t, "/brief\r")
+	s.output.waitForCount(t, "testcases synchronized", count+1)
+	s.waitFor(t, "LIVE spec progress")
+	drafts, err = filepath.Glob(filepath.Join(os.TempDir(), "mch-project-*.md"))
+	require.NoError(t, err)
+	if partial {
+		require.Len(t, drafts, 1, "the earlier failed spec synchronization still owns its draft")
+	} else {
+		require.Empty(t, drafts, "the successful brief flow cleans its owning editor draft")
+	}
+	s.send(t, "/return\r")
+	s.finishFromChanges(t)
 	mu.Lock()
 	defer mu.Unlock()
-	require.Len(t, created, 1)
-	require.Equal(t, "New title", created[0]["title"])
-	require.Equal(t, "User brief", created[0]["brief"])
-	require.Len(t, inserted, 4)
-	require.Equal(t, 1, failedInsertRefreshes)
-	require.Equal(t, true, inserted[0]["agent_edit"])
-	require.Equal(t, "Rewritten one", inserted[0]["body"])
-	require.Equal(t, "Rewritten two", inserted[1]["body"])
-	require.Equal(t, "Rewritten three", inserted[2]["body"])
-	require.Equal(t, false, inserted[3]["agent_edit"])
-	require.Equal(t, "Existing human edit", inserted[3]["body"])
-	require.Contains(t, calls, "/api/v1/change/details")
-	runner.mu.Lock()
-	defer runner.mu.Unlock()
-	require.Equal(t, "brief-rewrite", runner.requests[0].Prompt)
-	require.Equal(t, "brief-resolve", runner.requests[1].Prompt)
-	require.Equal(t, "Alpha", runner.requests[1].Questions[0].Answer)
-	require.Equal(t, "brief-resolve", runner.requests[2].Prompt)
-	require.Equal(t, "Tomorrow", runner.requests[2].Questions[0].Answer)
-	require.Equal(t, "Alpha", runner.requests[2].Questions[1].Answer)
+	require.Len(t, inserts, 4)
+	require.Equal(t, []any{"spec", "brief", "brief", "spec"}, []any{inserts[0]["doc_type"], inserts[1]["doc_type"], inserts[2]["doc_type"], inserts[3]["doc_type"]})
+	require.Equal(t, []any{false, false, true, true}, []any{inserts[0]["agent_edit"], inserts[1]["agent_edit"], inserts[2]["agent_edit"], inserts[3]["agent_edit"]})
+	require.Zero(t, creates)
+	require.Equal(t, []map[string]any{checked}, cases)
+	if partial {
+		require.Equal(t, []int{1, 3, 3}, deleted)
+	} else {
+		require.Equal(t, []int{1, 3}, deleted)
+	}
 }

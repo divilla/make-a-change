@@ -1,7 +1,6 @@
 package app
 
 import (
-	"cli/internal/changes"
 	"cli/internal/dto"
 	"errors"
 	"os"
@@ -68,35 +67,6 @@ func TestArtifactEditorUnchangedExitSkipsPersistence(t *testing.T) {
 	}
 }
 
-func TestChangeCreateRetainsCommittedChangeAfterTypeFailure(t *testing.T) {
-	cause := errors.New("type rejected")
-	created := dto.ChangeView{ID: "12", Title: "Created", Brief: "Body"}
-	client := &fakeClient{createdChange: created, changeTypesUpdateErr: cause}
-	m := newChangeTestModel(client)
-	m.currentProject = dto.Option{ID: "7"}
-	m.state = ChangeCreateState
-	m = m.setPromptValue("# Created\n\nTypes: feature\n\nBody")
-	next, cmd := m.submitPrompt()
-	require.NotNil(t, cmd)
-	msg := cmd().(changes.Result)
-	require.NoError(t, msg.Err)
-	require.ErrorIs(t, msg.RefreshErr, cause)
-	m = applyMsg(next.(Model), msg)
-	assert.Equal(t, ChangeDetailsState, m.state)
-	assert.Equal(t, created.ID, m.changeList.Detail.ID)
-	assert.Contains(t, m.status, "created change #12")
-	assert.Contains(t, m.err, "type update failed: type rejected")
-	assert.Empty(t, m.input.Value())
-	assert.Equal(t, []string{"change/create", "change/update-types"}, client.requestOrder)
-
-	// A repeated save cannot replay creation after the committed result.
-	next, cmd = m.executeCommand("/save")
-	require.Nil(t, cmd)
-	assert.Equal(t, ChangeDetailsState, next.(Model).state)
-	assert.Equal(t, 1, client.changeCreateCalls)
-	assert.Zero(t, client.changeGetCalls)
-}
-
 func TestPromptSubmissionPreservesSlashPrefixedData(t *testing.T) {
 	for _, state := range []State{TestCaseCreateState, TestCaseUpdateState, ProjectCreateState, ProjectUpdateState, ChangeDetailsState} {
 		t.Run(string(state), func(t *testing.T) {
@@ -135,7 +105,7 @@ func TestPromptSubmissionPreservesSlashPrefixedData(t *testing.T) {
 }
 
 func TestPromptSubmissionDispatchesRecognizedFormCommands(t *testing.T) {
-	for _, state := range []State{ChangeCreateState, ChangeUpdateState, TestCaseCreateState, TestCaseUpdateState, ProjectCreateState, ProjectUpdateState} {
+	for _, state := range []State{ChangeUpdateState, TestCaseCreateState, TestCaseUpdateState, ProjectCreateState, ProjectUpdateState} {
 		t.Run(string(state), func(t *testing.T) {
 			client := &fakeClient{}
 			m := newChangeTestModel(client)

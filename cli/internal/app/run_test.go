@@ -674,11 +674,6 @@ func TestChangeEditorPreservesEditedMarkdownAfterFailedSave(t *testing.T) {
 		edited   string
 	}{
 		{
-			name:   "create",
-			source: ChangeCreateState,
-			edited: "# Edited Change\n\nTypes: unknown\n\n## Problem Statement\nKeep this edit.",
-		},
-		{
 			name:     "update",
 			source:   ChangeUpdateState,
 			original: "# Original Change\n\nTypes: feature\n\n## Problem Statement\nOriginal spec.",
@@ -1540,173 +1535,6 @@ func TestNewChangeRequiresCurrentProject(t *testing.T) {
 	assert.Equal(t, ChangesListState, got.state)
 	assert.Equal(t, "current project must be numeric", got.err)
 	assert.Zero(t, client.changeCreateCalls)
-}
-
-func TestChangeCreateSaveExtractsTitleAndPreservesBrief(t *testing.T) {
-	spec := "# New Change\n\nTypes: feature|test\n\nEpic: Epic Five\n\n## Problem Statement\nKeep every section."
-	client := &fakeClient{
-		types:         []dto.Option{{ID: "feature", Label: "feature"}, {ID: "test", Label: "test"}},
-		epics:         []dto.Option{{ID: "5", Label: "Epic Five"}},
-		createdChange: dto.ChangeView{ID: "12"},
-		gotChange:     dto.ChangeView{ID: "12", Title: "New Change", Spec: spec, ChangeTypes: []string{"feature", "test"}, EpicID: "5", EpicName: "Epic Five"},
-	}
-	m := newChangeTestModel(client)
-	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
-	m.state = ChangeCreateState
-	m.input.SetValue(spec)
-
-	updated, cmd := m.executeCommandFrom(ChangeCreateState, "/save")
-	got := updated.(Model)
-	require.NotNil(t, cmd)
-	got = applyMsg(got, cmd())
-
-	require.Len(t, client.changeCreateInputs, 1)
-	assert.Equal(t, 7, client.changeCreateInputs[0].ProjectID)
-	assert.Equal(t, "New Change", client.changeCreateInputs[0].Title)
-	assert.Equal(t, spec, client.changeCreateInputs[0].Brief)
-	assert.Equal(t, [][]string{{"feature", "test"}}, client.changeTypesUpdates)
-	assert.Zero(t, client.epicCalls)
-	assert.Equal(t, []int{12}, client.changeGetIDs)
-	assert.Equal(t, ChangeDetailsState, got.state)
-	assert.Equal(t, client.gotChange.ID, got.changeList.Detail.ID)
-	assert.Equal(t, client.gotChange.Title, got.changeList.Detail.Title)
-}
-
-func TestChangeCreateSuccessWithReloadFailureOpensCreatedDetails(t *testing.T) {
-	spec := "# New Change\n\nTypes: feature\n\n## Problem Statement\nKeep every section."
-	client := &fakeClient{
-		types:         []dto.Option{{ID: "feature", Label: "feature"}},
-		createdChange: dto.ChangeView{ID: "12", Title: "New Change", Spec: spec, ChangeTypes: []string{"feature"}},
-		changeGetErr:  errors.New("temporary reload failure"),
-	}
-	m := newChangeTestModel(client)
-	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
-	m.state = ChangeCreateState
-	m.input.SetValue(spec)
-
-	updated, cmd := m.executeCommandFrom(ChangeCreateState, "/save")
-	got := updated.(Model)
-	require.NotNil(t, cmd)
-	got = applyMsg(got, cmd())
-
-	require.Len(t, client.changeCreateInputs, 1)
-	assert.Equal(t, []int{12}, client.changeGetIDs)
-	assert.Equal(t, ChangeDetailsState, got.state)
-	assert.Equal(t, client.createdChange.ID, got.changeList.Detail.ID)
-	assert.Equal(t, spec, got.changeList.Detail.Brief)
-	assert.Equal(t, "temporary reload failure", got.err)
-	assert.Empty(t, got.input.Value())
-}
-
-func TestStandaloneChangeSaveDoesNotRequireEpicLookup(t *testing.T) {
-	spec := "# Standalone Change\n\nTypes: feature\n\n## Problem Statement\nNo epic."
-	client := &fakeClient{
-		types:         []dto.Option{{ID: "feature", Label: "feature"}},
-		epicErr:       errors.New("epics unavailable"),
-		createdChange: dto.ChangeView{ID: "12"},
-		gotChange:     dto.ChangeView{ID: "12", Title: "Standalone Change", Spec: spec, ChangeTypes: []string{"feature"}},
-	}
-	m := newChangeTestModel(client)
-	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
-	m.state = ChangeCreateState
-	m.input.SetValue(spec)
-
-	updated, cmd := m.executeCommandFrom(ChangeCreateState, "/save")
-	got := updated.(Model)
-	require.NotNil(t, cmd)
-	got = applyMsg(got, cmd())
-
-	require.Len(t, client.changeCreateInputs, 1)
-	assert.Zero(t, client.epicCalls)
-	assert.Equal(t, ChangeDetailsState, got.state)
-
-	updateSpec := "# Standalone Change\n\nTypes: feature\n\nEpic: \n\n## Problem Statement\nNo epic."
-	original := dto.ChangeView{
-		ID:          "12",
-		Title:       "Standalone Change",
-		Spec:        spec,
-		ChangeTypes: []string{"feature"},
-	}
-	client = &fakeClient{
-		types:     []dto.Option{{ID: "feature", Label: "feature"}},
-		epicErr:   errors.New("epics unavailable"),
-		gotChange: dto.ChangeView{ID: "12", Title: "Standalone Change", Spec: updateSpec, ChangeTypes: []string{"feature"}},
-	}
-	m = newChangeTestModel(client)
-	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
-	m.state = ChangeUpdateState
-	m.changeList.Detail = original
-	m.input.SetValue(updateSpec)
-
-	updated, cmd = m.executeCommandFrom(ChangeUpdateState, "/save")
-	got = updated.(Model)
-	require.NotNil(t, cmd)
-	got = applyMsg(got, cmd())
-
-	assert.Zero(t, client.epicCalls)
-	assert.Equal(t, 1, client.changeSpecUpdateCalls)
-	assert.Equal(t, ChangeDetailsState, got.state)
-}
-
-func TestChangeCreateValidationErrorsDoNotCallBackendCreate(t *testing.T) {
-	tests := []struct {
-		name string
-		spec string
-	}{
-		{name: "missing title", spec: "Types: feature\n\n## Problem Statement\nSpec."},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			client := &fakeClient{
-				types: []dto.Option{{ID: "feature", Label: "feature"}},
-				epics: []dto.Option{{ID: "5", Label: "Epic Five"}},
-			}
-			m := newChangeTestModel(client)
-			m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
-			m.state = ChangeCreateState
-			m.input.SetValue(tt.spec)
-
-			updated, cmd := m.executeCommandFrom(ChangeCreateState, "/save")
-			got := updated.(Model)
-			require.Nil(t, cmd)
-
-			assert.Equal(t, ChangeCreateState, got.state)
-			assert.NotEmpty(t, got.err)
-			assert.Zero(t, client.changeCreateCalls)
-			assert.Zero(t, client.changeGetCalls)
-		})
-	}
-}
-
-func TestChangeSaveStructuralValidationDoesNotFetchReferences(t *testing.T) {
-	tests := []struct {
-		name    string
-		spec    string
-		wantErr string
-	}{
-		{name: "missing title", spec: "Types: feature\n\n## Problem Statement\nSpec.", wantErr: "change title is required"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			client := &fakeClient{err: errors.New("reference backend unavailable")}
-			m := newChangeTestModel(client)
-			m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
-			m.state = ChangeCreateState
-			m.input.SetValue(tt.spec)
-
-			updated, cmd := m.executeCommandFrom(ChangeCreateState, "/save")
-			got := updated.(Model)
-			require.Nil(t, cmd)
-
-			assert.Equal(t, ChangeCreateState, got.state)
-			assert.Equal(t, tt.wantErr, got.err)
-			assert.Zero(t, client.typeCalls)
-			assert.Zero(t, client.epicCalls)
-			assert.Zero(t, client.changeCreateCalls)
-		})
-	}
 }
 
 func TestChangeUpdateStructuralValidationDoesNotFetchReferences(t *testing.T) {
@@ -2744,7 +2572,7 @@ func TestCtrlNShortcutsCreateChangeAndTestCase(t *testing.T) {
 	changeList.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	got, cmd := sendKey(changeList, tea.KeyCtrlN)
 	require.NotNil(t, cmd)
-	assert.Equal(t, ChangeCreateState, got.state)
+	assert.Equal(t, ChangesListState, got.state)
 
 	detail := NewModelWithClient(&fakeClient{})
 	detail.state = ChangeDetailsState
@@ -2880,7 +2708,6 @@ func TestCreateUpdateSaveCancelTransitions(t *testing.T) {
 		command string
 		want    State
 	}{
-		{start: ChangeCreateState, command: "/cancel", want: ChangesListState},
 		{start: ChangeDetailsState, command: "/edit-spec", want: ChangeDetailsState},
 		{start: ChangeUpdateState, command: "/cancel", want: ChangeDetailsState},
 		{start: ChangeDetailsState, command: "/new-testcase", want: TestCaseCreateState},
@@ -3001,7 +2828,6 @@ func TestChangeDetailsCommandsAreExact(t *testing.T) {
 		"/delete",
 		"/documents",
 		"/return",
-		"/brief-clarify",
 	}, commandsByState[ChangeDetailsState])
 }
 
@@ -3052,11 +2878,6 @@ func TestReturnAndEscapeTransitions(t *testing.T) {
 	assert.Equal(t, DoneState, got.state)
 	assert.True(t, got.quitting)
 	require.NotNil(t, cmd)
-
-	m = NewModel()
-	m.state = ChangeCreateState
-	got, _ = sendKey(m, tea.KeyEsc)
-	assert.Equal(t, ChangesListState, got.state)
 }
 
 func TestSelectorDropdownsLoadAndReturn(t *testing.T) {
@@ -3379,7 +3200,7 @@ func TestCommandDropdownFiltersAndExecutesSelection(t *testing.T) {
 	assert.Equal(t, " > /"+strings.Repeat(" ", 76), stripANSI(lines[1]))
 	assert.True(t, strings.HasPrefix(stripANSI(lines[3]), "    changes"))
 	assert.Contains(t, stripANSI(lines[3]), "Browse changes")
-	assert.Equal(t, "(1/10)", stripANSI(lines[len(lines)-1]))
+	assert.NotContains(t, dropdown, "(1/10)")
 	got, _ = sendRune(got, 'e')
 	got, _ = sendRune(got, 'p')
 	got, _ = sendKey(got, tea.KeyEnter)
@@ -3561,7 +3382,6 @@ func TestEveryDummyScreenTitleRendersExactly(t *testing.T) {
 		{ChangesListState, "ChangesListScreen"},
 		{ChangeDetailsState, "ChangeDetailsScreen"},
 		{TestCaseDetailsState, "TestCaseDetailsScreen - Title: Test Case Details"},
-		{ChangeCreateState, "ChangeCreateScreen - Title: New Change"},
 		{ChangeUpdateState, "ChangeUpdateScreen"},
 		{TestCaseCreateState, "TestCaseCreateScreen - Title: New Test Case"},
 		{TestCaseUpdateState, "TestCaseUpdateScreen - Title: Edit Test Case"},

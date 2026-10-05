@@ -10,7 +10,6 @@ type API interface {
 	ListChangeRows(context.Context, int) ([]dto.Change, error)
 	ListInactiveChanges(context.Context, int) ([]dto.Change, error)
 	GetChange(context.Context, int) (dto.Change, error)
-	CreateChange(context.Context, dto.ChangeCreateInput) (int, error)
 	UpdateChangeTitle(context.Context, int, string) error
 	UpdateChangeSlug(context.Context, int, string) error
 	UpdateChangePRUrl(context.Context, int, string) error

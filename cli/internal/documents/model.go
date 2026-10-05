@@ -219,6 +219,7 @@ func (m Model) begin(ctx context.Context, api ScreenAPI, op Operation, input dto
 			if r.Err != nil {
 				return r
 			}
+			r.Detail = dto.Document{ID: r.ID, RefID: input.RefID, RefTable: input.RefTable, DocType: input.DocType, Body: strings.TrimSpace(input.Body), AgentEdit: input.AgentEdit}
 			return r
 		}
 		r.Rows, r.RefreshErr = api.ListDocuments(work, ownerID, table)

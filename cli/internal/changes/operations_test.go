@@ -165,7 +165,7 @@ func TestP403EachChangeActionAndValidation(t *testing.T) {
 		op Operation
 		in Input
 	}{
-		{List, Input{}}, {Details, Input{}}, {Create, Input{Title: "Explicit", Value: "plain brief"}}, {Delete, Input{}}, {Title, Input{Value: "/save"}}, {Phase, Input{Value: "review"}}, {Types, Input{Types: []string{}}}, {Epic, Input{Association: &assoc}}, {Epic, Input{}}, {AfterChange, Input{Association: &assoc}}, {AfterChange, Input{}}, {Active, Input{Active: false}}, {PRURL, Input{Value: "https://host/path"}}, {Document, Input{DocumentType: "spec", Value: "new\tbytes\n"}},
+		{List, Input{}}, {Details, Input{}}, {Delete, Input{}}, {Title, Input{Value: "/save"}}, {Phase, Input{Value: "review"}}, {Types, Input{Types: []string{}}}, {Epic, Input{Association: &assoc}}, {Epic, Input{}}, {AfterChange, Input{Association: &assoc}}, {AfterChange, Input{}}, {Active, Input{Active: false}}, {PRURL, Input{Value: "https://host/path"}}, {Document, Input{DocumentType: "spec", Value: "new\tbytes\n"}},
 	} {
 		t.Run(string(tt.op), func(t *testing.T) {
 			m, a := changeSetup()
@@ -177,11 +177,8 @@ func TestP403EachChangeActionAndValidation(t *testing.T) {
 			require.NoError(t, m.Err)
 			require.False(t, m.Busy)
 			require.Contains(t, a.calls, string(tt.op))
-			if tt.op != List && tt.op != Details && tt.op != Create {
+			if tt.op != List && tt.op != Details {
 				require.Contains(t, m.Status, map[bool]string{true: "deleted", false: "saved"}[tt.op == Delete])
-				if tt.op == Create {
-					require.Contains(t, m.Status, "created change #12")
-				}
 			}
 		})
 	}
@@ -194,10 +191,6 @@ func TestP403InvalidFormsAndAbsentCatalogsNeverWrite(t *testing.T) {
 		in      Input
 		catalog dto.ProjectConfig
 	}{
-		{Create, Input{Value: "brief"}, changeCatalog()},
-		{Create, Input{Title: "Title"}, changeCatalog()},
-		{Create, Input{Title: "Title", Value: "plain", UUID: "bad"}, changeCatalog()},
-		{Create, Input{Title: "Title", Value: "plain"}, dto.ProjectConfig{}},
 		{Title, Input{Value: " "}, changeCatalog()},
 		{Phase, Input{Value: "invented"}, changeCatalog()},
 		{Types, Input{Types: []string{"missing"}}, changeCatalog()},
@@ -213,9 +206,6 @@ func TestP403InvalidFormsAndAbsentCatalogsNeverWrite(t *testing.T) {
 		require.Error(t, m.Err)
 		require.Empty(t, a.calls)
 	}
-	for _, in := range []Input{{Title: "Title", Value: "plain"}, {Title: "Title", Value: "plain", UUID: "0198a86f-9b8a-7d89-ae5b-6f25b528b04c"}} {
-		require.NoError(t, validate(Create, 7, 0, in, changeCatalog()))
-	}
 	for _, value := range []string{"HTTP://host/path", "https://host/path"} {
 		require.NoError(t, validate(PRURL, 7, 12, Input{Value: value}, changeCatalog()))
 	}
@@ -228,8 +218,6 @@ func TestP405CommittedStepsSurviveLaterFailureAndRetryOnlyReads(t *testing.T) {
 		fail string
 		step string
 	}{
-		{Create, Input{Title: "New", Value: "brief"}, "details", "created change #12"},
-		{Create, Input{Title: "New", Value: "Types: feature\n\nbrief"}, "types", "created change #12"},
 		{Title, Input{Value: "/save"}, "details", "saved title"},
 		{Delete, Input{}, "list", "deleted change #12"},
 		{Document, Input{DocumentType: "brief", Value: "new\tbytes"}, "documents", "saved brief document #91"},
@@ -452,14 +440,14 @@ func TestP403NullableAssociationForm(t *testing.T) {
 }
 
 func TestP405CancellationAfterCommitRetainsStepAndLiteralValue(t *testing.T) {
-	for _, op := range []Operation{Create, Title, Document} {
+	for _, op := range []Operation{Title, Document} {
 		t.Run(string(op), func(t *testing.T) {
 			m, a := changeSetup()
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			a.cancelAfter = string(op)
 			a.cancel = cancel
-			in := Input{Title: "Comments", Value: "literal\tbytes\n", DocumentType: "brief"}
+			in := Input{Value: "literal\tbytes\n", DocumentType: "brief"}
 			m, cmd := m.Begin(ctx, a, a, op, 7, 12, in, changeCatalog())
 			m = finish(t, m, cmd)
 			require.ErrorIs(t, m.Err, context.Canceled)
@@ -469,7 +457,7 @@ func TestP405CancellationAfterCommitRetainsStepAndLiteralValue(t *testing.T) {
 			switch op {
 			case Title:
 				require.Equal(t, in.Value, m.Detail.Title)
-			case Create, Document:
+			case Document:
 				require.Equal(t, in.Value, m.Detail.Brief)
 			}
 			before := len(a.calls)

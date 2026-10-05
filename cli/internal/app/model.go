@@ -14,6 +14,7 @@ import (
 	"cli/pkg/briefprocess"
 	"cli/pkg/documentprocess"
 	"context"
+	"os"
 	"strconv"
 
 	httpclient "cli/pkg/client"
@@ -65,8 +66,6 @@ const (
 	detailEditSlug        detailEditField = "slug"
 	detailEditDocument    detailEditField = "document"
 	detailEditAfterChange detailEditField = "after-change"
-	detailCreateTitle     detailEditField = "create-title"
-	detailCreateUUID      detailEditField = "create-uuid"
 	detailEditPhase       detailEditField = "phase"
 	detailEditEpic        detailEditField = "epic"
 	detailEditTypes       detailEditField = "types"
@@ -140,7 +139,15 @@ type currentProjectLoadedMsg struct {
 	err        error
 }
 
+type editorScratch struct {
+	path      string
+	identity  os.FileInfo
+	projectID int
+	document  dto.Document
+}
+
 type editorFinishedMsg struct {
+	scratch            *editorScratch
 	generation         uint64
 	projectID, ownerID string
 	field              detailEditField
@@ -158,6 +165,7 @@ type editorFinishedMsg struct {
 type startupProjectSelectionMsg struct{}
 
 type appClient interface {
+	agent.API
 	projects.API
 	changes.API
 	epics.API
@@ -174,6 +182,7 @@ type Model struct {
 	selectorGeneration  uint64
 	input               textarea.Model
 	editorDraft         *string
+	editorScratch       *editorScratch
 	editorGeneration    uint64
 	state               State
 	previousState       State
@@ -219,12 +228,11 @@ type Model struct {
 	document            documents.Model
 	documentReturn      State
 	documentForm        bool
-	brief               agent.Model
-	briefField          string
-	briefReturn         State
 	briefRunner         agent.Runner
-	briefOperation      *briefOperation
-	briefOffset         int
+	agentOperation      *agentOperation
+	specSyncCancel      context.CancelFunc
+	agentOutput         string
+	agentOffset         int
 }
 
 // NewModel creates the default mch model using local config and HTTP backend access.

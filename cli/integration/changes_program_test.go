@@ -34,10 +34,7 @@ func changePromptLabel(command string) string {
 func TestCLIProgramChangeCRUDAndPartialSuccess(t *testing.T) {
 	for _, partial := range []bool{false, true} {
 		t.Run(fmt.Sprint(partial), func(t *testing.T) {
-			brief := "plain brief\twith bytes\n"
-			if !partial {
-				brief = "# Inferred title\n\n" + brief
-			}
+			brief := "# Inferred title\n\nplain brief\twith bytes\n"
 			var mu sync.Mutex
 			change := programChange(12, "Original")
 			exists := true
@@ -85,7 +82,10 @@ func TestCLIProgramChangeCRUDAndPartialSuccess(t *testing.T) {
 					writeProgramJSON(w, []any{})
 				case "/api/v1/change/create":
 					writes["create"] = append(writes["create"], body)
-					require.Equal(t, map[string]any{"project_id": float64(7), "title": "Explicit title", "brief": brief, "ref_uuid": "0198a86f-9b8a-7d89-ae5b-6f25b528b04c"}, body)
+					require.Equal(t, float64(7), body["project_id"])
+					require.Equal(t, "Inferred title", body["title"])
+					require.Equal(t, brief, body["brief"])
+					require.Regexp(t, `^[0-9a-f-]{36}$`, body["ref_uuid"])
 					change["title"] = body["title"]
 					exists = true
 					failRead = partial
@@ -125,7 +125,7 @@ func TestCLIProgramChangeCRUDAndPartialSuccess(t *testing.T) {
 			defer server.Close()
 			root := t.TempDir()
 			writeProgramConfig(t, root, server.URL)
-			s := startProgram(t, root, brief)
+			s := startProgram(t, root, brief, programAgent(t, root, "unchanged"))
 			editor := filepath.Join(root, "editor-value")
 			require.NoError(t, os.WriteFile(editor, []byte(brief), 0o600))
 			t.Setenv("EDITOR", "cp "+editor)
@@ -153,18 +153,10 @@ func TestCLIProgramChangeCRUDAndPartialSuccess(t *testing.T) {
 			s.navigate(t, "/changes\r", "Rows 1-1 of 1")
 			s.navigate(t, "/help\r", "PR URL requires HTTP(S)")
 			s.navigate(t, "/return\r", "Rows 1-1 of 1")
-			s.navigate(t, "/new-change\r", "review creation fields")
-			mu.Lock()
-			createCount := len(writes["create"])
-			mu.Unlock()
-			require.Zero(t, createCount, "editor completion must wait for confirmation")
-			s.navigate(t, "\x14", "editing create-title")
-			s.send(t, "\x01\x0bExplicit title\r")
-			s.navigate(t, "\x15", "editing create-uuid")
-			s.send(t, "0198a86f-9b8a-7d89-ae5b-6f25b528b04c\r")
-			s.navigate(t, "\r", "created change #12")
+			t.Setenv("TMPDIR", t.TempDir())
+			s.navigate(t, "/new-change\r", "created change #12")
 			recoverRead()
-			s.waitFor(t, "Explicit title")
+			s.waitFor(t, "Inferred title")
 			edit("/title", "/save", "saved title")
 			recoverRead()
 			s.navigate(t, "/title\r", "Title >")

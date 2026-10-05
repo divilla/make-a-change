@@ -73,13 +73,13 @@ func TestParseBriefStructureTracksOptionalTypesMetadata(t *testing.T) {
 	assert.Equal(t, []string{"fix", "feature"}, parsed.ChangeTypes)
 }
 
-func TestParseBriefStructureRequiresNonMetadataBody(t *testing.T) {
+func Test032ParseBriefAcceptsTitleWithoutBody(t *testing.T) {
 	for _, brief := range []string{
 		"# Change\n\n",
 		"# Change\n\nTypes:",
 		"# Change\n\nTypes: feature",
 	} {
 		_, err := ParseBriefStructure(brief)
-		require.EqualError(t, err, "brief body is required")
+		require.NoError(t, err)
 	}
 }

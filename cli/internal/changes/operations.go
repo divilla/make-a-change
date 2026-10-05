@@ -24,7 +24,6 @@ const (
 	List        Operation = "list"
 	Reactivate  Operation = "reactivate"
 	Details     Operation = "details"
-	Create      Operation = "create"
 	Delete      Operation = "delete"
 	Title       Operation = "title"
 	Slug        Operation = "slug"
@@ -43,8 +42,6 @@ type Input struct {
 	Types        []string
 	Association  *int
 	Active       bool
-	Title        string
-	UUID         string
 	DocumentType string
 }
 
@@ -56,10 +53,9 @@ type Result struct {
 	Detail          dto.ChangeView
 	Rows            []dto.ChangeView
 	Err, RefreshErr error
+	SavedDocument   *dto.Document
 	Steps           []string
 }
-
-var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // Begin validates and captures one operation. Commands never mutate a model.
 func (m Model) Begin(ctx context.Context, api API, docs Documents, op Operation, project, id int, in Input, catalog dto.ProjectConfig) (Model, tea.Cmd) {
@@ -129,21 +125,6 @@ func (m Model) Begin(ctx context.Context, api API, docs Documents, op Operation,
 		case Details:
 			r.Detail, r.Err = readDetail(ctx, api, docs, project, id)
 			return r
-		case Create:
-			r.ID, r.Err = api.CreateChange(ctx, dto.ChangeCreateInput{ProjectID: project, Title: in.Title, Brief: in.Value, RefUUID: in.UUID})
-			if r.Err == nil {
-				r.Detail = dto.ChangeView{ID: strconv.Itoa(r.ID), ProjectID: strconv.Itoa(project), Title: in.Title, Brief: in.Value}
-				r.Steps = append(r.Steps, fmt.Sprintf("created change #%d", r.ID))
-				types, present := ParseArtifactTypes(in.Value)
-				if present {
-					if err := api.UpdateChangeTypes(ctx, r.ID, types); err != nil {
-						r.RefreshErr = fmt.Errorf("type update failed: %w", err)
-						return r
-					}
-					r.Detail.ChangeTypes = types
-					r.Steps = append(r.Steps, "saved types "+strings.Join(types, "|"))
-				}
-			}
 		case Reactivate:
 			r.Err = api.UpdateChangeActive(ctx, id, true)
 			if r.Err == nil {
@@ -185,6 +166,7 @@ func (m Model) Begin(ctx context.Context, api API, docs Documents, op Operation,
 			var docID int
 			docID, r.Err = docs.Save(ctx, id, in.DocumentType, in.Value)
 			if r.Err == nil {
+				r.SavedDocument = &dto.Document{ID: docID, RefID: id, RefTable: "change", DocType: in.DocumentType, Body: strings.TrimSpace(in.Value)}
 				r.Steps = append(r.Steps, fmt.Sprintf("saved %s document #%d", in.DocumentType, docID))
 				found := false
 				for i := range r.Detail.Documents {
@@ -267,23 +249,10 @@ func validate(op Operation, project, id int, in Input, catalog dto.ProjectConfig
 	if project <= 0 {
 		return errors.New("select a valid project first")
 	}
-	if op != List && op != Create && id <= 0 {
+	if op != List && id <= 0 {
 		return errors.New("change ID must be a valid positive number")
 	}
 	switch op {
-	case Create:
-		if strings.TrimSpace(in.Title) == "" {
-			return errors.New("change title is required")
-		}
-		if strings.TrimSpace(in.Value) == "" {
-			return errors.New("brief is required")
-		}
-		if in.UUID != "" && !uuidPattern.MatchString(in.UUID) {
-			return errors.New("reference UUID must be a UUID or omitted")
-		}
-		if !slices.Contains(catalog.ChangePhases, "backlog") || !slices.Contains(catalog.ChangeDocs, "brief") {
-			return errors.New("create requires configured backlog phase and brief document type; reload /project-config")
-		}
 	case Title:
 		if strings.TrimSpace(in.Value) == "" {
 			return errors.New("change title is required")
@@ -375,7 +344,7 @@ func (m Model) Scope(project int) Model {
 
 // Apply rejects stale project/entity/operation/revision results.
 func (m Model) Apply(r Result) (Model, bool) {
-	if r.Generation != m.Generation || r.ProjectID != m.ProjectID || r.Operation != m.Operation || (r.Operation != Create && r.ID != m.EntityID) {
+	if r.Generation != m.Generation || r.ProjectID != m.ProjectID || r.Operation != m.Operation || r.ID != m.EntityID {
 		return m, false
 	}
 	m.Generation++
@@ -496,17 +465,6 @@ func optionalInt(v *int) string {
 		return "null"
 	}
 	return strconv.Itoa(*v)
-}
-
-// PrepareCreate keeps explicit form values and optionally extracts a Markdown title.
-func (m Model) PrepareCreate(brief string) Model {
-	m.Draft.Value = brief
-	if m.Draft.Title == "" {
-		if p, err := ParseBriefStructure(brief); err == nil {
-			m.Draft.Title = p.Title
-		}
-	}
-	return m
 }
 
 // AssociationInput validates a nullable association entered in a text form.

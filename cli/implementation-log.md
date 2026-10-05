@@ -121,3 +121,15 @@
 2026-05-10 00:55 cli-white-aligned-docs
 +3 -3 code - +23 -3 tests --- pure-white Foreground for Docs/comments and reserve timestamp space for all Docs checkboxes; retain purple/cyan timestamps and green checks; corrected display-column test; check/audit pass, unit 5709/6544 and terminal 5045/6544 pass
 
+2026-05-10 07:37 032-cli-brief-spec-flow
++1066 -1352 code - +1220 -1675 tests --- spec
++147 -26 code - +176 -3 tests --- review fixes 01
++78 -2 code - +56 -8 tests --- review fixes 02
++164 -4 code - +233 -3 tests --- review fixes 03
++111 -15 code - +116 -0 tests --- review fixes 04
++143 -25 code - +218 -5 tests --- review fixes 05
++69 -0 code - +107 -1 tests --- review fixes 06
+
+2026-05-10 14:36 cli-spec-save-after-interactive-exit
++37 -18 code - +91 -12 tests --- compare temp spec content with freshly read active spec after generation; save differing content regardless of mtime, skip duplicate versions and retain testcase sync; check/audit and independent unit 5657/6367 and terminal 4946/6367 gates pass
+

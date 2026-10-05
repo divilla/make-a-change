@@ -330,7 +330,6 @@ func TestTextPromptLabelsAndInputColorsAcrossForms(t *testing.T) {
 		{ProjectCreateState, "Name"},
 		{EpicUpdateState, "Name"},
 		{TestCaseCreateState, "Scenario"},
-		{ChangeCreateState, "Brief"},
 		{FindInputState, "Find"},
 	}
 	for _, testCase := range cases {
@@ -412,73 +411,6 @@ func TestP403ClearingUpdatePromptCancelsField(t *testing.T) {
 	}
 }
 
-func TestP403EditorReturnsToCreateFormBeforeFirstSave(t *testing.T) {
-	for _, uuid := range []string{"", "0198a86f-9b8a-7d89-ae5b-6f25b528b04c"} {
-		t.Run(uuid, func(t *testing.T) {
-			t.Setenv("TMPDIR", t.TempDir())
-			client := &fakeClient{createdChange: dto.ChangeView{ID: "12"}, gotChange: dto.ChangeView{ID: "12"}}
-			m := newChangeTestModel(client)
-			m.state = ChangesListState
-			m, _ = sendCommand(m, "/new-change")
-			brief := "# Inferred title\n\nExact\tbrief\r\n"
-			next, cmd := m.Update(editorFinishedMsg{source: ChangeCreateState, content: brief})
-			m = applyCommand(next.(Model), cmd)
-			require.Empty(t, client.changeCreateInputs, "editor completion must not create")
-			require.Equal(t, ChangeCreateState, m.state)
-			require.Equal(t, brief, m.promptValue())
-			require.Equal(t, "Inferred title", m.changeList.Draft.Title)
-			require.Contains(t, m.View(), "review creation fields")
-			m, _ = sendKey(m, tea.KeyCtrlT)
-			m = m.setPromptValue("Chosen title")
-			m, _ = sendKey(m, tea.KeyEnter)
-			m, _ = sendKey(m, tea.KeyCtrlU)
-			m = m.setPromptValue(uuid)
-			m, _ = sendKey(m, tea.KeyEnter)
-			// Reopening and returning from the brief editor also requires confirmation.
-			next, cmd = m.Update(editorFinishedMsg{source: ChangeCreateState, original: brief, content: brief})
-			m = applyCommand(next.(Model), cmd)
-			require.Empty(t, client.changeCreateInputs)
-			require.Equal(t, "Chosen title", m.changeList.Draft.Title)
-			m, cmd = sendKey(m, tea.KeyEnter)
-			m = applyCommand(m, cmd)
-			require.Empty(t, m.err)
-			require.Equal(t, []dto.ChangeCreateInput{{ProjectID: 7, Title: "Chosen title", Brief: brief, RefUUID: uuid}}, client.changeCreateInputs)
-		})
-	}
-}
-
-func TestP403CanceledCreateSubfieldDoesNotConsumeNextBrief(t *testing.T) {
-	for _, key := range []tea.KeyType{tea.KeyCtrlT, tea.KeyCtrlU} {
-		for _, cancel := range []string{"escape", "/cancel"} {
-			t.Run(fmt.Sprintf("%v/%s", key, cancel), func(t *testing.T) {
-				t.Setenv("TMPDIR", t.TempDir())
-				client := &fakeClient{createdChange: dto.ChangeView{ID: "12"}, gotChange: dto.ChangeView{ID: "12"}}
-				m := newChangeTestModel(client)
-				m.state = ChangeCreateState
-				m = m.setPromptValue("abandoned brief")
-				m, _ = sendKey(m, key)
-				if cancel == "escape" {
-					m, _ = sendKey(m, tea.KeyEsc)
-					m, _ = sendKey(m, tea.KeyEsc)
-				} else {
-					m, _ = sendCommand(m, cancel)
-				}
-				require.Equal(t, ChangesListState, m.state)
-				require.Empty(t, m.detailEditField)
-				m, _ = sendCommand(m, "/new-change")
-				require.Empty(t, m.detailEditField)
-				brief := "# Fresh title\n\nFresh\tbrief\r\n"
-				next, cmd := m.Update(editorFinishedMsg{source: ChangeCreateState, content: brief})
-				m = applyCommand(next.(Model), cmd)
-				m, cmd = sendKey(m, tea.KeyEnter)
-				m = applyCommand(m, cmd)
-				require.Empty(t, m.err)
-				require.Equal(t, []dto.ChangeCreateInput{{ProjectID: 7, Title: "Fresh title", Brief: brief}}, client.changeCreateInputs)
-			})
-		}
-	}
-}
-
 func TestP404SavedLongTitleKeepsDetailViewportUsable(t *testing.T) {
 	for _, refreshFails := range []bool{false, true} {
 		t.Run(fmt.Sprint(refreshFails), func(t *testing.T) {
@@ -513,30 +445,6 @@ func TestP404SavedLongTitleKeepsDetailViewportUsable(t *testing.T) {
 			require.Contains(t, seen.String(), "Modified")
 		})
 	}
-}
-
-func TestP403ExplicitCreateFieldsRetainRawBrief(t *testing.T) {
-	client := &fakeClient{createdChange: dto.ChangeView{ID: "12"}, gotChange: dto.ChangeView{ID: "12"}}
-	m := newChangeTestModel(client)
-	m.state = ChangeCreateState
-	brief := "plain\tbrief\r\n" + strings.Repeat("body\n", 1000)
-	m = m.setPromptValue(brief)
-	m.editorDraft = &brief
-	m, _ = sendKey(m, tea.KeyCtrlT)
-	m = m.setPromptValue("Explicit title")
-	m, cmd := sendKey(m, tea.KeyEnter)
-	require.Nil(t, cmd)
-	require.Equal(t, brief, m.promptValue())
-	m, _ = sendKey(m, tea.KeyCtrlU)
-	m = m.setPromptValue("0198a86f-9b8a-7d89-ae5b-6f25b528b04c")
-	m, _ = sendKey(m, tea.KeyEnter)
-	require.Equal(t, brief, m.promptValue())
-	m, cmd = sendKey(m, tea.KeyEnter)
-	require.NotNil(t, cmd)
-	m = applyMsg(m, cmd())
-	require.Empty(t, m.err)
-	require.Len(t, client.changeCreateInputs, 1)
-	require.Equal(t, dto.ChangeCreateInput{ProjectID: 7, Title: "Explicit title", Brief: brief, RefUUID: "0198a86f-9b8a-7d89-ae5b-6f25b528b04c"}, client.changeCreateInputs[0])
 }
 
 func TestP404ChangeEmptyFindAndObsoleteResults(t *testing.T) {

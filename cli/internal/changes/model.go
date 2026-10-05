@@ -662,17 +662,9 @@ func ParseBriefStructure(brief string) (ParsedBrief, error) {
 		return ParsedBrief{}, fmt.Errorf("brief title is required")
 	}
 	types, typesPresent := ParseArtifactTypes(normalized)
-	bodyLines := lines[firstIndex+1:]
-	firstBodyLine := firstNonBlankLine(bodyLines, 0)
-	if firstBodyLine >= 0 && isArtifactTypesLine(bodyLines[firstBodyLine]) {
-		bodyLines = bodyLines[firstBodyLine+1:]
-	}
-	if strings.TrimSpace(strings.Join(bodyLines, "\n")) == "" {
-		return ParsedBrief{}, fmt.Errorf("brief body is required")
-	}
 	return ParsedBrief{
 		Title:              title,
-		Brief:              normalized,
+		Brief:              brief,
 		ChangeTypes:        types,
 		ChangeTypesPresent: typesPresent,
 	}, nil

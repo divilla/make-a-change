@@ -367,7 +367,10 @@ var historySGR = regexp.MustCompile(`\x1b\[[0-9;:]*m`)
 // historyText allows text, layout whitespace and complete SGR controls only.
 // Decode whole output before splitting lines so multiline control-string payloads
 // cannot enter the viewport or affect its scroll bounds.
-func historyText(output string) string {
+func historyText(output string) string { return SafeANSI(output) }
+
+// SafeANSI retains display text and color while removing terminal control commands.
+func SafeANSI(output string) string {
 	var safe strings.Builder
 	for len(output) > 0 {
 		seq, _, n, _ := ansi.DecodeSequence(output, ansi.NormalState, nil)

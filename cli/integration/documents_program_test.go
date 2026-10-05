@@ -22,6 +22,7 @@ type documentProgramBackend struct {
 	inserts                 []map[string]any
 	failInsert, failList    int
 	malformed, wrongDetails bool
+	projectDocs             []string
 }
 
 func newDocumentProgramBackend(t *testing.T) (*documentProgramBackend, *httptest.Server) {
@@ -66,7 +67,11 @@ func newDocumentProgramBackend(t *testing.T) (*documentProgramBackend, *httptest
 		case "/api/v1/project/list":
 			writeProgramJSON(w, []any{programProject(7, "Program Project")})
 		case "/api/v1/project/config":
-			writeProgramJSON(w, programProjectConfig())
+			config := programProjectConfig()
+			if b.projectDocs != nil {
+				config["project_docs"] = b.projectDocs
+			}
+			writeProgramJSON(w, config)
 		case "/api/v1/epic/list":
 			writeProgramJSON(w, []any{programEpic(10, 7, "Program Epic")})
 		case "/api/v1/epic/details":
@@ -215,6 +220,8 @@ func TestCLIProgramDocumentOwnersAndHistory(t *testing.T) {
 				s.navigate(t, "/type\r", "selected document type: spec")
 				s.navigate(t, "/new-document\r", "Document draft:")
 				s.navigate(t, "configured choice\r", "saved document #91")
+				s.waitFor(t, "testcase error")
+				s.waitFor(t, "ChangeDetailsScreen")
 			}
 			finishDocumentSession(t, s)
 			b.mu.Lock()
@@ -224,7 +231,7 @@ func TestCLIProgramDocumentOwnersAndHistory(t *testing.T) {
 			if owner == "change" {
 				require.Equal(t, "spec", b.inserts[0]["doc_type"])
 				require.Equal(t, "configured choice", b.inserts[0]["body"])
-				require.GreaterOrEqual(t, b.calls["/api/v1/doc/details"], 2)
+				require.Equal(t, 1, b.calls["/api/v1/doc/details"], "spec insertion ends at change details without rereading history")
 			} else {
 				require.Equal(t, 1, b.calls["/api/v1/doc/details"])
 			}

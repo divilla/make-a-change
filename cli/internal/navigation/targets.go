@@ -26,8 +26,6 @@ func ReturnTargets() map[State]State {
 // CreateTarget returns the create state for a source state.
 func CreateTarget(state State) State {
 	switch state {
-	case MainState, ChangesListState:
-		return ChangeCreateState
 	case ChangeDetailsState, TestCaseDetailsState:
 		return TestCaseCreateState
 	case EpicsListState:
@@ -58,7 +56,7 @@ func UpdateTarget(state State) State {
 // SaveTarget returns the state reached after a navigation-only save.
 func SaveTarget(state State) State {
 	switch state {
-	case ChangeCreateState, ChangeUpdateState:
+	case ChangeUpdateState:
 		return ChangeDetailsState
 	case TestCaseCreateState, TestCaseUpdateState:
 		return ChangeDetailsState
@@ -74,8 +72,6 @@ func SaveTarget(state State) State {
 // CancelTarget returns the state reached after canceling an edit/create flow.
 func CancelTarget(state State) State {
 	switch state {
-	case ChangeCreateState:
-		return ChangesListState
 	case ChangeUpdateState:
 		return ChangeDetailsState
 	case TestCaseCreateState, TestCaseUpdateState:

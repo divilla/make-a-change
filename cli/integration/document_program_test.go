@@ -18,6 +18,11 @@ import (
 
 // Ordinary editor and save-order assertions rehomed from the removed agent programs.
 func TestCLIProgramOrdinaryDocumentEditor(t *testing.T) {
+	for _, owner := range []string{"project", "epic"} {
+		t.Run(owner+"/brief draft cleanup", func(t *testing.T) {
+			testOrdinaryBriefEditorCleanup(t, owner)
+		})
+	}
 	for _, failed := range []bool{false, true} {
 		t.Run(fmt.Sprintf("detail load failed=%t", failed), func(t *testing.T) {
 			testDocumentEditorWaitsForDetail(t, failed)
@@ -86,7 +91,7 @@ func TestCLIProgramOrdinaryDocumentEditor(t *testing.T) {
 				t.Cleanup(server.Close)
 				root := t.TempDir()
 				writeProgramConfig(t, root, server.URL)
-				session := startProgram(t, root, edited)
+				session := startProgram(t, root, edited, programAgent(t, root, "unchanged"))
 				capture := filepath.Join(root, "editor-input.md")
 				editorPath := filepath.Join(root, "editor-path.txt")
 				script := filepath.Join(root, "editor.sh")
@@ -124,9 +129,17 @@ func TestCLIProgramOrdinaryDocumentEditor(t *testing.T) {
 				} else if failure {
 					session.waitFor(t, "type update failed")
 				} else {
-					session.waitFor(t, "status save")
+					if field == "brief" {
+						session.waitFor(t, "brief unchanged")
+					} else {
+						session.waitFor(t, "status save")
+					}
 					if retry {
-						session.output.waitForCount(t, "status save", saveFrames+1)
+						if field == "brief" && !failure {
+							session.waitFor(t, "brief unchanged")
+						} else {
+							session.output.waitForCount(t, "status save", saveFrames+1)
+						}
 					}
 				}
 				mu.Lock()
@@ -147,13 +160,54 @@ func TestCLIProgramOrdinaryDocumentEditor(t *testing.T) {
 					expectedSeed = edited
 				}
 				assert.Equal(t, expectedSeed, readFile(t, capture))
-				assert.NoFileExists(t, readFile(t, editorPath))
+				if (field == "spec" && !unchanged) || (field == "brief" && failure) {
+					assert.FileExists(t, readFile(t, editorPath), "failed flow keeps recoverable editor draft")
+				} else {
+					assert.NoFileExists(t, readFile(t, editorPath))
+				}
 				assert.Contains(t, session.output.String(), "\x1b[2J")
 				assert.NoDirExists(t, filepath.Join(root, ".mch/tmp"))
 				session.finishFromDetails(t)
 			})
 		}
 	}
+}
+
+func testOrdinaryBriefEditorCleanup(t *testing.T, owner string) {
+	t.Helper()
+	t.Setenv("TMPDIR", t.TempDir())
+	b, server := newDocumentProgramBackend(t)
+	b.projectDocs = []string{"brief"}
+	root := t.TempDir()
+	writeProgramConfig(t, root, server.URL)
+	body := "# Ordinary brief\nKeep project and epic documents independent.\n"
+	s := startProgram(t, root, body)
+	pathFile, script := filepath.Join(root, "editor-path"), filepath.Join(root, "editor.sh")
+	require.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\nset -eu\nprintf '%s' \"$1\" > \"$EDITOR_PATH\"\nprintf '# Ordinary brief\\nKeep project and epic documents independent.\\n' > \"$1\"\n"), 0o700))
+	t.Setenv("EDITOR_PATH", pathFile)
+	t.Setenv("EDITOR", script)
+	openProgramDocuments(t, s, owner)
+	b.mu.Lock()
+	b.failInsert = 1
+	b.mu.Unlock()
+	s.navigate(t, "/new-document\r", "Document draft:")
+	s.navigate(t, "\x05", "document draft ready")
+	draft := readFile(t, pathFile)
+	require.Equal(t, body, readFile(t, draft))
+	s.navigate(t, "\r", "insert refused")
+	require.Equal(t, body, readFile(t, draft), "failed saves retain the draft")
+	s.navigate(t, "\r", "saved document #92; refreshed")
+	require.NoFileExists(t, draft, "successful ordinary saves clean up the editor file")
+	b.mu.Lock()
+	inputs := append([]map[string]any(nil), b.inserts...)
+	b.mu.Unlock()
+	require.Len(t, inputs, 2)
+	require.Equal(t, inputs[0], inputs[1], "retry uses the same unsaved document")
+	require.Equal(t, owner, inputs[1]["ref_table"])
+	require.Equal(t, "brief", inputs[1]["doc_type"])
+	require.Equal(t, body, inputs[1]["body"])
+	require.Equal(t, false, inputs[1]["agent_edit"])
+	finishDocumentSession(t, s)
 }
 
 func testDocumentEditorWaitsForDetail(t *testing.T, failed bool) {

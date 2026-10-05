@@ -30,13 +30,13 @@
       "TestCLIProgramConfigurationCRUDAndCatalogRefresh",
       "TestCLIProgramConfigurationSelectedProjectCatalogRefresh",
       "TestCLIProgramConfigurationStaleResponseIsolation",
-      "TestCLIProgramBriefNewAndExistingPersistence",
-      "TestCLIProgramBriefFailuresAndStaleCancellation",
-      "TestCLIProgramBriefStaleCancellation",
       "TestCLIProgram031DocumentCommentsAndHistory",
       "TestCLIProgram031InactiveChangesAndEpicSelection",
       "TestCLIProgram031BatFailureKeepsHistoryAndReturns",
-      "TestCLIProgramSelectedItemViewer"
+      "TestCLIProgramSelectedItemViewer",
+      "TestCLIProgram032BriefSpecFlow",
+      "TestCLIProgram032InvalidBriefAndCreationFailure",
+      "TestCLIProgram032ManualSpecAndEditedBrief"
     ]
   },
   "pty": {

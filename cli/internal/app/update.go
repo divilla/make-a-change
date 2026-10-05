@@ -1,7 +1,6 @@
 package app
 
 import (
-	"cli/internal/agent"
 	"cli/internal/changes"
 	"cli/internal/configurations"
 	"cli/internal/documents"
@@ -37,15 +36,58 @@ func (m Model) Init() tea.Cmd {
 // Update applies Bubble Tea messages to the root model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case briefCleanupMsg:
-		if msg.err != nil {
-			m.err = "brief scratch cleanup failed: " + msg.err.Error()
+	case newBriefEditedMsg:
+		return m.applyNewBrief(msg)
+	case agentInteractiveMsg:
+		if m.agentOperation != msg.operation {
+			return m, nil
 		}
-		return m, nil
-	case agent.Result:
-		return m.applyBriefResult(msg)
-	case briefProgressMsg:
-		return m.applyBriefProgress(msg)
+		return m, tea.ExecProcess(msg.command, func(err error) tea.Msg { return agentInteractiveFinishedMsg{request: msg, err: err} })
+	case agentInteractiveFinishedMsg:
+		if m.agentOperation != msg.request.operation {
+			return m, nil
+		}
+		msg.request.reply <- msg.err
+		return m, tea.Sequence(tea.ClearScreen, waitAgentOperation(m.agentOperation))
+	case agentProgressMsg:
+		if m.agentOperation != msg.operation {
+			return m, nil
+		}
+		m.agentOutput += msg.text
+		if len(m.agentOutput) > 1<<20 {
+			m.agentOutput = m.agentOutput[len(m.agentOutput)-(1<<20):]
+		}
+		return m, waitAgentOperation(msg.operation)
+	case agentFinishedMsg:
+		return m.applyAgentFinished(msg)
+	case savedDocumentSyncMsg:
+		if msg.project != m.currentProject.ID || msg.generation != m.selectionGeneration || m.changeList.Detail.ID != strconv.Itoa(msg.change) {
+			return m, nil
+		}
+		if m.specSyncCancel != nil {
+			m.specSyncCancel()
+			m.specSyncCancel = nil
+		}
+		m.status = msg.status
+		if msg.err != nil {
+			m.err = strings.TrimPrefix(m.err+"; "+msg.err.Error(), "; ")
+			return m.invalidateFailedSync(msg.err), nil
+		}
+		project, _ := strconv.Atoi(msg.project)
+		m = m.cleanupEditorDraft(project, msg.savedDocument)
+		return m.refreshSavedDetails(msg.status+"; testcases synchronized", m.err)
+	case agentDetailMsg:
+		result, ok := msg.result.(changes.Result)
+		if !ok || msg.project != m.currentProject.ID || result.ProjectID != m.changeList.ProjectID || result.Generation != m.changeList.Generation || result.ID != m.changeList.EntityID || result.Operation != m.changeList.Operation {
+			return m, nil
+		}
+		next, cmd := m.Update(msg.result)
+		m = next.(Model)
+		m.status = msg.status + "; " + m.status
+		if msg.err != "" {
+			m.err = msg.err + "; " + m.err
+		}
+		return m, cmd
 	case configSavedMsg:
 		m.configSaveInFlight = false
 		if msg.err != nil {
@@ -224,16 +266,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
-		if m.state == BriefState && msg.source == BriefState {
-			if msg.err != nil {
-				m.err = msg.err.Error()
-				return m, tea.ClearScreen
-			}
-			m.brief = m.brief.EditBrief(msg.content)
-			m.briefField = "brief"
-			m = m.setPromptValue("")
-			m.status = "brief edited; /confirm saves"
-			return m, tea.ClearScreen
+		if msg.scratch != nil {
+			m.editorScratch = msg.scratch
 		}
 		if m.state == BackendConfigFormState && msg.source == BackendConfigFormState {
 			return m.applyConfigurationEditor(msg)
@@ -256,6 +290,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.err = msg.err.Error()
 			m.status = "editor failed"
+			if msg.scratch != nil {
+				m.err += "; draft retained at " + msg.scratch.path
+			}
 			return m, tea.ClearScreen
 		}
 		if msg.source == ChangeDetailsState && m.editorDraft == nil && msg.content == msg.original {
@@ -267,17 +304,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.ClearScreen
 			}
 		}
-		if msg.source == EpicCreateState || msg.source == EpicUpdateState || msg.source == ProjectCreateState || msg.source == ProjectUpdateState || msg.source == ChangeCreateState || msg.source == ChangeUpdateState ||
+		if msg.source == EpicCreateState || msg.source == EpicUpdateState || msg.source == ProjectCreateState || msg.source == ProjectUpdateState || msg.source == ChangeUpdateState ||
 			msg.source == TestCaseCreateState || msg.source == TestCaseUpdateState ||
 			(msg.source == ChangeDetailsState && m.detailEditField != "") {
 			m = m.setPromptValue(msg.content)
 			m.editorDraft = &msg.content
-		}
-		if msg.source == ChangeCreateState && m.detailEditField == "" {
-			m.changeList = m.changeList.PrepareCreate(msg.content)
-			m.err = ""
-			m.status = "review creation fields; Enter saves, Ctrl+T title, Ctrl+U UUID"
-			return m, tea.ClearScreen
 		}
 		next, cmd := m.submitPromptValue(msg.content)
 		m = next.(Model)
@@ -313,6 +344,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.quitRequested {
 		return m, nil
 	}
+	if m.specSyncCancel != nil {
+		if msg.Type == tea.KeyEsc || msg.Type == tea.KeyCtrlC {
+			m.specSyncCancel()
+		}
+		return m, nil
+	}
 	if m.hasDropdown() {
 		m.err = ""
 		return m.handleDropdownKey(msg.String(), msg)
@@ -322,9 +359,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.changeDocuments.Busy {
 		return m, nil
-	}
-	if m.state == BriefState {
-		return m.briefKey(msg)
 	}
 	if m.document.Busy && m.state == DocumentState {
 		if msg.Type == tea.KeyEsc || msg.Type == tea.KeyCtrlC {
@@ -356,6 +390,22 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.state == HealthState {
 		return m.healthKey(msg)
 	}
+	if m.state == AgentExecState {
+		if key == "esc" || key == "ctrl+c" {
+			if m.agentOperation != nil {
+				m.agentOperation.cancel()
+			}
+			m.status = "cancelling agent; local drafts retained"
+			return m, nil
+		}
+		if key == "pgup" {
+			m.agentOffset += max(1, m.height-10)
+		}
+		if key == "pgdown" {
+			m.agentOffset = max(0, m.agentOffset-max(1, m.height-10))
+		}
+		return m, nil
+	}
 	m.err = ""
 	if m.state == FindInputState {
 		return m.handleFindKey(key, msg)
@@ -382,21 +432,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch key {
-	case "ctrl+t", "ctrl+u":
-		if m.state == ChangeCreateState {
-			if m.detailEditField == "" {
-				m.changeList.Draft.Value = m.promptValue()
-			}
-			field, value := detailCreateTitle, m.changeList.Draft.Title
-			if key == "ctrl+u" {
-				field, value = detailCreateUUID, m.changeList.Draft.UUID
-			}
-			m.detailEditField = field
-			m = m.setPromptValue(value)
-			m.editorDraft = &value
-			m.status = "editing " + string(field)
-			return m, nil
-		}
 	case "ctrl+c":
 		return m.handlePromptCancel()
 	case "ctrl+e":
@@ -614,7 +649,7 @@ func (m Model) submitPromptValue(value string) (tea.Model, tea.Cmd) {
 	if m.state == DocumentState && m.documentForm {
 		return m.beginDocumentInsert(value)
 	}
-	if m.detailEditField != "" && (m.state == ChangeDetailsState || m.state == ChangeUpdateState || m.state == ChangeCreateState) {
+	if m.detailEditField != "" && (m.state == ChangeDetailsState || m.state == ChangeUpdateState) {
 		return m.saveChangeDetailTextValue(value)
 	}
 	if commandAllowed(m.state, "/save") {
@@ -623,9 +658,6 @@ func (m Model) submitPromptValue(value string) (tea.Model, tea.Cmd) {
 		}
 		if m.state == EpicUpdateState {
 			return m.beginEpic(epics.Edit, m.epicList.Detail.ID, value)
-		}
-		if m.state == ChangeCreateState {
-			return m.saveChangeCreateValue(value)
 		}
 		if m.state == ChangeUpdateState {
 			return m.saveChangeUpdateValue(value)
@@ -753,7 +785,7 @@ func (m Model) handleEsc() (tea.Model, tea.Cmd) {
 			return m.arrive(ChangeDetailsState, "cancel")
 		}
 		return m.arrive(navigation.CancelTarget(m.state), "cancel")
-	case ChangeCreateState, TestCaseCreateState, TestCaseUpdateState,
+	case TestCaseCreateState, TestCaseUpdateState,
 		EpicCreateState, EpicUpdateState, ProjectCreateState, ProjectUpdateState:
 		m = m.setPromptValue("")
 		if m.state == TestCaseCreateState || m.state == TestCaseUpdateState {
@@ -878,9 +910,6 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 	if source == DocumentState {
 		return m.documentCommand(command)
 	}
-	if source == BriefState {
-		return m.briefCommand(command)
-	}
 	if isConfigurationState(source) {
 		return m.configurationCommand(source, command)
 	}
@@ -890,10 +919,6 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 	switch command {
 	case "/new-comment":
 		return m.beginComment(0)
-	case "/brief-new":
-		return m.openBrief(true)
-	case "/brief-clarify":
-		return m.openBrief(false)
 	case "/documents":
 		return m.openDocuments(source)
 	case "/quit":
@@ -996,21 +1021,10 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 			return m.epicForm(false)
 		}
 		if command == "/new-change" {
-			if _, err := currentProjectNumericID(m.currentProject.ID); err != nil {
-				m.err = err.Error()
-				return m, nil
-			}
+			return m.newChangeBrief()
 		}
 		m.projectList = m.projectList.Invalidate()
 		m.state = navigation.CreateTarget(source)
-		if m.state == ChangeCreateState {
-			m.changeList = m.changeList.Invalidate()
-			m.changeList.Draft = changes.Input{}
-			m.detailEditField = ""
-			m = m.setPromptValue("")
-			m.input.Placeholder = defaultInputPlaceholder
-			return m.openPromptEditor(ChangeCreateState)
-		}
 		if m.state == TestCaseCreateState {
 			m.testCase = m.testCase.OpenCreate()
 			form := testcases.CreateForm()
@@ -1058,9 +1072,6 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		if source == EpicUpdateState {
 			return m.beginEpic(epics.Edit, m.epicList.Detail.ID, m.promptValue())
 		}
-		if source == ChangeCreateState {
-			return m.saveChangeCreate()
-		}
 		if source == ChangeUpdateState {
 			return m.saveChangeUpdate()
 		}
@@ -1094,18 +1105,7 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		}
 		m.openConfirmation(navigation.DeleteConfirmationState(source), source, navigation.DeleteReturnState(source))
 	case "/title":
-		if source == ChangeCreateState {
-			m.changeList.Draft.Value = m.promptValue()
-			m.detailEditField = detailCreateTitle
-			m = m.setPromptValue(m.changeList.Draft.Title)
-			return m, nil
-		}
 		return m.beginChangeField(detailEditTitle)
-	case "/uuid":
-		m.changeList.Draft.Value = m.promptValue()
-		m.detailEditField = detailCreateUUID
-		m = m.setPromptValue(m.changeList.Draft.UUID)
-		return m, nil
 	case "/document":
 		m.changeList = m.changeList.Invalidate()
 		m.selectorGeneration++
@@ -1170,10 +1170,6 @@ func (m Model) arrive(state State, status string) (tea.Model, tea.Cmd) {
 	if m.state == FindInputState && state != FindInputState {
 		m = m.setPromptValue("")
 	}
-	if m.state == BriefState && state != BriefState {
-		m.brief = m.brief.Invalidate()
-		m.briefOperation = nil
-	}
 	var catalog tea.Cmd
 	if isConfigurationState(m.state) && !isConfigurationState(state) {
 		m.configurations = m.configurations.Invalidate()
@@ -1197,10 +1193,7 @@ func (m Model) arrive(state State, status string) (tea.Model, tea.Cmd) {
 	}
 	m.changeList = m.changeList.Invalidate()
 	m.epicList = m.epicList.Invalidate()
-	if m.state == ChangeCreateState {
-		m.detailEditField = ""
-	}
-	if m.state == EpicCreateState || m.state == EpicUpdateState || m.state == ChangeCreateState {
+	if m.state == EpicCreateState || m.state == EpicUpdateState {
 		m = m.setPromptValue("")
 	}
 	m.projectList = m.projectList.Invalidate()

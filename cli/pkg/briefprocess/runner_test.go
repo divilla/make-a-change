@@ -1,8 +1,8 @@
 package briefprocess
 
 import (
-	"cli/internal/dto"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,196 +12,188 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func testRoot(t *testing.T) string {
-	t.Helper()
+const testUUID = "0198a86f-9b8a-7d89-ae5b-6f25b528b04c"
+
+func Test032WorkspaceOwnershipAndExactFiles(t *testing.T) {
 	root := t.TempDir()
+	w := &Workspace{TempDir: root}
+	path, err := w.Prepare(testUUID, "")
+	require.NoError(t, err)
+	require.Equal(t, filepath.Join(root, "mch", testUUID, "brief.md"), path)
+	body, err := w.Read(path)
+	require.NoError(t, err)
+	require.Empty(t, body)
+	stamp, err := w.Stamp(path)
+	require.NoError(t, err)
+	require.True(t, stamp.Exists)
+	spec := filepath.Join(filepath.Dir(path), "spec.md")
+	stamp, err = w.Stamp(spec)
+	require.NoError(t, err)
+	require.False(t, stamp.Exists)
+	require.NoError(t, os.WriteFile(path, []byte("# Draft\t\n"), 0o600))
+	body, err = w.Read(path)
+	require.NoError(t, err)
+	require.Equal(t, "# Draft\t\n", body)
 	require.NoError(t, os.MkdirAll(filepath.Join(root, ".mch/default/prompts"), 0o700))
-	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch/default/prompts/brief-rewrite.md"), []byte("Rewrite only"), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch/default/prompts/brief-resolve.md"), []byte("Resolve only"), 0o600))
-	return root
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch/default/prompts/brief-rewrite.md"), []byte("Read [brief-file-path.md] then [brief-file-path.md]"), 0o600))
+	prompt, err := w.Prompt(root, "brief-rewrite", path)
+	require.NoError(t, err)
+	require.Equal(t, "Read "+path+" then "+path, prompt)
+	_, err = w.Prompt(root, "unknown", path)
+	require.Error(t, err)
+	_, err = w.Prompt(root, "spec-write", path)
+	require.Error(t, err)
+	require.NoError(t, os.WriteFile(spec, []byte("spec"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(filepath.Dir(path), "final.txt"), []byte("Done."), 0o600))
+	require.NoError(t, w.Cleanup(path))
+	require.NoDirExists(t, filepath.Dir(path))
 }
 
-func testRequest(t *testing.T, req dto.BriefRequest) dto.BriefRequest {
-	t.Helper()
-	base := filepath.Join(req.Root, ".mch", "tmp")
-	dir := filepath.Join(base, "brief-owned")
-	if _, err := os.Lstat(base); os.IsNotExist(err) {
-		require.NoError(t, os.Mkdir(base, 0o700))
+func Test032WorkspaceRefusesUnownedAndNonRegularPaths(t *testing.T) {
+	for _, tc := range []string{"parent file", "parent symlink", "unowned dir", "uuid file", "invalid uuid"} {
+		t.Run(tc, func(t *testing.T) {
+			root := t.TempDir()
+			parent := filepath.Join(root, "mch")
+			dir := filepath.Join(parent, testUUID)
+			w := &Workspace{TempDir: root}
+			ref := testUUID
+			sentinel := ""
+			switch tc {
+			case "parent file":
+				sentinel = parent
+				require.NoError(t, os.WriteFile(parent, []byte("keep"), 0o600))
+			case "parent symlink":
+				require.NoError(t, os.Symlink(t.TempDir(), parent))
+			case "unowned dir":
+				require.NoError(t, os.MkdirAll(dir, 0o700))
+				sentinel = filepath.Join(dir, "brief.md")
+				require.NoError(t, os.WriteFile(sentinel, []byte("keep"), 0o600))
+			case "uuid file":
+				require.NoError(t, os.Mkdir(parent, 0o700))
+				sentinel = dir
+				require.NoError(t, os.WriteFile(dir, []byte("keep"), 0o600))
+			case "invalid uuid":
+				ref = "../../escape"
+			}
+			_, err := w.Prepare(ref, "overwrite")
+			require.Error(t, err)
+			if sentinel != "" {
+				data, err := os.ReadFile(sentinel)
+				require.NoError(t, err)
+				require.Equal(t, "keep", string(data))
+			}
+		})
 	}
-	if info, err := os.Lstat(base); err == nil && info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
-		var makeErr error
-		dir, makeErr = os.MkdirTemp(base, "brief-")
-		require.NoError(t, makeErr)
-	}
-	req.OriginalPath = filepath.Join(dir, "original.md")
-	req.InputPath = filepath.Join(dir, "brief.md")
-	req.ContextPath = filepath.Join(dir, "context.json")
-	req.QuestionsPath = filepath.Join(dir, "questions.json")
-	req.AnswersPath = filepath.Join(dir, "answers.json")
-	req.OutputPath = filepath.Join(dir, "result.json")
-	return req
-}
-
-func TestP803PromptSelectionAndStructuredOutput(t *testing.T) {
-	root := testRoot(t)
-	executable := filepath.Join(t.TempDir(), "codex-stub")
-	script := "#!/bin/sh\nfor arg do last=$arg; done\npath=$(printf '%s\\n' \"$last\" | sed -n 's/^Output path: //p')\nprintf '%s' '{\"input_revision\":4,\"rewritten_brief\":\"Clear brief\",\"questions\":[],\"unresolved\":[],\"ready_for_spec\":true}' > \"$path\"\n"
-	require.NoError(t, os.WriteFile(executable, []byte(script), 0o700))
-	out, dir, err := (Runner{Executable: executable}).Run(context.Background(), testRequest(t, dto.BriefRequest{Root: root, Prompt: "brief-rewrite", Revision: 4, ProjectID: 7, ChangeID: 21, DocumentID: 31, Original: "\tOriginal\n```sh\nrm example\n```\n", Brief: "Current draft", Questions: []dto.BriefQuestion{{ID: "Q1", Text: "Which?", Context: "intro", Answer: " Alpha "}}}))
-	require.NoError(t, err)
-	require.Equal(t, "Clear brief", out.RewrittenBrief)
-	stored, err := os.ReadFile(filepath.Join(dir, "brief.md"))
-	require.NoError(t, err)
-	require.Equal(t, "Current draft", string(stored))
-	stored, err = os.ReadFile(filepath.Join(dir, "original.md"))
-	require.NoError(t, err)
-	require.Equal(t, "\tOriginal\n```sh\nrm example\n```\n", string(stored))
-	stored, err = os.ReadFile(filepath.Join(dir, "answers.json"))
-	require.NoError(t, err)
-	require.JSONEq(t, `{"Q1":" Alpha "}`, string(stored))
-	stored, err = os.ReadFile(filepath.Join(dir, "context.json"))
-	require.NoError(t, err)
-	require.JSONEq(t, `{"input_revision":4,"project_id":7,"change_id":21,"document_id":31}`, string(stored))
-	require.FileExists(t, filepath.Join(dir, "result.json"))
-}
-
-func TestP803MissingPromptsAndMalformedOutputStayIncomplete(t *testing.T) {
-	root := testRoot(t)
-	require.NoError(t, os.Remove(filepath.Join(root, ".mch/default/prompts/brief-resolve.md")))
-	_, path, err := (Runner{Executable: "/bin/true"}).Run(context.Background(), testRequest(t, dto.BriefRequest{Root: root, Prompt: "brief-resolve", Revision: 1, Brief: "Text"}))
-	require.ErrorContains(t, err, "brief-resolve.md")
-	require.DirExists(t, path)
-	_, path, err = (Runner{Executable: "/bin/true"}).Run(context.Background(), testRequest(t, dto.BriefRequest{Root: root, Prompt: "brief-rewrite", Revision: 1, Brief: "Text"}))
-	require.ErrorContains(t, err, "output missing")
-	require.DirExists(t, path)
-	executable := filepath.Join(t.TempDir(), "malformed-runner")
-	script := "#!/bin/sh\nfor arg do last=$arg; done\npath=$(printf '%s\\n' \"$last\" | sed -n 's/^Output path: //p')\nprintf '%s' '{\"input_revision\":1,\"rewritten_brief\":\"Draft\",\"questions\":[],\"unresolved\":[]}' > \"$path\"\n"
-	require.NoError(t, os.WriteFile(executable, []byte(script), 0o700))
-	_, path, err = (Runner{Executable: executable}).Run(context.Background(), testRequest(t, dto.BriefRequest{Root: root, Prompt: "brief-rewrite", Revision: 1, Brief: "Text"}))
-	require.ErrorContains(t, err, "missing ready_for_spec")
-	require.FileExists(t, filepath.Join(path, "result.json"))
-}
-
-func TestP803RunnerRejectsDuplicateTopLevelFields(t *testing.T) {
-	root := testRoot(t)
-	executable := filepath.Join(t.TempDir(), "duplicate-output-runner")
-	script := "#!/bin/sh\nfor arg do last=$arg; done\npath=$(printf '%s\\n' \"$last\" | sed -n 's/^Output path: //p')\nprintf '%s' \"$AGENT_OUTPUT\" > \"$path\"\n"
-	require.NoError(t, os.WriteFile(executable, []byte(script), 0o700))
-	for _, tc := range []struct {
-		name, output, field string
-	}{
-		{name: "contradictory readiness", output: `{"input_revision":1,"rewritten_brief":"Draft","questions":[],"unresolved":[],"ready_for_spec":false,"ready_for_spec":true}`, field: "ready_for_spec"},
-		{name: "repeated revision", output: `{"input_revision":1,"input_revision":1,"rewritten_brief":"Draft","questions":[],"unresolved":[],"ready_for_spec":true}`, field: "input_revision"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("AGENT_OUTPUT", tc.output)
-			_, dir, err := (Runner{Executable: executable}).Run(context.Background(), testRequest(t, dto.BriefRequest{Root: root, Prompt: "brief-rewrite", Revision: 1, Brief: "Text"}))
-			require.ErrorContains(t, err, "duplicate field")
-			require.ErrorContains(t, err, tc.field)
-			require.FileExists(t, filepath.Join(dir, "result.json"))
+	for _, tc := range []string{"symlink draft", "unexpected file", "replaced directory", "outside path", "missing ownership"} {
+		t.Run(tc, func(t *testing.T) {
+			w := &Workspace{TempDir: t.TempDir()}
+			path, err := w.Prepare(testUUID, "keep")
+			require.NoError(t, err)
+			switch tc {
+			case "symlink draft":
+				require.NoError(t, os.Symlink(path, filepath.Join(filepath.Dir(path), "spec.md")))
+			case "unexpected file":
+				require.NoError(t, os.WriteFile(filepath.Join(filepath.Dir(path), "unrelated"), []byte("keep"), 0o600))
+			case "replaced directory":
+				require.NoError(t, os.Rename(filepath.Dir(path), filepath.Dir(path)+"-old"))
+				require.NoError(t, os.Mkdir(filepath.Dir(path), 0o700))
+			case "outside path":
+				path = filepath.Join(t.TempDir(), "brief.md")
+			case "missing ownership":
+				w = &Workspace{}
+			}
+			require.Error(t, w.Cleanup(path))
+			if tc == "symlink draft" || tc == "unexpected file" {
+				body, err := os.ReadFile(path)
+				require.NoError(t, err)
+				require.Equal(t, "keep", string(body))
+			}
 		})
 	}
 }
 
-func TestP803RunnerCancellationProgressAndReaping(t *testing.T) {
-	root := testRoot(t)
-	executable := filepath.Join(t.TempDir(), "sleeping-runner")
-	require.NoError(t, os.WriteFile(executable, []byte("#!/bin/sh\nprintf 'started\\n'\nprintf 'checking context\\n' >&2\nsleep 30\n"), 0o700))
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	progress := make(chan string, 1)
-	type result struct {
-		path string
-		err  error
+func Test032CodexExecArgumentsStreamingFinalAndSession(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "repo with spaces")
+	scratch := filepath.Join(base, "scratch with spaces")
+	require.NoError(t, os.Mkdir(root, 0o700))
+	require.NoError(t, os.Mkdir(scratch, 0o700))
+	w := &Workspace{TempDir: scratch}
+	brief, err := w.Prepare(testUUID, "# Brief")
+	require.NoError(t, err)
+	dir := filepath.Dir(brief)
+	prompt := "literal `prompt` $(untouched)\nsecond line"
+	script := filepath.Join(root, "codex")
+	body := `#!/bin/sh
+set -eu
+[ "$#" = 12 ] && [ "$1" = exec ] && [ "$2" = -C ] && [ "$4" = --color ] && [ "$5" = always ] && [ "$6" = --output-last-message ] || exit 8
+[ "$8" = --sandbox ] && [ "$9" = workspace-write ] && [ "${10}" = --add-dir ] && [ "${11}" = "$(dirname "$7")" ] || exit 9
+printf '%s' "$3" > "$7.root"
+printf '%s' "${12}" > "$7.prompt"
+printf '# Generated spec\n' > "${11}/spec.md"
+printf '\033[32mstreaming progress\033[0m\n'
+printf 'session id: ` + testUUID + `\n' >&2
+printf 'Done.\n' > "$7"
+`
+	require.NoError(t, os.WriteFile(script, []byte(body), 0o700))
+	progress := make(chan string, 10)
+	result, err := (Runner{Executable: script}).Exec(context.Background(), root, brief, prompt, progress)
+	require.NoError(t, err)
+	require.Equal(t, "Done.", result.Final)
+	require.Equal(t, testUUID, result.SessionID)
+	spec, err := w.Read(filepath.Join(dir, "spec.md"))
+	require.NoError(t, err)
+	require.Equal(t, "# Generated spec\n", spec)
+	gotRoot, err := os.ReadFile(filepath.Join(dir, "final.txt.root"))
+	require.NoError(t, err)
+	require.Equal(t, root, string(gotRoot))
+	gotPrompt, err := os.ReadFile(filepath.Join(dir, "final.txt.prompt"))
+	require.NoError(t, err)
+	require.Equal(t, prompt, string(gotPrompt))
+	output := ""
+	for len(progress) > 0 {
+		output += <-progress
 	}
-	done := make(chan result, 1)
-	start := time.Now()
-	go func() {
-		_, path, err := (Runner{Executable: executable}).Run(ctx, testRequest(t, dto.BriefRequest{Root: root, Prompt: "brief-rewrite", Revision: 1, Brief: "Text", Progress: progress}))
-		done <- result{path: path, err: err}
-	}()
-	select {
-	case message := <-progress:
-		require.Regexp(t, `^(agent stdout: started|agent stderr: checking context)$`, message)
-	case <-time.After(3 * time.Second):
-		t.Fatal("no live agent progress")
-	}
-	cancel()
-	var got result
-	select {
-	case got = <-done:
-	case <-time.After(3 * time.Second):
-		t.Fatal("agent was not reaped after cancellation")
-	}
-	require.Error(t, got.err)
-	require.Less(t, time.Since(start), 3*time.Second)
-	require.True(t, strings.HasPrefix(got.path, filepath.Join(root, ".mch/tmp")))
-	require.NoDirExists(t, got.path)
+	require.Contains(t, output, "\x1b[32mstreaming progress\x1b[0m")
+	cmd := (Runner{Executable: script}).Interactive(context.Background(), "resume", testUUID)
+	require.Equal(t, []string{script, "resume", testUUID}, cmd.Args)
+	_, err = (Runner{Executable: script}).Exec(context.Background(), root, brief, prompt, nil)
+	require.ErrorContains(t, err, "file exists")
 }
 
-func TestP803ProgressCaptureIsBoundedAndNeverBlocks(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	progress := make(chan string, 1)
-	w := limitedWriter{ctx: ctx, progress: progress, stream: "agent stderr"}
-	chunk := strings.Repeat("x", maxOutput+10)
-	done := make(chan struct{})
-	go func() {
-		_, _ = w.Write([]byte(chunk))
-		_, _ = w.Write([]byte("later output"))
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("full progress channel blocked the writer")
+func Test032CodexFailuresCancellationAndFinalFileValidation(t *testing.T) {
+	for _, tc := range []string{"failed with ID", "cancel", "symlink final", "large final", "missing final"} {
+		t.Run(tc, func(t *testing.T) {
+			dir := t.TempDir()
+			script := filepath.Join(dir, "codex")
+			body := "#!/bin/sh\n"
+			switch tc {
+			case "failed with ID":
+				body += "printf 'session id: " + testUUID + "\\n'; exit 3\n"
+			case "cancel":
+				body += "sleep 10\n"
+			case "symlink final":
+				body += "rm \"$7\"; ln -s /dev/null \"$7\"\n"
+			case "large final":
+				body += "head -c 1048577 /dev/zero > \"$7\"\n"
+			case "missing final":
+				body += "rm \"$7\"\n"
+			}
+			require.NoError(t, os.WriteFile(script, []byte(body), 0o700))
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			result, err := (Runner{Executable: script}).Exec(ctx, dir, filepath.Join(dir, "brief.md"), "prompt", nil)
+			require.Error(t, err)
+			if tc == "failed with ID" {
+				require.Equal(t, testUUID, result.SessionID)
+			}
+			if tc == "cancel" {
+				require.True(t, errors.Is(ctx.Err(), context.DeadlineExceeded))
+			}
+		})
 	}
-	require.Equal(t, maxOutput, w.b.Len())
-	require.LessOrEqual(t, len(<-progress), len("agent stderr: ")+256)
-	cancel()
-	_, _ = w.Write([]byte("after cancellation"))
-	require.Empty(t, progress)
-}
-
-func TestP803ScratchOwnershipRefusalAndCleanup(t *testing.T) {
-	root := testRoot(t)
-	base := filepath.Join(root, ".mch/tmp")
-	require.NoError(t, os.WriteFile(base, []byte("user file"), 0o600))
-	_, _, err := (Runner{}).Run(context.Background(), testRequest(t, dto.BriefRequest{Root: root, Prompt: "brief-rewrite", Revision: 1, Brief: "Text"}))
-	require.ErrorContains(t, err, "not an owned directory")
-	content, err := os.ReadFile(base)
+	writer := &streamWriter{ctx: context.Background()}
+	_, err := writer.Write([]byte(strings.Repeat("x", maxOutput+100)))
 	require.NoError(t, err)
-	require.Equal(t, "user file", string(content))
-	require.NoError(t, os.Remove(base))
-	outside := t.TempDir()
-	require.NoError(t, os.Symlink(outside, base))
-	_, _, err = (Runner{}).Run(context.Background(), testRequest(t, dto.BriefRequest{Root: root, Prompt: "brief-rewrite", Revision: 1, Brief: "Text"}))
-	require.ErrorContains(t, err, "not an owned directory")
-	require.NoError(t, os.Remove(base))
-	require.NoError(t, os.MkdirAll(base, 0o700))
-	owned, err := os.MkdirTemp(base, "brief-")
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(owned, "brief.md"), []byte("input"), 0o600))
-	require.NoError(t, CleanupOwned(root, owned))
-	require.NoDirExists(t, owned)
-	owned, err = os.MkdirTemp(base, "brief-")
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(owned, "unrelated"), []byte("keep"), 0o600))
-	require.Error(t, CleanupOwned(root, owned))
-	require.FileExists(t, filepath.Join(owned, "unrelated"))
-}
-
-func TestP803RunnerRejectsSymlinkOutputWithoutTouchingUserFile(t *testing.T) {
-	root := testRoot(t)
-	victim := filepath.Join(t.TempDir(), "user-document")
-	require.NoError(t, os.WriteFile(victim, []byte("keep me"), 0o600))
-	executable := filepath.Join(t.TempDir(), "symlink-runner")
-	script := "#!/bin/sh\nfor arg do last=$arg; done\npath=$(printf '%s\\n' \"$last\" | sed -n 's/^Output path: //p')\nln -s \"$VICTIM\" \"$path\"\n"
-	require.NoError(t, os.WriteFile(executable, []byte(script), 0o700))
-	t.Setenv("VICTIM", victim)
-	_, dir, err := (Runner{Executable: executable}).Run(context.Background(), testRequest(t, dto.BriefRequest{Root: root, Prompt: "brief-rewrite", Revision: 1, Brief: "Text"}))
-	require.ErrorContains(t, err, "not a bounded regular file")
-	require.DirExists(t, dir)
-	content, err := os.ReadFile(victim)
-	require.NoError(t, err)
-	require.Equal(t, "keep me", string(content))
+	require.Equal(t, maxOutput, writer.buffer.Len())
 }

@@ -1,0 +1,25 @@
+steps:
+
+  - id: 1
+    action: brief-write
+    actor: user # user|agent|factory
+    ref: 4127cab0-5e39-4ef0-1111-f909946aaaa # <ref_id>
+    codex_sid: 4127cab0-5e39-4ef0-1111-f909946adc31 # <codex_session_id>
+    started_at: null
+    finished_at: yyyy-mm-dd hh:mm:ss # <mch_modified_at>
+    status: completed # running|awaiting_input|completed|failed
+    output_type: brief # clarification|error|<artifact> --- decisions|brief|spec|pr|review_findings|review_no_findings|review_fix_report|code_docs or other not listed
+    output: |
+      actual user written brief
+
+  - id: 2
+    action: brief-rewrite
+    actor: agent # user|agent|factory
+    ref: 4127cab0-5e39-4ef0-1111-f909946aaaa # <ref_id>
+    codex_sid: aaa7cab0-5e39-4ef0-1111-f909946adc31 # <codex_session_id>
+    started_at: yyyy-mm-dd hh:mm:ss
+    finished_at: null
+    status: completed # running|awaiting_input|completed|failed
+    output_type: brief # clarification|error|<artifact> --- decisions|brief|spec|pr|review_findings|review_no_findings|review_fix_report|code_docs or other not listed
+    output: |
+      actual brief

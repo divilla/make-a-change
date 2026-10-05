@@ -64,16 +64,13 @@ func (m Model) viewLines() ([]string, int) {
 		return lines, epicIndex
 	}
 	if m.state == MainHelpState {
-		lines = append(lines, "Selected project: /brief-new starts brief clarification for a new change.\nUse /changes to browse and select an existing change, then /brief-clarify.")
+		lines = append(lines, "Use /changes and /new-change to write a brief. Saving a brief starts rewriting and spec writing.")
 	}
 	if m.state == ChangesHelpState {
 		lines = append(lines, changes.HelpView())
 	}
-	if m.state == ChangeCreateState {
-		lines = append(lines, "Title: "+m.changeList.Draft.Title, "Optional UUID: "+m.changeList.Draft.UUID)
-	}
-	if m.state == BriefState {
-		lines = append(lines, m.briefView(width))
+	if m.state == AgentExecState {
+		lines = append(lines, m.agentView(width))
 	}
 	if m.state == EpicsHelpState {
 		lines = append(lines, epics.HelpView())
@@ -161,6 +158,9 @@ func (m Model) viewLines() ([]string, int) {
 func (m Model) errorLine(width int) string {
 	if m.err == "" {
 		return ""
+	}
+	if m.err == "Error generating `spec`" {
+		return styles.Default.Error.Render(m.err)
 	}
 	value := "Error: " + documents.SafeLine(strings.ReplaceAll(strings.ReplaceAll(m.err, "\r", " "), "\n", " "))
 	if cells := ansi.StringWidth(value); cells > width {
@@ -279,8 +279,8 @@ func (m Model) helpText() string {
 		return "<return> save  |  <esc> or <ctrl+c> cancel"
 	}
 	switch m.state {
-	case BriefState:
-		return "Enter edit/answer | /confirm | /approve | /resolve | Ctrl+E editor | PgUp/PgDn scroll | Esc return"
+	case AgentExecState:
+		return "PgUp/PgDn scroll | Esc cancel"
 	case DocumentState:
 		if m.documentForm {
 			return "<return> append selected type  |  <ctrl+e> editor  |  <esc> cancel draft"
@@ -315,8 +315,6 @@ func (m Model) helpText() string {
 		return testcases.CreateForm().Help
 	case TestCaseUpdateState:
 		return testcases.EditForm().Help
-	case ChangeCreateState:
-		return "<ctrl+t> title | <ctrl+u> optional UUID | <ctrl+e> brief editor | <return> save | <ctrl+c> cancel"
 	case ChangeUpdateState, EpicCreateState, EpicUpdateState, ProjectCreateState, ProjectUpdateState:
 		return "<return> save  |  <ctrl+c> delete prompt  |  <esc> cancel"
 	case FindInputState:
@@ -408,10 +406,6 @@ func (m Model) promptLabel() string {
 	switch m.detailEditField {
 	case detailEditPRUrl:
 		return "PR URL"
-	case detailCreateUUID:
-		return "UUID"
-	case detailCreateTitle:
-		return "Title"
 	case detailEditTestCase:
 		return "Scenario"
 	case detailEditAfterChange:
@@ -426,8 +420,6 @@ func (m Model) promptLabel() string {
 		return "Name"
 	case TestCaseCreateState, TestCaseUpdateState:
 		return "Scenario"
-	case ChangeCreateState:
-		return "Brief"
 	case ChangeUpdateState:
 		return "Title"
 	case FindInputState:
@@ -436,10 +428,8 @@ func (m Model) promptLabel() string {
 		if m.documentForm {
 			return "Document"
 		}
-	case BriefState:
-		if m.briefField != "" {
-			return strings.ToUpper(m.briefField[:1]) + m.briefField[1:]
-		}
+	case AgentExecState:
+		return "Agent"
 	}
 	return ""
 }
@@ -501,13 +491,12 @@ func (m Model) currentProjectFooter() string {
 
 func screenTitle(state State) string {
 	titles := map[State]string{
-		BriefState:                 "BriefScreen - Title: Clarify Brief",
+		AgentExecState:             "AgentExecScreen - Title: Write Spec",
 		DocumentState:              documents.DetailTitle(),
 		MainState:                  "MainScreen - Title: Main",
 		ChangesListState:           changes.ListTitle(),
 		ChangeDetailsState:         changes.DetailTitle(),
 		TestCaseDetailsState:       testcases.DetailTitle(),
-		ChangeCreateState:          "ChangeCreateScreen - Title: New Change",
 		ChangeUpdateState:          "ChangeUpdateScreen - Title: Edit Change",
 		TestCaseCreateState:        testcases.CreateTitle(),
 		TestCaseUpdateState:        testcases.UpdateTitle(),

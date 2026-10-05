@@ -993,3 +993,140 @@ The manifest adds the complete-program `TestCLIProgramSelectedItemViewer` scenar
 It uses owned processes and a fake HTTP backend; no live backend or database is
 accessed. Tests of native terminal behavior establish absence of application mouse
 capture, while word selection and copy remain the terminal's own bindings.
+
+## 032 — editor brief, spec generation and testcase synchronization
+
+[032 specification](../../agent/specs/032-cli-brief-spec-flow.md) replaces P8's
+structured clarification protocol and the P4 creation form. Those earlier tables
+are historical assertion reuse records. The current creation path has no form,
+explicit title/UUID controls, approval, JSON questions, answer protocol or retrying
+agent flow. Review/fix remain deferred; only brief rewrite and spec write execute.
+The four checked-in prompts remain; the earlier brief-resolve inventory assertion
+was stale against the supplied resources and is replaced by the 032 resource test.
+
+Creation now belongs to `agent`, through the existing `CreateChange` API. The
+`changes` feature retains ordinary list/details/updates/delete and document saves.
+Repository-local `editor` overrides the existing EDITOR/nano fallback and survives
+atomic selection saves. Editor, rewrite, exec and resume use owned local processes.
+The exec adapter streams SGR color, records the final message with Codex's
+`--output-last-message` option, and extracts the run's session ID from its header.
+No structured brief clarification protocol remains.
+
+| 032 specification behavior | Named unit evidence | Complete-program evidence |
+| --- | --- | --- |
+| Empty editor file at temp/mch/generated-UUID/brief.md; title-only and first nonblank H1 validation; invalid brief stays on list; editor failures retain drafts | `Test032NewChangeEditorUsesEmptyUUIDPathAndInvalidBriefStaysOnList`, `Test032TitleOnlyAndLeadingBlankBriefStartsImmediately`, `Test032EditorErrorKeepsLocalDraftAndStops`, `Test032ParseBriefAcceptsTitleWithoutBody` | `TestCLIProgram032BriefSpecFlow`, `TestCLIProgram032InvalidBriefAndCreationFailure` |
+| Repository editor override, EDITOR/nano fallback, persistence when selecting projects | `Test032ConfiguredEditorAndFallbackPersistWithSelection` | `TestCLIProgram032ManualSpecAndEditedBrief` uses a configured editor different from EDITOR; retained editor programs and real PTY |
+| Exact new create payload, reused editor file, current existing brief/reference UUID, correct human/agent provenance, agent saves do not recursively start a flow | `Test032NewAndExistingSequenceAndProvenance`, `Test032ManualSpecSavesSynchronizeAndHumanBriefSavesLaunch`, `Test032GenericChangeDocumentSavesRouteToFlowAndSync` | `TestCLIProgram032BriefSpecFlow`, `TestCLIProgram032ManualSpecAndEditedBrief`, revised `TestCLIProgramChangeCRUDAndPartialSuccess` |
+| In-memory prompt substitution, exact interactive arguments/root, mtime comparison, unchanged rewrite skips save/exec; touch alone saves | `Test032WorkspaceOwnershipAndExactFiles`, `Test032ModificationTimeControlsRewrite`, `Test032NewAndExistingSequenceAndProvenance`, `Test032CodexExecArgumentsStreamingFinalAndSession` | `TestCLIProgram032BriefSpecFlow`; retained `TestCLIProgramOrdinaryDocumentEditor` verifies ordinary save effects plus unchanged rewrite |
+| AgentExecScreen, streamed colored output, Done final checks spec, other successful final resumes that session; existing temp spec is compared with freshly read active spec, differing/missing active spec saves without an mtime requirement, identical content skips insertion; missing ID stops, missing temp spec shows exact footer error | `Test032CodexExecArgumentsStreamingFinalAndSession`, `Test032ResumeUsesThisSessionAndSpecFile`, `TestSpecComparedWithActiveDocumentAfterAgentExit`, `Test032FailuresStopDependentEffectsAndKeepDrafts`, `Test032StreamingColorsStaleResultsAndExactFooterError` | `TestCLIProgram032BriefSpecFlow` (done/resume/existing-file/identical-active/unchanged-brief/no-spec/process-failure paths) |
+| Every successful manual/agent spec insert synchronizes cases; missing/empty/malformed section retains saved spec and all cases; full validation precedes API work | `Test032ManualSpecSavesSynchronizeAndHumanBriefSavesLaunch`, `Test032GenericChangeDocumentSavesRouteToFlowAndSync`, `Test032TestcaseSectionValidatedBeforeAPI`, `Test032SyncFailureKeepsSavedSpecAndStopsCleanup` | `TestCLIProgram032ManualSpecAndEditedBrief`, retained `TestCLIProgramOrdinaryDocumentEditor` (invalid spec retained) |
+| Exact scenario text and counts; keep checked copies before unchecked; keep IDs/text/timestamps/done; delete absent/excess copies; create unchecked missing occurrences; only selected change | `Test032ExactMatchesAndDuplicateOccurrencesPreserveCheckedRecords`, `Test032SynchronizationErrorsExposePartialPersistence` | `TestCLIProgram032ManualSpecAndEditedBrief` keeps checked ID 2 and deletes unchecked duplicate/absent records without creating/updating the match; `TestCLIProgram032BriefSpecFlow` asserts unchecked creation |
+| Listing/mutation errors and partial persistence stop later work; saved documents remain; process/cancellation errors never resume; configuration/file/prompt failures stop; drafts remain | `Test032FailuresStopDependentEffectsAndKeepDrafts`, `Test032ExistingPreflightAndUnsupportedCatalogs`, `Test032SynchronizationErrorsExposePartialPersistence`, `Test032CodexFailuresCancellationAndFinalFileValidation`, `Test032SyncFailureKeepsSavedSpecAndStopsCleanup` | `TestCLIProgram032InvalidBriefAndCreationFailure`, `TestCLIProgram032BriefSpecFlow`; ordinary editor retry/partial-write assertions retained |
+| Scratch ownership validation, unrelated file/unowned directory preservation, no old screens/flows, ordinary actions preserved, ends at details with no review/fix | `Test032WorkspaceRefusesUnownedAndNonRegularPaths`, `Test032WorkspaceOwnershipAndExactFiles`, `TestRemovedCommandsCannotDispatchProcesses`, retained ordinary navigation/action/history tests | all three 032 scenarios, revised ordinary creation/editor programs, existing document/testcase/project/epic/config/health scenarios and `TestShellNavigationEditorAndScrolling` |
+
+The manifest replaces `TestCLIProgramBriefNewAndExistingPersistence`,
+`TestCLIProgramBriefFailuresAndStaleCancellation` and
+`TestCLIProgramBriefStaleCancellation` with the three 032 scenarios above. Their
+JSON/question/approval/retry assertions describe removed behavior. Process
+cancellation, API ordering, persistence, stale results, ownership and ordinary
+editor assertions are retained or rehomed in the named 032 tests. The removed
+creation-form unit assertions now have automatic H1-derived creation and owned
+editor failure tests. Exact endpoint assertions still cover the unchanged backend
+contracts; no backend code, database fixtures or live services are involved.
+
+### 032 review fixes 01
+
+Document inserts now return the committed version with the backend's trimmed body
+and explicit provenance. The shell retains it in change details before brief
+rewriting or spec synchronization, so follow-up errors preserve the displayed
+version and subsequent editor input. Creation validates optional Types metadata
+against the project's configuration before creating, then updates types through
+`/change/update-types` before rewriting. A failed type update reports the committed
+change and stops later effects; absent metadata does not send an update, while
+explicit empty metadata does.
+
+| Review behavior | Regression evidence |
+| --- | --- |
+| `/documents` spec save synchronizes the committed body after draft clearing | `Test032InsertResultRetainsCommittedDocumentAfterDraftClears`, strengthened `Test032GenericChangeDocumentSavesRouteToFlowAndSync` |
+| Saved brief/spec remains in details and subsequent editor input after follow-up errors | `Test032DocumentSaveRetainedAfterFollowupFailure` |
+| Creation preserves supported/empty Types, rejects unsupported Types before writes, retains successful types after later errors, and stops on type-update errors | `Test032CreationTypesValidateAndPersistBeforeRewrite`, `Test032CreatedTypesRemainVisibleAfterWorkflowError`, strengthened complete-program `TestCLIProgram032BriefSpecFlow` |
+| Workflow helpers resolve from the script directory when called at repository root | `bash scripts/codex-flow_test.sh` with stub helpers in an owned repository path containing spaces |
+
+### 032 review fixes 02
+
+Spec execution explicitly selects `--sandbox workspace-write` and adds only the
+owned brief directory with `--add-dir`, so `spec.md` can be written outside the
+repository root. This follows the [non-interactive permissions documentation](https://developers.openai.com/codex/noninteractive/)
+and [CLI flag reference](https://developers.openai.com/codex/cli/reference/).
+The factory workflow stops on implementation failure and returns its exit status;
+review runs only after successful implementation and retains its own failure status.
+
+| Review behavior | Regression evidence |
+| --- | --- |
+| Explicit workspace-write sandbox and writable scratch outside the repository, including paths with spaces and literal prompt bytes | Strengthened `Test032CodexExecArgumentsStreamingFinalAndSession` asserts flags and creates/reads the generated spec through an owned workspace; `TestCLIProgram032BriefSpecFlow` and `TestShellNavigationEditorAndScrolling` assert sandbox and scratch arguments in their process collaborators |
+| Implementation failure skips review and preserves exit 7; successful implementation followed by failing review preserves exit 9; success invokes both helpers in order | Expanded `bash scripts/codex-flow_test.sh` with isolated stub helpers |
+
+Process collaborators remain local fakes; these assertions verify invocation and
+workflow behavior without calling the live Codex service.
+
+### 032 review fixes 03
+
+Interactive cancellation preserves foreground group membership and terminates the
+owned descendant tree by individual PID. Cleanup uses the system `ps` command;
+enumeration failure still terminates each stopped parent. Synchronization errors
+after valid section parsing invalidate detail/testcase caches and obsolete result
+generations. The saved spec and partial-persistence error remain available, and
+`/retry` only reads. Malformed sections do not mutate or invalidate unchanged cases.
+
+| Review behavior | Regression evidence |
+| --- | --- |
+| Cancel rewriting/resumption with nested shell/tool descendants; keep a foreground sibling running | `Test032InteractiveCancellationKillsDescendantsWithoutSignalingForegroundGroup` |
+| Enumeration failure terminates the stopped parent; already exited and not-started commands are safe | `Test032InteractiveCancellationEnumerationFailureStillKillsStoppedParent` |
+| Failed/cancelled partial sync disables edit/toggle/delete in manual and agent completion paths; failed reads stay invalid and successful reads restore current rows and counts | `Test032PartialSynchronizationInvalidatesManualAndAgentCachesUntilReadSucceeds`; strengthened `TestCLIProgram032ManualSpecAndEditedBrief/partial=true` checks saved spec retention, blocked editing, read-only retry and subsequent successful workflow |
+| Typed synchronization errors retain underlying causes; malformed sections leave unchanged caches valid | Strengthened `Test032SynchronizationErrorsExposePartialPersistence`, `Test032CanceledSyncDoesNotReadOrMutateCases`; `Test032MalformedSpecDoesNotInvalidateUnchangedCachedCases` |
+
+### 032 review fixes 04
+
+Testcase extraction tracks the opening fence character and delimiter length.
+Only the same character, at least that length, and no trailing non-whitespace
+closes a fence. Example headings cannot supply the saved spec's Testcases section.
+Editors and interactive Codex share the process adapter's descendant cleanup,
+preserving foreground terminal access and signalling only owned process IDs.
+
+| Review behavior | Regression evidence |
+| --- | --- |
+| Shorter, mismatched, text-suffixed and unclosed fences keep example headings hidden; missing sections leave checked rows untouched without API calls; matching or longer closers allow the real section | `Test032FencedExamplesCannotSupplyTestcases` |
+| Configured and environment-fallback editors cancel nested descendants, keep a sibling in the shared foreground group running, and retain the draft | `Test032EditorCancellationKillsDescendantsAndRetainsForegroundGroupAndDraft` |
+
+### 032 review fixes 05
+
+Retained editor drafts carry their project, owner table/ID, document type and body.
+Successful brief flows and spec synchronization carry the corresponding human save
+into cleanup; another change, document or body cannot remove an unsaved draft.
+Cleanup still validates file identity, and follow-up failures retain drafts.
+Replacing a selected change invalidates detail and testcase reads and loaded flags;
+editing requires a successful detail reload rather than the initial partial snapshot.
+
+| Regression contract | Evidence |
+| --- | --- |
+| Failed editor save survives another change's successful flow or manual synchronization | `Test032FailedEditorSaveSurvivesAnotherChangesCompletion`; strengthened `TestCLIProgram032BriefSpecFlow` loads an earlier change, fails its editor save, then creates another change in all five modes and verifies the retained file |
+| Cleanup matches project, owner table/ID, document type, trimmed saved body and human provenance; ownership checks remain enforced | `Test032EditorDraftCleanupMatchesOnlyThePersistedDocument`, strengthened `Test032EditorDraftCleanupRequiresOwnedIdentity` |
+| Details and `/documents` saves carry the owning document through follow-up completion; failed follow-ups retain drafts | `Test032MatchingEditorDraftRemovedOnlyAfterItsSuccessfulFollowup`; strengthened `TestCLIProgram032ManualSpecAndEditedBrief` checks matching cleanup and unrelated draft retention after partial synchronization; retained `TestCLIProgramOrdinaryDocumentEditor` |
+| New-change rewrite/spec failure clears both detail-loaded flags and testcase validity; failed reload stays blocked and successful reload seeds the generic brief editor from active documents | `Test032NewChangeFailureRequiresDetailReloadBeforeEditing`; strengthened `TestCLIProgram032BriefSpecFlow` verifies blocked editing and read-only retry after execution/unchanged-resume failures |
+
+Existing interactive rewrite/resume cancellation and enumeration-failure tests
+continue to cover the shared cleanup. These direct process tests contribute no
+terminal counters; the complete-program and real PTY campaign remains independent.
+
+### 032 review fixes 06
+
+Successful ordinary document inserts clean up the matching editor draft before
+refreshing history. Project/epic brief and spec saves retain failed drafts for
+retry, without requiring a change workflow to release their temporary files.
+Change brief/spec follow-ups retain their existing completion timing and ownership
+checks. HTTP payloads and human provenance remain unchanged.
+
+| Regression contract | Evidence |
+| --- | --- |
+| Project/epic brief and spec editor drafts survive failed saves and are removed after successful saves or retries; history still refreshes without agent work | `Test032OrdinaryDocumentSaveCleansMatchingEditorDraft` |
+| Real project/epic brief editors retain exact bytes after an API rejection and remove their temporary files after a successful retry | Strengthened `TestCLIProgramOrdinaryDocumentEditor`, included in the existing terminal scenario manifest |

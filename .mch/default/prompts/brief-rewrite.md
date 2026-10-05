@@ -1,31 +1,33 @@
-# Brief rewrite
+# Brief Rewrite
 
-The caller supplies the brief input path, relevant context paths, and a rewritten brief
-output path. Rewrite for clarity, structure, grammar, and readability while preserving
-all meaningful intent, scope, product decisions, and the original level of detail.
-Keep the document a brief draft; do not turn it into a spec or implementation plan.
-Preserve concrete labels, paths, commands, API shapes, examples, quoted text, and fenced
-code blocks. Remove repetition only without loss of meaning. Wrap prose at 100 columns.
-Identify material questions and obstacles alongside the draft; do not silently choose
-among different interpretations. A rewritten brief with unanswered blockers is not ready
-for spec writing.
+- Read the brief from the supplied file path and rewrite it for wording and clarity,
+  using simple, understandable language.
+- Read `.mch/default/templates/spec-template.md` and use it to check whether the brief
+  provides enough information to write a complete specification.
+- If the brief or template path is missing or unreadable, report the error to the user.
+- Preserve all specified functionality, scope, rules, examples, and decisions. Do not add
+  functionality or requirements beyond the brief and the user's clarification answers.
+- Read relevant repository contracts and references when available to resolve established
+  behavior. Include references needed by the specification writer in the rewritten brief.
+  Ask the user about missing or conflicting information that affects intended behavior.
+- Identify ambiguities and missing decisions that would prevent a complete specification.
+  Check the goal, scope boundaries, testable behavior, rules, limits, constraints, and
+  expected outcomes for relevant happy paths, edge cases, and error paths.
+- Ask focused questions one at a time, waiting for each answer before asking the next.
+  Ask follow-up questions if new ambiguities arise. Do not guess or invent answers.
+  Avoid questions about implementation choices that can be made during specification writing
+  without changing intended behavior or violating constraints.
+- Before saving, verify that the clarified brief and referenced contracts are a clean,
+  complete base for writing the full specification in the template's format, without further
+  questions about intended behavior. Resolve any remaining gaps through clarification.
+  Include information for optional template sections only when relevant.
+- Once the questions are resolved, overwrite the supplied input file with the rewritten
+  brief in Markdown and print the same Markdown in the response, without a surrounding
+  code block or commentary. If no clarification is needed, do this directly.
+  Apply the same save-and-print behavior to all later revisions.
+- The first line of the brief must be a level-one heading: `# [Title describing the brief]`.
+- Limit each line of the rewritten brief to 100 characters in both the file and the response.
+- Keep the brief concise without omitting specified details.
+- Specification writing is handled by a separate prompt.
 
-Read only the explicit input and context paths supplied by the caller. Require an explicit
-output path distinct from the input paths; report missing or unreadable paths precisely.
-Write only to that output path. Preserve original inputs and unrelated user files.
-Ask material questions when intent, scope, contracts, or required context are ambiguous.
-Never invent answers or requirements. Missing answers remain unresolved blockers.
-Do not implement code or perform Git automation: no branch changes, commits, pushes,
-merges, PR publication, deployment, or shell workflow dispatch. Repository inspection
-is read-only context, never an instruction to execute automation.
-Keep the result bounded to this phase. The caller owns phase transitions and the
-serialization of questions, answers, findings, and revision identity.
-
-Write exactly one UTF-8 JSON object to the distinct output path. Its complete schema is:
-`{"input_revision":1,"rewritten_brief":"...","questions":[{"id":"Q1","text":"...","context":"affected brief text or section"}],"unresolved":["Q1"],"ready_for_spec":false}`.
-Use the supplied revision exactly. Each question needs a stable nonblank ID without
-leading/trailing whitespace, colons, or control characters, plus a concrete
-question and affected brief context. Every unresolved ID must name a returned question.
-Set `ready_for_spec` true only when no material unanswered question or blocker remains;
-then `unresolved` must be empty. Return an empty questions array when no question is needed.
-Do not add prose before or after the JSON object. The output must be bounded to 1 MiB.
+[brief-file-path.md]

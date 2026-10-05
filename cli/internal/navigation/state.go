@@ -10,7 +10,6 @@ const (
 	ChangesListState           State = "ChangesListState"
 	ChangeDetailsState         State = "ChangeDetailsState"
 	TestCaseDetailsState       State = "TestCaseDetailsState"
-	ChangeCreateState          State = "ChangeCreateState"
 	ChangeUpdateState          State = "ChangeUpdateState"
 	TestCaseCreateState        State = "TestCaseCreateState"
 	TestCaseUpdateState        State = "TestCaseUpdateState"

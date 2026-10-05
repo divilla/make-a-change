@@ -11,13 +11,11 @@ import (
 )
 
 var commandsByState = map[State][]string{
-	BriefState:                {"/title", "/uuid", "/brief", "/confirm", "/approve", "/resolve", "/retry", "/reload", "/return"},
 	DocumentState:             documents.Commands(),
-	MainState:                 {"/changes", "/epics", "/projects", "/select-project", "/config", "/backend-configs", "/health", "/help", "/quit", "/brief-new"},
+	MainState:                 {"/changes", "/epics", "/projects", "/select-project", "/config", "/backend-configs", "/health", "/help", "/quit"},
 	ChangesListState:          changes.ListCommands(),
-	ChangeDetailsState:        append(changes.DetailCommands(), "/brief-clarify"),
+	ChangeDetailsState:        changes.DetailCommands(),
 	TestCaseDetailsState:      testcases.DetailCommands(),
-	ChangeCreateState:         {"/title", "/uuid", "/save", "/cancel"},
 	ChangeUpdateState:         {"/save", "/cancel"},
 	TestCaseCreateState:       testcases.EditCommands(),
 	TestCaseUpdateState:       testcases.EditCommands(),
@@ -43,11 +41,8 @@ var commandsByState = map[State][]string{
 
 var commandDescriptions = map[string]string{
 	"/after-change":    "Set the prerequisite change",
-	"/approve":         "Approve the brief",
 	"/backend-configs": "Manage backend configurations",
 	"/brief":           "Edit the brief",
-	"/brief-clarify":   "Clarify this change's brief",
-	"/brief-new":       "Start a new brief clarification",
 	"/cancel":          "Discard and return",
 	"/changes":         "Browse changes",
 	"/clear-filters":   "Clear all change filters",
@@ -83,7 +78,6 @@ var commandDescriptions = map[string]string{
 	"/projects":        "Browse projects",
 	"/quit":            "Quit the application",
 	"/reload":          "Reload the current brief",
-	"/resolve":         "Resolve brief questions",
 	"/retry":           "Reload this screen",
 	"/return":          "Return to the previous screen",
 	"/save":            "Save the current draft",
@@ -92,7 +86,6 @@ var commandDescriptions = map[string]string{
 	"/type":            "Choose a document type",
 	"/types-filter":    "Filter changes by change types",
 	"/types":           "Choose change types",
-	"/uuid":            "Edit the optional UUID",
 }
 
 func commandOptions(state State) []dto.Option {

@@ -436,3 +436,14 @@ func TestP602AgentHistoryRowDisplaysProvenance(t *testing.T) {
 func (a *docAPI) ListComments(context.Context, int, string) ([]dto.Document, error) {
 	return []dto.Document{}, nil
 }
+
+func Test032InsertResultRetainsCommittedDocumentAfterDraftClears(t *testing.T) {
+	a := &docAPI{cfg: dto.ProjectConfig{ChangeDocs: []string{"spec"}}}
+	m := scoped(t, a, 7, 12, "change")
+	m, cmd := m.BeginInsert(context.Background(), a, " \n# Saved spec\nbody\t\n ", false)
+	r := cmd().(Result)
+	next, ok := m.Apply(r)
+	require.True(t, ok)
+	require.Empty(t, next.DraftBody)
+	require.Equal(t, dto.Document{ID: 91, RefID: 12, RefTable: "change", DocType: "spec", Body: "# Saved spec\nbody"}, r.Detail)
+}

@@ -10,6 +10,28 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+func (m Model) retainSavedChangeDocument(doc dto.Document) Model {
+	found := false
+	for i, current := range m.changeList.Detail.Documents {
+		if current.DocType == doc.DocType {
+			m.changeList.Detail.Documents[i] = doc
+			found = true
+		}
+	}
+	if !found {
+		m.changeList.Detail.Documents = append(m.changeList.Detail.Documents, doc)
+	}
+	switch doc.DocType {
+	case "brief":
+		m.changeList.Detail.Brief = doc.Body
+	case "spec":
+		m.changeList.Detail.Spec = doc.Body
+	case "pr":
+		m.changeList.Detail.PR = doc.Body
+	}
+	return m
+}
+
 func (m Model) beginComment(id int) (tea.Model, tea.Cmd) {
 	if !m.changeDetailLoaded {
 		m.err = "load change details before editing comments"

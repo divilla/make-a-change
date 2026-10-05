@@ -2991,3 +2991,513 @@ failure paths and HTTP rejection branches; exact locations are in each campaign'
 `uncovered.txt` and `functions.log`. No baseline failures or blockers remain.
 No backend source or toolchain changed; backend/Docker checks are outside scope.
 No Git publication or deployment occurred. Next action: caller review/publication.
+
+## 032 — editor brief, spec writing and testcase sync (2026-10-05)
+
+Implemented [032](../../agent/specs/032-cli-brief-spec-flow.md). `/new-change`
+opens an empty operation-owned UUID brief with repository-configured editor or
+EDITOR/nano fallback, derives the title from the first nonblank H1, and creates
+immediately with the complete brief. The creation form and structured
+clarification/question protocol are removed. Human existing-brief saves run the
+same sequence; agent saves retain provenance without recursively launching it.
+
+Interactive brief rewriting uses mtime, followed by colored streamed spec exec.
+The final message selects direct save or resumption of the exact successful
+session. Missing/unchanged resumed specs show the required footer error. Every
+saved manual/agent spec validates its complete Testcases section before API work,
+then reconciles exact occurrences, keeping checked records first and preserving
+matching IDs, timestamps and state. Errors stop dependent work, retain drafts,
+and expose committed document/testcase mutations. Scratch cleanup validates
+ownership. Review/fix and Git publication remain deferred.
+
+The assertion mapping is in `cli-contracts.md` under 032. Named new complete-program
+scenarios are `TestCLIProgram032BriefSpecFlow`,
+`TestCLIProgram032InvalidBriefAndCreationFailure`, and
+`TestCLIProgram032ManualSpecAndEditedBrief`. Retained ordinary creation/editor/
+document scenarios were adapted to the specified save behavior. The real PTY
+scenario verifies terminal handoff, actual interactive input, colored streaming,
+scrolling, cancellation, child reaping and retained drafts. Interactive children
+stay in the terminal foreground group; exec children use an owned process group.
+Unit regressions also cover editor cancellation/identity and
+`Test032DetailRefreshFeedbackIgnoresStaleGeneration` prevents late refresh feedback
+from leaking into a newer screen.
+
+| Command actually run on final source | Exit | Evidence |
+| --- | ---: | --- |
+| `make -C cli format` | 0 | `/tmp/032-format.log`; intended Go formatting inspected. |
+| `make -C cli check` | 0 | `/tmp/032-final-check.log`; format, lint, vet, unit race, architecture and tooling pass. |
+| `make -C cli coverage` | 0 | `/tmp/032-final-coverage.log`; **5517/6265 (88.0607%)**, strict 80% gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/032-final-deps-audit.log`; no vulnerabilities found. |
+| `make -C cli integration-coverage` | 0 | `/tmp/032-final-integration-coverage.log`; **4869/6265 (77.7175%)**, strict 70% gate passes. |
+| `python3 -B -m unittest discover -s cli/scripts -p documentation_test.py` | 0 | `/tmp/032-docs.log`; documented commands and links verified after checkpoint updates. |
+
+Earlier implementation checks exposed and repaired new lint issues, manifest/
+assertion-ledger omissions and obsolete editor/history/PTY expectations. Initial
+`make -C cli check` exited 2 (`/tmp/032-check.log`), and initial
+`make -C cli integration-coverage` exited 2 (`/tmp/032-integration-coverage.log`);
+that incomplete campaign establishes no coverage result. Focused full-program
+and PTY checks passed after fixes, and all required campaigns above were rerun on
+final source. A stale prompt-inventory assertion referred to absent
+`brief-resolve.md`; it now checks the four supplied resources with the removed
+JSON protocol superseded by this specification. No failures or blockers remain.
+
+Independent final campaigns completed all 35 manifest program scenarios,
+including the covered startup child, and 1 real PTY scenario, with no skips,
+missing counters, assertion failures, crashes, timeouts or cleanup failures.
+Production inventory includes untested packages; no HTTP-only adapter test adds
+terminal counters and no unit hits are combined with terminal hits. All network
+collaborators are owned fake HTTP servers; no live backend/database is used.
+Tested revision: `9e8f525c05ab4281bec2c14b0e79060c7d3e0c0c` plus the recorded working-tree changes.
+Both campaign input maps matched each other and current files before these
+checkpoint/log-only writes. Sorted compact input mapping SHA-256:
+`701a002a4712140c208eeae7a5f266b25a581db95076dbb3bf5145a78ba35c67`. Terminal child SHA-256:
+`8e5c037628549503be5250342ebf5ee012307837f7fa845542d665315125bed3`.
+Tools: Go `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0.
+Revision/source hashes, commands/exits, raw profiles, package totals, scenarios and
+uncovered statements/functions remain in `cli/.coverage/{unit,integration}`.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 125/134 | 80/134 |
+| `cli/internal/app` | 2574/3072 | 2360/3072 |
+| `cli/internal/changes` | 859/986 | 755/986 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 525/549 | 434/549 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 23/38 | 18/38 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 195/199 | 166/199 |
+| `cli/internal/ui` | 21/21 | 17/21 |
+| `cli/pkg/briefprocess` | 108/128 | 94/128 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining gaps include main, navigation fallbacks, agent/process/file error paths,
+HTTP rejection and document/history recovery branches. Exact locations remain
+in each campaign's `uncovered.txt` and `functions.log`; both final aggregate
+thresholds pass. Backend and Docker checks are outside scope because backend
+source and toolchain compatibility did not change. No commit, push, deployment,
+stage or production promotion occurred. Next action: caller review/publication.
+
+## 032 review fixes 01 — committed documents, Types and workflow paths (2026-10-05)
+
+All four supplied findings were validated and fixed. Insert results retain the
+committed document, including outer-whitespace trimming and human/agent provenance.
+The shell records it in change details before starting follow-up work; spec sync
+uses that retained body after the form clears. Regression tests verify successful
+case creation and current editor input after testcase-validation or workflow errors.
+Creation carries parsed Types metadata, validates against the project catalog
+before creating, and persists present metadata through the existing type-update
+endpoint before rewriting. Missing metadata sends no update; explicit empty metadata
+sends an empty update. Errors preserve the created change and any saved types.
+The workflow resolves helpers relative to its own script directory; its root
+invocation test uses stub helpers and a temporary path containing spaces.
+The assertion ledger records the named regression evidence.
+
+| Final command | Exit/result |
+| --- | --- |
+| `make -C cli format` | 0; `/tmp/032-review-format-final.log`; intended Go formatting only. |
+| `go test -count=1 ./internal/app ./internal/documents ./internal/agent` (inside `cli`) | 0; `/tmp/032-review-target-final.log`. |
+| `bash scripts/codex-flow_test.sh` and `bash -n scripts/codex-flow.sh scripts/codex-flow_test.sh` | 0; root invocation and shell syntax pass. |
+| `make -C cli check` | 0; `/tmp/032-review-check.log`; formatting, lint, vet, race, architecture and tooling pass. |
+| `make -C cli coverage` | 0; **5555/6283 (88.4132%)**, strict 80% gate passes; `/tmp/032-review-coverage.log`. |
+| `make -C cli deps-audit` | 0; no vulnerabilities; `/tmp/032-review-deps-audit.log`. |
+| `make -C cli integration-coverage` | 0; **4882/6283 (77.7017%)**, strict 70% gate passes; `/tmp/032-review-integration-coverage.log`. |
+
+Two early targeted runs exited 1 because the new regression fixture omitted the
+configured document types and expected body text in the details screen, which
+shows document indicators. The corrected test verifies the saved indicator and
+subsequent editor input; final targeted tests and all required checks pass.
+No required campaign failed, skipped a scenario or remained blocked.
+
+Tested revision: `0c780c59236c067d7d66f4645df17045f6071d48` plus these working-tree
+changes. Both campaigns completed with exit 0. All 35 manifest program/startup
+scenarios and the real PTY scenario passed; unit and terminal profiles are separate.
+Both campaign input maps matched each other and the current files before these
+checkpoint/log-only writes. Sorted compact input-map SHA-256:
+`c546b0f5edeb06aebd31bdd213486544ef0e7193f382f87b6f669237846a05bd`.
+Terminal child SHA-256: `e67c7c650d66e52a35ced34d757d7b58979877ac92739e913b74884d4b73de71`.
+Tools: Go `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0.
+Revision/source hashes, commands/exits, scenario results, raw profiles and exact
+uncovered statements/functions remain under `cli/.coverage/{unit,integration}`.
+
+| Production package | Unit covered/total | Terminal covered/total |
+| --- | ---: | ---: |
+| `cli/cmd/mch` | 0/3 | 1/3 |
+| `cli/internal/agent` | 135/144 | 86/144 |
+| `cli/internal/app` | 2601/3079 | 2366/3079 |
+| `cli/internal/changes` | 859/986 | 755/986 |
+| `cli/internal/configurations` | 170/183 | 167/183 |
+| `cli/internal/documents` | 526/550 | 435/550 |
+| `cli/internal/dto` | 0/0 | 0/0 |
+| `cli/internal/epics` | 221/221 | 191/221 |
+| `cli/internal/health` | 48/50 | 47/50 |
+| `cli/internal/help` | 6/6 | 6/6 |
+| `cli/internal/navigation` | 23/38 | 18/38 |
+| `cli/internal/projects` | 224/234 | 200/234 |
+| `cli/internal/styles` | 0/0 | 0/0 |
+| `cli/internal/testcases` | 195/199 | 166/199 |
+| `cli/internal/ui` | 21/21 | 17/21 |
+| `cli/pkg/briefprocess` | 108/128 | 94/128 |
+| `cli/pkg/client` | 402/424 | 318/424 |
+| `cli/pkg/documentprocess` | 16/17 | 15/17 |
+
+Remaining gaps include the process entrypoint, shell recovery/navigation,
+agent/process/file errors and HTTP rejection branches. The measured aggregates
+pass both final CLI thresholds. The tests use fake collaborators and owned local
+processes. No live backend/database, commits, pushes or deployment were used.
+
+## 032 review fixes 02 — writable spec sandbox and workflow failures (2026-10-05)
+
+Both findings are valid and fixed. Spec execution explicitly passes
+`--sandbox workspace-write` and `--add-dir` for the owned brief directory, retaining
+the repository root, literal prompt, colored output and final-message capture.
+The strengthened adapter test creates an owned scratch directory outside the
+repository, checks arguments with spaces, writes `spec.md` and reads it through
+the workspace. Existing complete-program and real PTY collaborators now enforce
+the same sandbox/scratch arguments. Official non-interactive documentation and
+the installed `codex exec --help` confirm the supported flags; no live Codex
+service was invoked. HTTP and scratch-ownership contracts remain aligned.
+
+`scripts/codex-flow.sh` enables fail-fast shell behavior. Its isolated regression
+test proves implementation exit 7 skips review and is returned unchanged, review
+exit 9 propagates after successful implementation, and success calls both helpers
+in order from a repository path containing spaces.
+
+| Command actually run | Exit | Evidence |
+| --- | ---: | --- |
+| `go test -count=1 ./pkg/briefprocess -run '^Test032CodexExecArgumentsStreamingFinalAndSession$'` (CLI cwd, before fix) | 1 | `/tmp/032-review02-before-runner.log`; missing sandbox/scratch arguments reproduced. |
+| `bash scripts/codex-flow_test.sh` (before fix) | 1 | `/tmp/032-review02-before-flow.log`; implementation-failure regression fails. |
+| `make -C cli format` | 0 | `/tmp/032-review02-format.log`; intended formatting inspected. |
+| `go test -count=1 ./pkg/briefprocess` (CLI cwd) | 0 | `/tmp/032-review02-targeted.log`; adapter, ownership, cancellation and final-file checks pass. |
+| `go test -count=1 ./integration -run '^TestCLIProgram032BriefSpecFlow$'` (CLI cwd) | 0 | `/tmp/032-review02-program.log`; final source rerun in campaign. |
+| `bash scripts/codex-flow_test.sh` and `bash -n scripts/codex-flow.sh scripts/codex-flow_test.sh` | 0 | `/tmp/032-review02-flow.log`; ordering, failure propagation and syntax pass. |
+| `make -C cli check` | 0 | `/tmp/032-review02-check.log`; formatting, lint, vet, unit race, architecture and tooling pass. |
+| `make -C cli coverage` | 0 | `/tmp/032-review02-coverage.log`; **5556/6284 (88.4150%)**, strict 80% gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/032-review02-deps-audit.log`; no vulnerabilities found. |
+| `make -C cli integration-coverage` | 0 | `/tmp/032-review02-integration-coverage.log`; **4883/6284 (77.7053%)**, strict 70% gate passes. |
+| `python3 -B -m unittest discover -s cli/scripts -p documentation_test.py` and `git diff --check` | 0 | `/tmp/032-review02-documentation.log`; documented commands, links and diff whitespace pass. |
+
+Both independent campaigns completed all required scenarios: 35 manifest program
+tests including the covered startup child, and one real PTY scenario. No skips,
+missing counters, assertion failures, crashes, timeouts or cleanup failures.
+Untested production packages remain in both denominators. Unit and terminal hits
+are separate; workflow-script and direct-adapter tests add no terminal counters.
+All collaborators are owned local processes or fake HTTP servers.
+
+Tested revision: `f34b676f66fb231d8c769046ba926ff06a2adb1c` plus the recorded
+working-tree changes. Both campaign input maps matched each other and current
+files before this checkpoint/log update. Sorted compact input-map SHA-256:
+`d74c08f3c4f6d1c3cc2f8165711ef87b2e3579bfa28aa0a8b7e8796d32518fed`.
+Terminal child SHA-256:
+`bba250eb2fc42be354a14a1f1c168dcfb0acc561bac39cf94c4410f6f6b2f130`.
+Tools: Go `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0.
+Full command exits, revision/source hashes, scenarios, raw profiles, exact package
+counts and uncovered statements/functions remain under `cli/.coverage/{unit,integration}`.
+Package totals are unchanged from review fixes 01 except `cli/pkg/briefprocess`,
+now **109/129 unit** and **95/129 terminal**; its extra statement is covered in
+both campaigns. Remaining gaps include main, shell recovery/navigation,
+agent/process/file failures and HTTP rejection branches as listed in the raw
+reports. Both final aggregate thresholds pass; no blocker remains.
+Next action: caller review/publication. Backend and toolchain compatibility were
+unchanged. No Git publication or stage/production promotion occurred.
+
+## 032 review fixes 03 — interactive descendants and partial-sync caches (2026-10-05)
+
+Both findings were valid. Interactive cancellation now stops each parent before
+enumerating its children using system `ps`, recursively terminates descendants,
+and always kills the stopped parent even if enumeration fails. It signals only
+individual PIDs, retaining the shared foreground terminal group and Bubble Tea
+handoff. Rewrite and resume regressions launch nested shell/sleep processes and
+verify cancellation leaves no running descendants while a foreground sibling survives.
+
+Valid-section synchronization errors retain their underlying causes in a typed
+error. Manual and agent completion paths invalidate both detail and testcase loaded
+state and advance result generations, retaining the committed spec and error.
+Edit, toggle and delete remain blocked until a read-only refresh succeeds; failed
+refreshes remain invalid. Parser rejection leaves unchanged cached cases valid.
+The unit regression covers both completion paths and cancellation after a committed
+deletion. The existing complete-program manual-save scenario now also fails its
+second deletion, proves the spec persisted and editing is blocked, refreshes without
+replaying writes, and completes a subsequent brief/spec workflow.
+
+| Final command | Exit | Evidence |
+| --- | --- | --- |
+| `make -C cli format` | 0 | `/tmp/032-review03-format-final.log`; intended Go formatting inspected. |
+| `go test -count=1 ./pkg/briefprocess ./internal/app ./internal/testcases` (CLI cwd) | 0 | `/tmp/032-review03-targeted-final.log`; final source also verified by required unit campaigns. |
+| `go test -count=1 -timeout=60s ./integration -run '^TestCLIProgram032ManualSpecAndEditedBrief$'` (CLI cwd) | 0 | `/tmp/032-review03-program-final.log`; final source rerun in campaign. |
+| `make -C cli check` | 0 | `/tmp/032-review03-check.log`; formatting, lint, vet, race, architecture and tooling pass. |
+| `make -C cli coverage` | 0 | `/tmp/032-review03-coverage.log`; **5602/6324 (88.5832%)**, strict 80% gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/032-review03-deps-audit.log`; no vulnerabilities found. |
+| `make -C cli integration-coverage` | 0 | `/tmp/032-review03-integration-coverage.log`; **4901/6324 (77.4984%)**, strict 70% gate passes. |
+| `python3 -B -m unittest discover -s cli/scripts -p documentation_test.py` and `git diff --check` | 0 | `/tmp/032-review03-documentation.log`; documented commands, links and whitespace pass. |
+
+Early focused runs exited 1: the new unit fixture omitted the retained spec and
+document type, and the program test waited for a clipped portion of the one-line
+error. Both fixtures/assertions were corrected. No required check or campaign
+failed or remains blocked. All 35 manifest program scenarios (including the covered
+startup child) and the real PTY scenario completed without skips, missing counters,
+assertion failures, crashes, timeouts or cleanup failures. Packages with no tests
+remain in the denominator; DTO/styles have no executable statements.
+
+Tested revision: `ee57fd8267cf31e94576e3fa6abb1382df147b49` plus these working-tree
+changes. Both campaign input maps matched each other and all current files before
+the documentation/log updates below. Sorted compact input-map SHA-256:
+`fcbb2e2f131be0a5c54085288bf6d4788d395ad29dc90c20c26708e1458a86ec`.
+Terminal child SHA-256:
+`9f7cc8f5e7cec923160b6ef91ab2528d75ff900afb70be1bde5ad6fd8dfb681c`.
+Tools: Go `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0.
+The assertion ledger, checkpoint and implementation log were updated after the
+campaigns; production and test source hashes remain those in provenance.
+Independent raw profiles, commands/exits, scenarios and uncovered statements and
+functions remain under `cli/.coverage/{unit,integration}`. Unit/terminal statement
+counts for changed production packages are `internal/app` **2613/3088** and
+**2377/3088**, `internal/testcases` **201/204** and **173/204**, and
+`pkg/briefprocess` **137/155** and **95/155**. Other package totals remain as in
+review fixes 02. Remaining gaps include main, shell recovery/navigation,
+agent/process/file failures and HTTP rejection branches. The cancellation cleanup
+is unit-tested independently and contributes no direct-adapter terminal hits.
+
+All collaborators are owned local processes or fake HTTP servers. Backend HTTP
+contracts and toolchain compatibility are unchanged. No commits, pushes or
+stage/production promotion occurred; caller review/publication remains next.
+
+## 032 review fixes 04 — Markdown fences and editor descendants (2026-10-05)
+
+Both findings were valid and reproduced before fixes. Testcase parsing now keeps
+the opening fence character and length, requiring a matching character, at least
+the opening length, and only trailing whitespace to close it. Regression cases
+cover backticks, tildes, shorter and mismatched delimiters, trailing text, longer
+closers and unclosed fences. Without a real section, checked records remain
+unchanged and no API call occurs; a real section after a matching closer is used.
+
+Editors now use the same interactive command constructor as Codex, retaining
+foreground terminal group membership and terminating owned descendants on context
+cancellation. Tests exercise configured and EDITOR-fallback scripts with nested
+children, preserve a sibling process in the shared group, and retain the draft.
+Existing rewrite/resume and enumeration-failure tests pass through the shared
+adapter. HTTP routes, payloads, document provenance and scratch ownership are unchanged.
+
+| Command | Exit | Evidence |
+| --- | --- | --- |
+| Targeted new parser/editor regressions before fixes | 1 | `/tmp/032-review04-before.log`; real-section recognition and orphaned children fail. |
+| Targeted parser regression with example Notes before the closer, before fixes | 1 | `/tmp/032-review04-before-fences.log`; example cases incorrectly synchronize when the real section is missing. |
+| `make -C cli format` (initial and final) | 0 | `/tmp/032-review04-format.log`, `/tmp/032-review04-format-final.log`; intended formatting inspected. |
+| `go test -count=1 ./internal/testcases ./internal/app ./pkg/briefprocess` (CLI cwd) | 0 | `/tmp/032-review04-targeted.log`; final unclosed-fence addition also passes in both required unit campaigns. |
+| `make -C cli check` | 0 | `/tmp/032-review04-check.log`; formatting, lint, vet, race, architecture and tooling pass. |
+| `make -C cli coverage` | 0 | `/tmp/032-review04-coverage.log`; **5611/6334 (88.5854%)**, strict 80% gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/032-review04-deps-audit.log`; no vulnerabilities found. |
+| `make -C cli integration-coverage` | 0 | `/tmp/032-review04-integration-coverage.log`; **4908/6334 (77.4866%)**, strict 70% gate passes. |
+| `python3 -B -m unittest discover -s cli/scripts -p documentation_test.py` and `git diff --check -- . ':(exclude)cli/implementation-log.md'` | 0 | `/tmp/032-review04-documentation.log`; commands/links and source/documentation whitespace pass. |
+
+Unscoped `git diff --check` reports the implementation log's trailing blank line,
+which the skill's required block format mandates; that format was checked separately.
+
+All 35 manifest program scenarios, including the covered startup child, and the
+real PTY scenario completed with no skips, missing counters, assertion failures,
+crashes, timeouts or cleanup failures. Unit and terminal profiles are independent;
+direct adapter tests contribute no terminal hits. No final check failed or is blocked.
+Both denominators retain all production packages, including main without unit tests;
+DTO/styles have no executable statements.
+
+Tested revision: `8f7def7812162d188b4a30024c6c072ffc26cc76` plus the working-tree fixes.
+Both campaign input maps matched each other and all current files before the
+ledger/checkpoint/log updates. Sorted compact input-map SHA-256:
+`e24aa4d66211a50e1c82e1db8dc55f8aa3325b12c4292e57d8fe8b037ca0cbca`.
+Terminal child SHA-256:
+`4a3e3d0cf238f83714556c5ff05786ff8eda30ec902e70cc9e41cb88408459f0`.
+Tools: Go `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0.
+Raw profiles, command exits, scenarios, package totals and uncovered statements/functions
+remain under `cli/.coverage/{unit,integration}`. Changed package counts:
+
+| Package | Unit covered/total | Terminal covered/total |
+| --- | --- | --- |
+| `internal/app` | 2613/3088 | 2376/3088 |
+| `internal/testcases` | 207/210 | 179/210 |
+| `pkg/briefprocess` | 140/159 | 99/159 |
+
+Other package totals match review fixes 03. Remaining gaps include main, shell
+recovery/navigation, agent/process/file failures and HTTP rejection branches; the
+raw uncovered reports identify exact statements. Both aggregate gates pass.
+Collaborators are owned local processes or fake HTTP servers. No backend/database
+or live agent service was used. Caller review/publication remains next; no commits,
+pushes or stage/production promotion occurred.
+
+## 032 review fixes 05 — scoped draft cleanup and replacement details (2026-10-05)
+
+Both findings were valid and reproduced before fixes. Editor drafts now retain
+the project, owner table/ID, document type and body captured by the editor.
+Brief workflow and manual spec synchronization completion use the corresponding
+human save to authorize cleanup, preserving unmatched drafts and file identity
+checks. Later workflow failures still retain the owning draft. Replacing the
+selected change cancels obsolete reads and invalidates both detail-loaded flags
+and testcase state. Failed workflow snapshots remain visible, but editors require
+a successful detail reload; the generic brief editor then uses the saved active
+document rather than an empty document collection.
+
+Unit regressions cover mismatched scope/content/provenance, matching completion
+through both editor paths, retained files after unrelated completion, and failed
+then successful reload after rewrite/spec errors. The existing complete-program
+flow now first loads another change and fails its spec editor save, then creates
+a new change in all five workflow modes. It verifies the earlier draft survives,
+blocks editing after workflow errors and reloads details without replaying writes.
+The manual program verifies matching cleanup and unrelated retained drafts after
+partial synchronization. HTTP contracts and document provenance are unchanged.
+
+| Command | Exit | Evidence |
+| --- | --- | --- |
+| Focused new unit regressions before fixes | 1 | `/tmp/032-review05-before.log`; unrelated completion deleted the draft and new snapshots inherited loaded flags. |
+| `make -C cli format` (initial and final) | 0 | `/tmp/032-review05-format.log`, `/tmp/032-review05-format-final.log`; intended formatting inspected. |
+| `go test -count=1 ./internal/app` (CLI cwd) | 0 | `/tmp/032-review05-targeted-final.log`. |
+| `go test -count=1 -timeout=90s ./integration -run '^TestCLIProgram(032BriefSpecFlow\|032ManualSpecAndEditedBrief\|OrdinaryDocumentEditor)$'` (CLI cwd) | 0 | `/tmp/032-review05-program-final.log`. |
+| `make -C cli check` | 0 | `/tmp/032-review05-check-final.log`; formatting, lint, vet, race, architecture and tooling pass. |
+| `make -C cli coverage` | 0 | `/tmp/032-review05-coverage-final.log`; **5640/6353 (88.7770%)**, strict 80% gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/032-review05-deps-audit-final.log`; no vulnerabilities found. |
+| `make -C cli integration-coverage` | 0 | `/tmp/032-review05-integration-coverage-final.log`; **4926/6353 (77.5382%)**, strict 70% gate passes. |
+| `python3 -B -m unittest discover -s cli/scripts -p documentation_test.py` and `git diff --check -- . ':(exclude)cli/implementation-log.md'` | 0 | `/tmp/032-review05-documentation.log`; documented commands/links and source/documentation whitespace pass. |
+
+The implementation log's final blank line follows the skill's required block
+format; its format and statistics are checked separately from whitespace checks.
+
+An early program run exited 1 because its marker included clipped error text;
+the assertion now uses the visible prefix. Initial required check, unit coverage
+and audit runs exited 0. Initial integration coverage exited 2 and established
+no passing coverage: existing ordinary editor assertions caught cleanup being
+moved before follow-up failures, and the new navigation test raced Escape with
+the next command. Cleanup now retains its completion timing with scoped save
+evidence, and navigation waits for the prompt-clear feedback. Raw failed campaign
+diagnostics are preserved in `/tmp/032-review05-integration-failed`, with output
+in `/tmp/032-review05-integration-coverage.log`. All final checks pass; no scenario
+is skipped or blocked. All 35 manifest program scenarios, including the covered
+startup child, and the real PTY scenario complete without missing counters,
+assertion failures, crashes, timeouts or cleanup failures.
+
+Tested revision: `c54c0ffbfd5f64bd911c407e382827332c1d9f3f` plus these working-tree
+fixes. Both campaigns' input maps matched each other and current files before
+ledger/checkpoint/log updates. Sorted compact input-map SHA-256:
+`1069687b253c34f9fa0140ceed49108480b7bf55d85c8476623ebcc167514100`.
+Terminal child SHA-256:
+`46e479422b8883aed70e2293c6b439c17a243b1c1c7f574195dbff35cd082148`.
+Tools: Go `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0.
+The documentation/log updates follow the campaigns; tested production and test
+source hashes remain unchanged. Independent profiles, command exits, scenarios,
+exact package totals and uncovered statements/functions remain under
+`cli/.coverage/{unit,integration}`. Changed package `internal/app` has unit
+**2642/3107** and terminal **2392/3107** covered statements. Other package counts
+match review fixes 04. Main (unit 0/3, terminal 1/3), navigation (23/38, 18/38),
+and process/HTTP/error recovery branches remain coverage gaps. Every production
+package stays in the denominator, including packages without tests; DTO/styles
+have no executable statements. Both aggregate gates pass.
+
+Collaborators are owned local processes and fake HTTP servers. No live backend,
+database or agent service was used. No commits, pushes or stage/production
+promotion occurred; caller review/publication remains next.
+
+## 032 review fixes 06 — ordinary document draft cleanup (2026-10-05)
+
+The finding was valid. Both unit and complete-program regressions reproduced
+temporary files surviving successful project/epic saves. Ordinary document insert
+completion now calls the existing scoped, file-identity-checked draft cleanup
+before refreshing history. Failed saves still retain drafts for retry; change
+brief/spec follow-ups retain their existing cleanup timing. No HTTP or provenance
+contract changed. Unit cases cover project/epic brief and spec saves and retries;
+complete-program cases run real editors for project/epic briefs against fake HTTP.
+
+| Command | Exit | Evidence |
+| --- | --- | --- |
+| Focused new unit regressions before the fix | 1 | `/tmp/032-review06-before.log`; all eight cases reproduce retained files after successful saves. |
+| Focused project/epic program regressions before the fix | 1 | `/tmp/032-review06-program-before.log`; both editor files survive successful retries. |
+| `make -C cli format` (initial and final) | 0 | `/tmp/032-review06-format.log`, `/tmp/032-review06-format-final.log`; intended formatting inspected. |
+| `go test -count=1 ./internal/app` (CLI cwd, final) | 0 | `/tmp/032-review06-targeted-final.log`. |
+| `go test -count=1 -timeout=90s ./integration -run '^TestCLIProgram(OrdinaryDocumentEditor\|032BriefSpecFlow\|032ManualSpecAndEditedBrief)$'` (CLI cwd) | 0 | `/tmp/032-review06-program.log`. |
+| `make -C cli check` (final) | 0 | `/tmp/032-review06-check-final.log`; formatting, lint, vet, race, architecture and tooling pass. |
+| `make -C cli coverage` (final) | 0 | `/tmp/032-review06-coverage-final.log`; **5642/6354 (88.7945%)**, strict 80% gate passes. |
+| `make -C cli deps-audit` (initial and final) | 0 | `/tmp/032-review06-deps-audit.log`, `/tmp/032-review06-deps-audit-final.log`; no vulnerabilities found. |
+| `make -C cli integration-coverage` (initial and final) | 0 | `/tmp/032-review06-integration-coverage.log`, `/tmp/032-review06-integration-coverage-final.log`; final **4937/6354 (77.6991%)**, strict 70% gate passes. |
+| `python3 -B -m unittest discover -s cli/scripts -p documentation_test.py` and `git diff --check -- . ':(exclude)cli/implementation-log.md'` | 0 | `/tmp/032-review06-documentation.log`; documented commands/links and source/documentation whitespace pass. |
+
+The implementation log's final blank line follows the skill's required block
+format; its format and statistics are checked separately from whitespace checks.
+
+Early targeted unit runs exited 1 because the new fake omitted committed history
+and document details during refresh. Initial `check` and unit `coverage` exited 2
+for that fixture error; these incomplete runs establish no passing coverage.
+The fixture now supplies the committed row, active selection and details.
+Failed campaign diagnostics remain in `/tmp/032-review06-unit-failed`, with
+output in `/tmp/032-review06-coverage.log` and `/tmp/032-review06-check.log`.
+All final checks pass. All 35 manifest program scenarios, including the covered
+startup child, and the real PTY scenario finish without skips, missing counters,
+assertion failures, crashes, timeouts or cleanup failures.
+
+Tested revision: `f81715e760cdb4edf48bd75a1e5aff19b00126d4` plus these working-tree
+fixes. Final campaigns have matching input maps, verified against current files
+before documentation/log updates. Sorted compact input-map SHA-256:
+`d079af8dde77680a798f2433ffd28d5fa9443663c6cb78c480a55bf493d4457d`.
+Terminal child SHA-256:
+`1afec5e828e8ea4b8088383875369ad906bf4626ac010a43043d7a4b9092d867`.
+Tools: Go `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0.
+Independent profiles, commands/exits, scenario lists, exact package totals and
+uncovered statements/functions remain in `cli/.coverage/{unit,integration}`.
+Changed package `internal/app` has unit **2644/3108** and terminal **2402/3108**
+covered statements; `internal/documents` has **526/550** and **436/550**.
+Other package counts match review fixes 05. Remaining gaps
+include main (unit 0/3, terminal 1/3), navigation (23/38, 18/38), and shell,
+agent/process and HTTP error branches. All production packages remain in both
+denominators, including main without unit tests; DTO/styles have no statements.
+Documentation/log updates follow the campaigns without changing tested Go source.
+Only owned local processes and fake HTTP servers were used. No live backend,
+database or agent service, commits, pushes or stage/production promotion occurred.
+
+## Spec saving after interactive exit (2026-10-05)
+
+The user's updated contract replaces the resumed-spec modification-time gate.
+After successful spec generation/resumption, the controller checks the owned
+`spec.md`, reads the current active documents, and compares spec content with
+backend-compatible outer-whitespace trimming. A missing/different active spec
+gets one agent-authored `/doc/insert`; equal content retains the current version
+and reports `spec unchanged`. Both paths synchronize testcases. Missing drafts,
+active-document read/ownership/conflict failures, failed processes, and
+cancellation retain the existing error and draft-preservation behavior.
+
+Unit regressions cover unchanged file time, new/differing/equal active specs,
+outer whitespace, a fresh API read after preflight, and failed/malformed active
+reads. Complete-program tests use real owned child processes and fake HTTP to
+verify an exec-created file left untouched during resume still saves, while an
+identical active spec does not insert another version. No YAML workflow behavior
+was added; the user's `.mch/output/ref_uuid.yaml` edits were left intact.
+The 032 specification and assertion ledger now reflect the updated contract.
+
+| Command | Exit | Evidence |
+| --- | --- | --- |
+| New focused controller regressions before the fix | 1 | `/tmp/cli-spec-save-before.log`; unchanged mtime and missing active-content comparison reproduced. |
+| `go test -count=1 ./internal/agent` (CLI cwd) | 0 | Controller suite passes after the fix. |
+| Focused agent/app/program command mistakenly invoked from repository root | 1 | No Go module at root; no tests executed. Rerun below from CLI cwd. |
+| `go test -count=1 -timeout=3m ./internal/agent ./internal/app ./integration -run 'TestSpecCompared\|Test032\|TestCLIProgram032BriefSpecFlow'` (CLI cwd) | 0 | Controller, application and complete-program regressions pass. |
+| `make -C cli format` | 0 | `/tmp/cli-spec-save-format.log`; diff inspected, only intended files changed. |
+| `make -C cli check` | 0 | `/tmp/cli-spec-save-check.log`; formatting, lint, vet, race, architecture and tooling pass. |
+| `make -C cli coverage` | 0 | `/tmp/cli-spec-save-coverage.log`; **5657/6367 (88.8488%)**, strict 80% gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/cli-spec-save-deps-audit.log`; no vulnerabilities found. |
+| `make -C cli integration-coverage` | 0 | `/tmp/cli-spec-save-integration-coverage.log`; **4946/6367 (77.6818%)**, strict 70% gate passes, including the real PTY scenario. |
+
+Tested revision: `0a6d1fade44e94ea186904a13cfcaf35cc7edf14` plus this working-tree
+change. Campaign input maps match each other and were checked against every
+current input before these evidence updates. Sorted compact input-map SHA-256:
+`6c52c2c15f4f4b665c25e5c781c38f54a9e0f1582d316282bf18606a7d000c7a`.
+Terminal child SHA-256:
+`6d7ec2ccf751ac3af739be1be4d3eea1c46d517bb0001d5fb919932f946870de`.
+Tools: Go `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0.
+Raw profiles, command exits, scenario results, exact package counts, and uncovered
+statements/functions remain in `cli/.coverage/{unit,integration}`. Both campaigns
+completed without skipped scenarios or missing counters. Changed package
+`internal/agent` is **150/157** unit and **95/157** terminal. Other package counts
+match review fixes 06; remaining gaps include main, navigation, and process/API
+error branches. All production packages remain in both denominators. These final
+checkpoint/log edits do not change tested production or test source.
+
+Validation used fake HTTP servers and owned local processes only. No live data
+was changed and no Git publication was performed.

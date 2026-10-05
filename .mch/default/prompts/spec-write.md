@@ -1,26 +1,22 @@
-# Spec write
+# Specification Writing
 
-The caller supplies the clarified brief input path, resolved question and answer input
-paths, relevant repository/context paths, and a spec output path. Require the brief's
-material blockers to be resolved before writing an implementation-ready spec.
-Account for every meaningful brief item without silently expanding scope. Inspect supplied
-code and tests for current behavior and constraints; distinguish existing behavior from
-the intended future state. Ask if existing work conflicts with a product decision.
-Use these sections: Goal, Scope, Requirements, Non-Goals, Design Notes, Verification,
-QA Test Cases, Review Focus, and Follow-Ups. Requirements describe testable final behavior,
-visible contracts, persistence and failure handling. Include realistic repository-supported
-verification commands and behavior-focused happy, failure, no-op, and boundary scenarios.
-Do not claim unrun verification succeeded or invent API contracts. Preserve relevant
-examples and fenced code; wrap prose at 100 columns. Use only supplied project configuration
-when referring to configured types. A written spec must next undergo spec review.
+- Read the supplied brief and `.mch/default/templates/spec-template.md`. Use the template
+  as the source of all specification structure, content, and formatting rules.
+- Preserve the brief and clarification answers: functionality, scope, rules, constraints,
+  examples, and decisions. Do not add requirements or expand scope.
+- Check relevant repository contracts and references. Distinguish existing behavior from
+  requested changes; do not invent contracts or decisions.
+- Resolve missing information, ambiguities, and contradictions through focused questions,
+  one at a time, waiting for each answer before asking the next. Do not guess answers.
+- Write concisely in simple language. Before saving, verify that all brief items and answers
+  are covered consistently and no unresolved decision prevents implementation or testing.
+- Save the complete Markdown specification as `spec.md` beside the brief, overwriting any
+  existing `spec.md`. Preserve the brief and unrelated files; do not save an incomplete draft.
+- Read the saved file back and verify completeness and compliance with the template.
+  On success, output exactly `Done.` without printing the specification or adding commentary.
+- If required inputs are missing or unreadable, or completion or saving is blocked, explain
+  the reason and/or ask the next clarification question. Do not output `Done.` on failure.
+- Apply these rules to later revisions. Write the specification only; do not implement code
+  or perform Git publication.
 
-Read only the explicit input and context paths supplied by the caller. Require an explicit
-output path distinct from the input paths; report missing or unreadable paths precisely.
-Write only to that output path. Preserve original inputs and unrelated user files.
-Ask material questions when intent, scope, contracts, or required context are ambiguous.
-Never invent answers or requirements. Missing answers remain unresolved blockers.
-Do not implement code or perform Git automation: no branch changes, commits, pushes,
-merges, PR publication, deployment, or shell workflow dispatch. Repository inspection
-is read-only context, never an instruction to execute automation.
-Keep the result bounded to this phase. The caller owns phase transitions and the
-serialization of questions, answers, findings, and revision identity.
+[brief-file-path.md]

@@ -8,12 +8,11 @@ type State = navigation.State
 // State aliases keep app tests and callers decoupled from the navigation package path.
 const (
 	DocumentState              State = "DocumentState"
-	BriefState                 State = "BriefState"
+	AgentExecState             State = "AgentExecState"
 	MainState                        = navigation.MainState
 	ChangesListState                 = navigation.ChangesListState
 	ChangeDetailsState               = navigation.ChangeDetailsState
 	TestCaseDetailsState             = navigation.TestCaseDetailsState
-	ChangeCreateState                = navigation.ChangeCreateState
 	ChangeUpdateState                = navigation.ChangeUpdateState
 	TestCaseCreateState              = navigation.TestCaseCreateState
 	TestCaseUpdateState              = navigation.TestCaseUpdateState
