@@ -79,7 +79,7 @@ func TestP302EpicOperationsValidationFormsAndPresentation(t *testing.T) {
 	for _, part := range []string{"ID: 3", "Project ID: 7", "Name: Exact\nname", "Done TC: 2", "Total TC: 8", "Completed: 63", "Changes: 4", "Created: " + e.CreatedAt.Local().Format("2006-01-02 15:04"), "Modified: " + e.UpdatedAt.Local().Format("2006-01-02 15:04")} {
 		assert.Contains(t, DetailsView(m, 160), part)
 	}
-	assert.Contains(t, TableView(m, 160, 24), "3  Exact name  2/8  63  4")
+	assert.Contains(t, TableView(m, 160, 24), epicTableLine("3", "Exact name", "2/8", "63%", "4", "inactive"))
 	assert.Contains(t, TableView(Model{}, 80, 24), "No epics")
 	assert.Contains(t, TableView(Model{Loading: true}, 80, 24), "loading")
 	assert.Contains(t, DetailsView(Model{Loading: true}, 80), "Loading")
@@ -151,7 +151,11 @@ func TestP303EpicMutationsExactlyOnceFailureRecoveryAndNoOp(t *testing.T) {
 				assert.Equal(t, 1, api.reads)
 				assert.Empty(t, m.Draft)
 				if op == Delete {
-					assert.Equal(t, 10, m.Rows[0].ID)
+					if mode == "refresh failure" {
+						assert.Equal(t, 3, m.Rows[0].ID)
+					} else {
+						assert.Equal(t, 10, m.Rows[0].ID)
+					}
 					assert.Zero(t, m.Detail.ID)
 				} else {
 					assert.Equal(t, raw, m.Detail.Name)
@@ -247,3 +251,5 @@ func TestP304EpicIdentityCancellationAndHiddenRows(t *testing.T) {
 	assert.True(t, ok)
 	require.ErrorIs(t, m.Err, context.Canceled)
 }
+
+func (f *epicAPI) UpdateEpicActive(context.Context, int, bool) error { f.writes++; return f.writeErr }

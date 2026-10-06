@@ -136,7 +136,7 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 	if m.dropdown.kind == dropdownConfirm {
 		selected := m.selectedOption()
 		if selected.Label == "" {
-			m.err = "confirmation requires /yes or /no"
+			m.err = "confirmation requires yes or no"
 			return m, nil
 		}
 		switch selected.ID {
@@ -158,9 +158,9 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 				m.state = ProjectDetailsState
 				return m.beginProject(projects.Delete, m.projectList.Detail.ID, "")
 			}
-			if previous == ChangeDetailsState && target == ChangesListState {
-				m.state = ChangeDetailsState
-				m.status = "deleting change"
+			if (previous == ChangeDetailsState || previous == ChangesListState) && target == ChangesListState {
+				m.state = previous
+				m.status = "deactivating change"
 				id, _ := changeNumericID(m.changeList.Detail)
 				return m.beginChange(changes.Delete, id, changes.Input{})
 			}
@@ -172,7 +172,7 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 		case "/no", "/cancel":
 			return m.cancelDropdown()
 		default:
-			m.err = "confirmation requires /yes or /no"
+			m.err = "confirmation requires yes or no"
 			return m, nil
 		}
 	}
@@ -280,26 +280,13 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 
 func (m *Model) openConfirmation(state, previous, onYes State) {
 	m.openDropdown(state, dropdownConfirm, previous, onYes, "Are you sure?", []dto.Option{
-		{ID: "/yes", Label: "/yes"},
-		{ID: "/no", Label: "/no"},
+		{ID: "/yes", Label: "yes"},
+		{ID: "/no", Label: "no"},
 	}, false)
 }
 
 func (m Model) dropdownView(width int) string {
 	width = ui.NormalizeWidth(width)
-	if m.dropdown.kind == dropdownConfirm && m.deleteDocumentID > 0 {
-		lines := []string{lipgloss.NewStyle().Foreground(styles.AccentPurple).Render("Are you sure?")}
-		for i, option := range m.filteredOptions() {
-			line := "  " + option.Label
-			if i == m.dropdown.highlighted {
-				line = styles.Default.MenuSelected.Width(width).Render(line)
-			} else {
-				line = styles.Default.MenuItem.Render(line)
-			}
-			lines = append(lines, line)
-		}
-		return strings.Join(lines, "\n")
-	}
 	prompt := m.dropdown.filter
 	if m.dropdown.kind == dropdownCommand {
 		prompt = "/" + m.dropdown.filter
@@ -362,7 +349,7 @@ func (m Model) dropdownView(width int) string {
 
 func (m Model) dropdownLine(option dto.Option, highlighted bool) string {
 	label := option.Label
-	if m.dropdown.kind == dropdownCommand {
+	if m.dropdown.kind == dropdownCommand || m.dropdown.kind == dropdownConfirm {
 		return "    " + strings.TrimPrefix(label, "/")
 	}
 	if m.dropdown.source == selectorEpics && option.ID != "@none" && option.ID != "@clear" && option.ID != "" {

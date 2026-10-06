@@ -422,17 +422,25 @@ func detailTableRowLines(row DetailRow, labelWidth int, textWidth int, selected 
 func detailStyledValue(row DetailRow, value string, style lipgloss.Style, selected bool) string {
 	checkStyle := lipgloss.NewStyle().Foreground(styles.AccentGreen)
 	stampStyle := lipgloss.NewStyle().Foreground(styles.AccentCyan)
+	agentStyle := lipgloss.NewStyle().Foreground(styles.AccentBlue)
 	if row.DocumentType != "" && strings.HasPrefix(row.Timestamp, time.Now().Local().Format("2006-01-02")+" ") {
 		stampStyle = stampStyle.Foreground(styles.AccentPurple)
 	}
 	if selected {
 		checkStyle = checkStyle.Background(styles.MutedPurple)
 		stampStyle = stampStyle.Background(styles.MutedPurple)
+		agentStyle = agentStyle.Background(styles.MutedPurple)
 	}
 	prefix := ""
 	if row.Timestamp != "" {
 		if before, after, found := strings.Cut(value, row.Timestamp); found {
 			prefix = style.Render(before) + stampStyle.Render(row.Timestamp)
+			value = after
+		}
+	}
+	if row.AgentEdit && row.DocumentType != "" && !row.Comment {
+		if before, after, found := strings.Cut(value, "agent-edit"); found {
+			prefix += style.Render(before) + agentStyle.Render("agent-edit")
 			value = after
 		}
 	}

@@ -12,4 +12,5 @@ type API interface {
 	CreateEpic(context.Context, int, string) (int, error)
 	UpdateEpic(context.Context, int, string) error
 	DeleteEpic(context.Context, int) error
+	UpdateEpicActive(context.Context, int, bool) error
 }

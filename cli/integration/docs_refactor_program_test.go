@@ -56,13 +56,18 @@ func docs031Server(t *testing.T) (*docs031Backend, *httptest.Server) {
 			cfg["change_docs"] = []string{"brief", "spec", "notes"}
 			writeProgramJSON(w, cfg)
 		case "/api/v1/change/list":
-			rows := []any{programChange(12, "Program Change")}
-			if !b.inactive {
-				rows = append(rows, programChange(20, "Activated change"))
-			}
-			writeProgramJSON(w, rows)
-		case "/api/v1/change/list-inactive":
 			require.Equal(t, float64(7), in["project_id"])
+			require.Contains(t, in, "active")
+			if in["active"] == true {
+				b.calls["active-list"]++
+				rows := []any{programChange(12, "Program Change")}
+				if !b.inactive {
+					rows = append(rows, programChange(20, "Activated change"))
+				}
+				writeProgramJSON(w, rows)
+				return
+			}
+			b.calls["inactive-list"]++
 			if b.inactiveReadFailures > 0 {
 				b.inactiveReadFailures--
 				http.Error(w, "inactive list unavailable", http.StatusServiceUnavailable)
@@ -269,16 +274,16 @@ func TestCLIProgram031InactiveChangesAndEpicSelection(t *testing.T) {
 	s.waitFor(t, "No changes")
 	b.mu.Lock()
 	activationCalls := b.calls["/api/v1/change/update-active"]
-	inactiveReads := b.calls["/api/v1/change/list-inactive"]
-	activeReadsBeforeReturn := b.calls["/api/v1/change/list"]
+	inactiveReads := b.calls["inactive-list"]
+	activeReadsBeforeReturn := b.calls["active-list"]
 	b.mu.Unlock()
 	require.Equal(t, 1, activationCalls)
 	require.Equal(t, 4, inactiveReads)
 	require.Equal(t, 1, activeReadsBeforeReturn)
-	s.navigate(t, "\x03", "Rows 1-2 of 2")
+	s.navigate(t, "/inactive-filter\r", "Rows 1-2 of 2")
 	s.waitFor(t, "Activated change")
 	b.mu.Lock()
-	activeReads := b.calls["/api/v1/change/list"]
+	activeReads := b.calls["active-list"]
 	b.mu.Unlock()
 	require.Equal(t, 2, activeReads)
 	s.navigate(t, "\r", "loaded change")
@@ -292,7 +297,7 @@ func TestCLIProgram031InactiveChangesAndEpicSelection(t *testing.T) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	require.Equal(t, 1, b.calls["/api/v1/change/update-active"])
-	require.GreaterOrEqual(t, b.calls["/api/v1/change/list-inactive"], 2)
+	require.GreaterOrEqual(t, b.calls["inactive-list"], 2)
 }
 
 func TestCLIProgram031BatFailureKeepsHistoryAndReturns(t *testing.T) {

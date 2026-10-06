@@ -20,6 +20,9 @@ import (
 
 // View renders the root application shell and active screen.
 func (m Model) View() string {
+	if m.dropdown.kind == dropdownConfirm && m.dropdown.previous != "" {
+		m.state = m.dropdown.previous
+	}
 	lines, epicIndex := m.viewLines()
 	width := terminalWidth(m.width)
 	if epicIndex != 0 {
@@ -241,6 +244,11 @@ func (m Model) changeFiltersLine(table string) string {
 		"   " + changeFilterLabel("/types-filter ") + changeFilterValue(m.changesFilters.typ.Label) +
 		"   " + changeFilterLabel("/epic-filter ") + changeFilterValue(m.changesFilters.epic.Label) +
 		"   " + changeFilterLabel("/find-filter ") + changeFilterValue(m.changesFilters.find)
+	inactiveLabel := changeFilterLabel("/inactive-filter")
+	if m.changesFilters.inactive {
+		inactiveLabel = lipgloss.NewStyle().Foreground(styles.AccentRed).Render("/inactive-filter")
+	}
+	line += "   " + inactiveLabel
 	tableWidth := firstLineWidth(table)
 	padding := tableWidth - lipgloss.Width(line)
 	if padding < 0 {
@@ -290,7 +298,7 @@ func (m Model) helpText() string {
 		if m.changeList.Inactive {
 			return "Inactive changes | Space activate | /retry reload | Esc/Ctrl+C return | Up/Down select | Type to filter"
 		}
-		return "Ctrl+H inactive changes | Type to filter changes  |  <ctrl+n> new change  |  <return> view  |  </> command"
+		return "/inactive-filter inactive changes | Delete deactivate | Type to filter changes  |  <ctrl+n> new change  |  <return> view  |  </> command"
 	case ChangeDetailsState:
 		row, ok := changes.DetailRowAtSelection(m.changeList.Detail, m.changeList.DetailSelected)
 		if ok {

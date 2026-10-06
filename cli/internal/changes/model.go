@@ -56,6 +56,7 @@ type DetailRow struct {
 	TestCaseDone bool
 	DocumentType string
 	DocumentID   int
+	AgentEdit    bool
 	Comment      bool
 	NoWrap       bool
 	Timestamp    string
@@ -264,6 +265,7 @@ func DetailRows(change dto.ChangeView) []DetailRow {
 		for _, d := range change.Documents {
 			if d.DocType == kind {
 				row.DocumentID = d.ID
+				row.AgentEdit = d.AgentEdit
 				row.Text = "[✓] " + kind
 				if !d.UpdatedAt.IsZero() {
 					row.Timestamp = d.UpdatedAt.Local().Format("2006-01-02 15:04")
@@ -527,7 +529,11 @@ func detailRowTextLines(row DetailRow, textWidth int) []string {
 	if row.NoWrap {
 		value := row.Text
 		if row.DocumentType != "" && !row.Comment {
-			value = padRightDisplay(row.Timestamp, len("2006-01-02 15:04")) + " - " + value
+			agentEdit := strings.Repeat(" ", len(" - agent-edit"))
+			if row.AgentEdit {
+				agentEdit = " - agent-edit"
+			}
+			value = padRightDisplay(row.Timestamp, len("2006-01-02 15:04")) + agentEdit + " - " + value
 		}
 		return strings.Split(value, "\n")
 	}

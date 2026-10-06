@@ -26,17 +26,28 @@ merely an unused client method.
 
 ### Changes list interaction
 
-The Changes list shows `/phase-filter`, `/types-filter`, `/epic-filter`, and
-`/find-filter` in its filter summary. These four filters persist while opening a
-change, returning to Main, reentering the list, and switching projects.
-`/clear-filters` clears all four; `@clear` in the Phase, Types, or Epic selector
-clears only that filter. A blank Find entry or canceled editor retains the
+The Changes list shows `/phase-filter`, `/types-filter`, `/epic-filter`,
+`/find-filter`, and `/inactive-filter` in its filter summary. These five filters
+persist while opening a change, returning to Main, reentering the list, and
+switching projects. `/clear-filters` clears all five and restores active-only
+changes; `@clear` in the Phase, Types, or Epic selector clears only that filter. A blank Find entry or canceled editor retains the
 saved query. Typing ordinary text in the list prompt applies an additional
 temporary word-prefix search until the prompt is cleared or the user leaves the
 list. The list restores the selected change when returning from its details
 screen. The ordinary active-list menu omits `/retry` and `/brief-new`; returning
 to Main and opening `/changes` reloads that list. The inactive list exposes
-`/retry` to reload inactive changes without repeating activation. Epic cells show
+`/retry` to reload inactive changes without repeating activation. Active lists also
+expose `/retry` after a committed deactivation whose refresh failed. `/inactive-filter`
+selects inactive-only changes and retains the other filters; toggling it again
+selects active-only changes. Its summary label is red while enabled. `/del-change`
+follows `/new-change` in the active menu and confirms deactivation; inactive menus
+replace it with `/undel-change` for restoration. Space restores inactive changes.
+Change-details `/delete` confirms deactivation. CLI change actions never permanently
+delete a change. Both list states use project-scoped `/change/list` with an explicit
+activity boolean; mutations use `/change/update-active`. Epic lists include both
+activity states, Delete uses the backend delete/deactivation fallback immediately,
+and Space toggles activity through `/epic/update-active`. Epic assignment offers
+only active epics plus the clear option. Epic cells show
 the epic name without an ID suffix. Types uses AccentPurple, while `%` and
 Complete use AccentBlue.
 

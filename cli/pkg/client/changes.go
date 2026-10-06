@@ -58,20 +58,24 @@ func (w changeWire) value(details bool) (dto.Change, error) {
 
 // ListChangeRows performs exactly one cancellable list operation.
 func (c HTTPClient) ListChangeRows(ctx context.Context, project int) ([]dto.Change, error) {
-	return c.changeRows(ctx, project, "/api/v1/change/list")
+	return c.changeRows(ctx, project, true)
 }
 
 // ListInactiveChanges reads retained inactive changes for one project.
 func (c HTTPClient) ListInactiveChanges(ctx context.Context, project int) ([]dto.Change, error) {
-	return c.changeRows(ctx, project, "/api/v1/change/list-inactive")
+	return c.changeRows(ctx, project, false)
 }
 
-func (c HTTPClient) changeRows(ctx context.Context, project int, path string) ([]dto.Change, error) {
+func (c HTTPClient) changeRows(ctx context.Context, project int, active bool) ([]dto.Change, error) {
+	const path = "/api/v1/change/list"
 	if project <= 0 {
 		return nil, errors.New("select a valid project first")
 	}
 	var wire []changeWire
-	if err := c.projectRequest(ctx, path, epicProjectID{project}, 200, &wire); err != nil {
+	if err := c.projectRequest(ctx, path, struct {
+		ProjectID int  `json:"project_id"`
+		Active    bool `json:"active"`
+	}{project, active}, 200, &wire); err != nil {
 		return nil, err
 	}
 	if wire == nil {
@@ -86,6 +90,7 @@ func (c HTTPClient) changeRows(ctx context.Context, project int, path string) ([
 		if err != nil {
 			return nil, contractStatus(path, err)
 		}
+		v.Active = active
 		rows = append(rows, v)
 	}
 	return rows, nil
@@ -220,12 +225,4 @@ func (c HTTPClient) UpdateChangePRUrl(ctx context.Context, id int, value string)
 		ID    int    `json:"id"`
 		Value string `json:"pr_url"`
 	}{id, value}, 204, nil)
-}
-
-// DeleteChange performs exactly one delete.
-func (c HTTPClient) DeleteChange(ctx context.Context, id int) error {
-	if id <= 0 {
-		return errors.New("change ID must be a valid positive number")
-	}
-	return c.projectRequest(ctx, "/api/v1/change/delete", projectID{id}, 204, nil)
 }

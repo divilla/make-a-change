@@ -103,7 +103,7 @@ func (m Model) Begin(ctx context.Context, api API, docs Documents, op Operation,
 		m.Status = "saving"
 	}
 	if op == Delete {
-		m.Status = "deleting change"
+		m.Status = "deactivating change"
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	m.cancel = cancel
@@ -111,6 +111,7 @@ func (m Model) Begin(ctx context.Context, api API, docs Documents, op Operation,
 	prior := m.Detail
 	prior.Documents = append([]dto.Document(nil), m.Detail.Documents...)
 	priorRows := append([]dto.ChangeView(nil), m.Rows...)
+	inactive := m.Inactive
 	readList := readRows
 	if m.Inactive {
 		readList = readInactiveRows
@@ -133,7 +134,7 @@ func (m Model) Begin(ctx context.Context, api API, docs Documents, op Operation,
 			}
 			return r
 		case Delete:
-			r.Err = api.DeleteChange(ctx, id)
+			r.Err = api.UpdateChangeActive(ctx, id, false)
 		case Title:
 			r.Err = api.UpdateChangeTitle(ctx, id, in.Value)
 			r.Detail.Title = in.Value
@@ -211,7 +212,10 @@ func (m Model) Begin(ctx context.Context, api API, docs Documents, op Operation,
 			r.Rows, r.RefreshErr = readList(ctx, api, project)
 			if r.RefreshErr != nil {
 				for _, v := range priorRows {
-					if v.ID != strconv.Itoa(id) {
+					if v.ID != strconv.Itoa(id) || inactive {
+						if v.ID == strconv.Itoa(id) {
+							v.Active = false
+						}
 						r.Rows = append(r.Rows, v)
 					}
 				}
@@ -229,7 +233,7 @@ func (m Model) Begin(ctx context.Context, api API, docs Documents, op Operation,
 
 func completedStep(op Operation, id int, in Input) string {
 	if op == Delete {
-		return fmt.Sprintf("deleted change #%d", id)
+		return fmt.Sprintf("deactivated change #%d", id)
 	}
 	value := in.Value
 	switch op {
@@ -339,7 +343,7 @@ func (m Model) Invalidate() Model {
 // Scope clears state from the previous project.
 func (m Model) Scope(project int) Model {
 	m = m.Invalidate()
-	return Model{ProjectID: project, Generation: m.Generation}
+	return Model{ProjectID: project, Generation: m.Generation, Inactive: m.Inactive}
 }
 
 // Apply rejects stale project/entity/operation/revision results.
@@ -403,6 +407,7 @@ func readRows(ctx context.Context, api API, project int) ([]dto.ChangeView, erro
 	}
 	out := make([]dto.ChangeView, 0, len(rows))
 	for _, r := range rows {
+		r.Active = true
 		out = append(out, Present(r))
 	}
 	return out, nil
@@ -490,6 +495,7 @@ func readInactiveRows(ctx context.Context, api API, project int) ([]dto.ChangeVi
 		if r.ProjectID != project {
 			return nil, errors.New("inactive change belongs to another project")
 		}
+		r.Active = false
 		out = append(out, Present(r))
 	}
 	return out, nil

@@ -18,7 +18,6 @@ type API interface {
 	UpdateChangeActive(context.Context, int, bool) error
 	UpdateChangeEpic(context.Context, int, *int) error
 	UpdateChangeAfterChange(context.Context, int, *int) error
-	DeleteChange(context.Context, int) error
 	ListTestCases(context.Context, int) ([]dto.TestCase, error)
 }
 

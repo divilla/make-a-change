@@ -41,7 +41,7 @@ func Test031ConfiguredDocumentSlotsAndCheckColor(t *testing.T) {
 			case "spec":
 				require.Equal(t, "[✓] spec", r.Text)
 				require.Equal(t, updated.Local().Format("2006-01-02 15:04"), r.Timestamp)
-				require.Equal(t, []string{r.Timestamp + " - [✓] spec"}, detailRowTextLines(r, 80))
+				require.Equal(t, []string{r.Timestamp + strings.Repeat(" ", 13) + " - [✓] spec"}, detailRowTextLines(r, 80))
 				for _, selected := range []bool{false, true} {
 					stampStyle := lipgloss.NewStyle().Foreground(styles.AccentCyan)
 					checkStyle := lipgloss.NewStyle().Foreground(styles.AccentGreen)
@@ -52,12 +52,12 @@ func Test031ConfiguredDocumentSlotsAndCheckColor(t *testing.T) {
 						bodyStyle = bodyStyle.Background(styles.MutedPurple)
 					}
 					view := strings.Join(detailTableRowLines(r, 12, 80, selected, nil), "\n")
-					require.Contains(t, view, stampStyle.Render(r.Timestamp)+bodyStyle.Render(" - [")+checkStyle.Render("✓")+bodyStyle.Render(padRightDisplay("] spec", 80-lipgloss.Width(r.Timestamp)-5)))
+					require.Contains(t, view, stampStyle.Render(r.Timestamp)+bodyStyle.Render(strings.Repeat(" ", 13)+" - [")+checkStyle.Render("✓")+bodyStyle.Render(padRightDisplay("] spec", 80-lipgloss.Width(r.Timestamp)-18)))
 				}
 			case "notes", "pr":
 				require.Equal(t, "[ ] "+r.DocumentType, r.Text)
 				require.Zero(t, r.DocumentID)
-				require.Equal(t, []string{strings.Repeat(" ", 16) + " - [ ] " + r.DocumentType}, detailRowTextLines(r, 80))
+				require.Equal(t, []string{strings.Repeat(" ", 29) + " - [ ] " + r.DocumentType}, detailRowTextLines(r, 80))
 			}
 		}
 	}
@@ -82,12 +82,49 @@ func TestDocCheckboxesAlignWithMissingTimestamps(t *testing.T) {
 			}
 			count++
 			line := stripANSI(strings.Join(detailTableRowLines(row, 12, 80, selected, nil), "\n"))
-			require.Equal(t, 34, lipgloss.Width(line[:strings.Index(line, "[")])) // label/separator + timestamp/separator
+			require.Equal(t, 47, lipgloss.Width(line[:strings.Index(line, "[")])) // label/separator + timestamp/agent-edit/separator
 			if row.Timestamp == "" {
-				require.Contains(t, line, strings.Repeat(" ", 16)+" - "+row.Text)
+				require.Contains(t, line, strings.Repeat(" ", 29)+" - "+row.Text)
 			}
 		}
 		require.Equal(t, 3, count)
+	}
+}
+
+func TestDocumentAgentEditLabelAndAlignment(t *testing.T) {
+	profile := lipgloss.ColorProfile()
+	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	when := time.Date(2026, 10, 6, 4, 1, 0, 0, time.UTC)
+	change := dto.ChangeView{ID: "12", DocumentTypes: []string{"brief", "spec", "pr", "review"}, Documents: []dto.Document{
+		{ID: 1, DocType: "brief", UpdatedAt: when, AgentEdit: true},
+		{ID: 2, DocType: "spec", UpdatedAt: when},
+		{ID: 3, DocType: "pr", UpdatedAt: when},
+	}}
+	for _, selected := range []bool{false, true} {
+		agentStyle := lipgloss.NewStyle().Foreground(styles.AccentBlue)
+		if selected {
+			agentStyle = agentStyle.Background(styles.MutedPurple)
+		}
+		for _, row := range DetailRows(change) {
+			if row.DocumentType == "" || row.Comment {
+				continue
+			}
+			view := strings.Join(detailTableRowLines(row, 12, 80, selected, nil), "\n")
+			plain := stripANSI(view)
+			require.Equal(t, 47, lipgloss.Width(plain[:strings.Index(plain, "[")]))
+			if row.DocumentType == "brief" {
+				require.Contains(t, plain, when.Local().Format("2006-01-02 15:04")+" - agent-edit - [✓] brief")
+				require.Contains(t, view, agentStyle.Render("agent-edit"))
+			} else {
+				require.NotContains(t, plain, "agent-edit")
+			}
+			for _, width := range []int{20, 30, 40} {
+				narrow := detailTableRowLines(row, 12, width, selected, nil)
+				require.Len(t, narrow, 1)
+				require.Equal(t, 15+width, lipgloss.Width(narrow[0]))
+			}
+		}
 	}
 }
 

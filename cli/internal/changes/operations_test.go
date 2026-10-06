@@ -176,9 +176,13 @@ func TestP403EachChangeActionAndValidation(t *testing.T) {
 			m = finish(t, m, cmd)
 			require.NoError(t, m.Err)
 			require.False(t, m.Busy)
-			require.Contains(t, a.calls, string(tt.op))
+			opName := string(tt.op)
+			if tt.op == Delete {
+				opName = "active"
+			}
+			require.Contains(t, a.calls, opName)
 			if tt.op != List && tt.op != Details {
-				require.Contains(t, m.Status, map[bool]string{true: "deleted", false: "saved"}[tt.op == Delete])
+				require.Contains(t, m.Status, map[bool]string{true: "deactivated", false: "saved"}[tt.op == Delete])
 			}
 		})
 	}
@@ -219,7 +223,7 @@ func TestP405CommittedStepsSurviveLaterFailureAndRetryOnlyReads(t *testing.T) {
 		step string
 	}{
 		{Title, Input{Value: "/save"}, "details", "saved title"},
-		{Delete, Input{}, "list", "deleted change #12"},
+		{Delete, Input{}, "list", "deactivated change #12"},
 		{Document, Input{DocumentType: "brief", Value: "new\tbytes"}, "documents", "saved brief document #91"},
 		{Document, Input{DocumentType: "brief", Value: "Types: feature\nnew\tbytes"}, "types", "saved brief document #91"},
 	} {
@@ -496,17 +500,21 @@ func Test031DeleteRefreshPreservesListModeAndReadOnlyRecovery(t *testing.T) {
 				}
 				m, cmd := m.Begin(context.Background(), api, base, Delete, 7, 12, Input{}, changeCatalog())
 				m = finish(t, m, cmd)
-				require.Equal(t, []string{"delete", endpoint}, base.calls)
+				require.Equal(t, []string{"active", endpoint}, base.calls)
 				require.Equal(t, inactive, m.Inactive)
-				require.Contains(t, m.Status, "deleted change #12")
+				require.Contains(t, m.Status, "deactivated change #12")
 				if refreshFails {
 					require.ErrorContains(t, m.Err, endpoint+" failed")
 					require.Contains(t, m.Status, "/retry reads only")
-					require.Equal(t, []dto.ChangeView{{ID: "13", Active: false}}, m.Rows)
+					expected := []dto.ChangeView{{ID: "13", Active: false}}
+					if inactive {
+						expected = append([]dto.ChangeView{{ID: "12", Active: false}}, expected...)
+					}
+					require.Equal(t, expected, m.Rows)
 					base.fail = ""
 					m, cmd = m.Begin(context.Background(), api, base, List, 7, 0, Input{}, changeCatalog())
 					m = finish(t, m, cmd)
-					require.Equal(t, []string{"delete", endpoint, endpoint}, base.calls)
+					require.Equal(t, []string{"active", endpoint, endpoint}, base.calls)
 				}
 				require.NoError(t, m.Err)
 				if inactive {

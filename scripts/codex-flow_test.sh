@@ -26,7 +26,7 @@ HELPER
 done
 (
 	cd -- "$repo"
-	bash scripts/codex-flow.sh
+	bash scripts/codex-flow.sh agent/specs/032-cli-brief-spec-flow.md
 )
 printf '%s\n' codex-code-spec.pl codex-review-loop.pl > "$test_root/expected"
 cmp "$test_root/expected" "$FLOW_TEST_CALLS"
@@ -36,7 +36,7 @@ cmp "$test_root/expected" "$FLOW_TEST_CALLS"
 status=0
 (
 	cd -- "$repo"
-	FLOW_TEST_CODE_EXIT=7 FLOW_TEST_REVIEW_EXIT=0 bash scripts/codex-flow.sh
+	FLOW_TEST_CODE_EXIT=7 FLOW_TEST_REVIEW_EXIT=0 bash scripts/codex-flow.sh agent/specs/032-cli-brief-spec-flow.md
 ) || status=$?
 [[ $status == 7 ]]
 printf '%s\n' codex-code-spec.pl > "$test_root/expected"
@@ -47,7 +47,7 @@ cmp "$test_root/expected" "$FLOW_TEST_CALLS"
 status=0
 (
 	cd -- "$repo"
-	FLOW_TEST_CODE_EXIT=0 FLOW_TEST_REVIEW_EXIT=9 bash scripts/codex-flow.sh
+	FLOW_TEST_CODE_EXIT=0 FLOW_TEST_REVIEW_EXIT=9 bash scripts/codex-flow.sh agent/specs/032-cli-brief-spec-flow.md
 ) || status=$?
 [[ $status == 9 ]]
 printf '%s\n' codex-code-spec.pl codex-review-loop.pl > "$test_root/expected"

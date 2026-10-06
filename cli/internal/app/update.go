@@ -377,9 +377,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	key := msg.String()
-	if m.state == ChangesListState && m.changeList.Inactive && (key == "esc" || key == "ctrl+c") && m.input.Value() == "" {
-		return m.leaveInactiveChanges()
-	}
 	if m.isDropdownState() {
 		m.err = ""
 		return m.handleDropdownKey(key, msg)
@@ -472,13 +469,11 @@ func (m Model) handleListNavigationKey(key string, msg tea.KeyMsg) (Model, tea.C
 			next, cmd := m.openInactiveChanges()
 			return next.(Model), cmd, true
 		case (key == " " || key == "space") && m.changeList.Inactive && m.input.Value() == "":
-			rows := changes.FilteredRows(m.changeList.Rows, m.changeFilters())
-			if m.changeList.Selected >= 0 && m.changeList.Selected < len(rows) {
-				id, _ := strconv.Atoi(rows[m.changeList.Selected].ID)
-				next, cmd := m.beginChange(changes.Reactivate, id, changes.Input{})
-				return next.(Model), cmd, true
-			}
-			return m, nil, true
+			next, cmd := m.selectedChangeActivity(true)
+			return next.(Model), cmd, true
+		case (key == "delete" || key == "del") && m.input.Value() == "":
+			next, cmd := m.selectedChangeActivity(false)
+			return next.(Model), cmd, true
 		case (key == "enter" || msg.Type == tea.KeyCtrlJ) && strings.HasPrefix(strings.TrimSpace(m.input.Value()), "/"):
 			return m, nil, false
 		case key == "up":
@@ -552,6 +547,19 @@ func (m Model) handleListNavigationKey(key string, msg tea.KeyMsg) (Model, tea.C
 		}
 	case EpicsListState:
 		switch {
+		case (key == "delete" || key == "del" || key == " " || key == "space") && m.input.Value() == "":
+			if m.epicList.Loading || len(m.epicList.Rows) == 0 {
+				m.err = epics.NoSelectableError
+				return m, nil, true
+			}
+			m.epicList = m.epicList.MoveSelection(0)
+			row := m.epicList.Rows[m.epicList.Selected]
+			op := epics.Delete
+			if key == " " || key == "space" {
+				op = epics.ToggleActive
+			}
+			next, cmd := m.beginEpic(op, row.ID, "")
+			return next.(Model), cmd, true
 		case key == "up":
 			m.epicList = m.epicList.MoveSelection(-1)
 			return m, nil, true
@@ -1002,15 +1010,22 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		m.state = FindInputState
 		m = m.setPromptValue(m.changesFilters.find)
 		m.input.Placeholder = "Find changes"
+	case "/inactive-filter":
+		return m.toggleInactiveChanges()
+	case "/del-change":
+		return m.selectedChangeActivity(false)
+	case "/undel-change":
+		return m.selectedChangeActivity(true)
 	case "/clear-filters":
 		m.rememberSelectedChange()
+		inactive := m.changesFilters.inactive
 		m.changesFilters = changesFilters{}
+		if inactive {
+			return m.beginChange(changes.List, 0, changes.Input{})
+		}
 		m.restoreSelectedChange()
 		m.status = "filters cleared"
 	case "/return":
-		if source == ChangesListState && m.changeList.Inactive {
-			return m.leaveInactiveChanges()
-		}
 		return m.arrive(navigation.ReturnTargets()[source], "return")
 	case "/new-change", "/new-testcase", "/new-test-case", "/new-epic", "/new-project":
 		if source == ChangeDetailsState && (command == "/new-testcase" || command == "/new-test-case") && !m.changeDetailLoaded {

@@ -44,6 +44,9 @@ var commandDescriptions = map[string]string{
 	"/backend-configs": "Manage backend configurations",
 	"/brief":           "Edit the brief",
 	"/cancel":          "Discard and return",
+	"/del-change":      "Deactivate selected change after confirmation",
+	"/undel-change":    "Restore selected inactive change",
+	"/inactive-filter": "Toggle persistent inactive changes filter",
 	"/changes":         "Browse changes",
 	"/clear-filters":   "Clear all change filters",
 	"/config":          "Show the current configuration",
@@ -108,8 +111,17 @@ func commandAllowed(state State, command string) bool {
 
 func (m Model) commandOptions(state State) []dto.Option {
 	options := commandOptions(state)
-	if state == ChangesListState && m.changeList.Inactive {
-		options = append(options, dto.Option{ID: "/retry", Label: "/retry"})
+	if state == ChangesListState {
+		if m.changesFilters.inactive {
+			for i := range options {
+				if options[i].ID == "/del-change" {
+					options[i] = dto.Option{ID: "/undel-change", Label: "/undel-change"}
+				}
+			}
+		}
+		if m.changesFilters.inactive || m.changeList.Outcome != "" {
+			options = append(options, dto.Option{ID: "/retry", Label: "/retry"})
+		}
 	}
 	return options
 }

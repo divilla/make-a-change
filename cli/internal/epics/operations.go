@@ -4,6 +4,7 @@ import (
 	"cli/internal/dto"
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -15,11 +16,12 @@ type Operation string
 
 // Supported epic operations. Retries use only List or Details.
 const (
-	List    Operation = "list"
-	Details Operation = "details"
-	Create  Operation = "create"
-	Edit    Operation = "edit"
-	Delete  Operation = "delete"
+	List         Operation = "list"
+	Details      Operation = "details"
+	Create       Operation = "create"
+	Edit         Operation = "edit"
+	Delete       Operation = "delete"
+	ToggleActive Operation = "toggle-active"
 )
 
 // Result binds work to its generation, entity and operation.
@@ -64,6 +66,11 @@ func (m Model) Begin(ctx context.Context, api API, op Operation, projectID, id i
 		m.Status = "validation failed"
 		return m, nil
 	}
+	if op == ToggleActive && (m.Loading || !slices.ContainsFunc(m.Rows, func(e dto.Epic) bool { return e.ID == id && e.ProjectID == projectID })) {
+		m.Err = errors.New("load the selected epic before toggling activity")
+		m.Status = "validation failed"
+		return m, nil
+	}
 	if op == Edit && m.DetailLoaded && name == m.Detail.Name {
 		m.Err = nil
 		m.Status = "unchanged"
@@ -86,7 +93,7 @@ func (m Model) Begin(ctx context.Context, api API, op Operation, projectID, id i
 		m.Selected = 0
 		m.Status = "loading epics"
 	}
-	if op == Create || op == Edit || op == Delete {
+	if op == Create || op == Edit || op == Delete || op == ToggleActive {
 		m.Outcome = ""
 		m.Busy = true
 		m.Status = "saving"
@@ -131,15 +138,29 @@ func (m Model) Begin(ctx context.Context, api API, op Operation, projectID, id i
 					r.Epic = p
 				}
 			}
-		case Delete:
-			r.Err = api.DeleteEpic(ctx, id)
+		case Delete, ToggleActive:
+			if op == Delete {
+				r.Err = api.DeleteEpic(ctx, id)
+			} else {
+				for _, e := range priorRows {
+					if e.ID == id {
+						r.Epic = e
+						r.Epic.Active = !e.Active
+						break
+					}
+				}
+				r.Err = api.UpdateEpicActive(ctx, id, r.Epic.Active)
+			}
 			if r.Err == nil {
 				r.Committed = true
 				r.Rows, r.RefreshErr = api.ListEpics(ctx, projectID)
 				if r.RefreshErr != nil {
-					for _, e := range priorRows {
-						if e.ID != id {
-							r.Rows = append(r.Rows, e)
+					r.Rows = priorRows
+					if op == ToggleActive {
+						for i := range r.Rows {
+							if r.Rows[i].ID == id {
+								r.Rows[i].Active = r.Epic.Active
+							}
 						}
 					}
 				}
@@ -176,6 +197,9 @@ func (m Model) Apply(r Result) (Model, bool) {
 		if r.Operation == Create || r.Operation == Edit {
 			m.Status = "save failed"
 		}
+		if r.Operation == ToggleActive {
+			m.Status = "save failed"
+		}
 		if r.Operation == Delete {
 			m.Status = "delete failed"
 		}
@@ -203,17 +227,26 @@ func (m Model) Apply(r Result) (Model, bool) {
 		m.DetailLoaded = r.RefreshErr == nil
 		m.Draft = ""
 		m.Status = "saved epic"
-	case Delete:
+	case Delete, ToggleActive:
 		m.Detail = dto.Epic{}
 		m.DetailLoaded = false
 		m.Rows = r.Rows
 		m.Selected = 0
 		m.Status = "deleted epic"
+		if r.Operation == ToggleActive {
+			m.Status = "epic activity saved"
+		}
 		if r.RefreshErr != nil {
 			m.Status = "epic delete committed"
+			if r.Operation == ToggleActive {
+				m.Status = "epic activity saved"
+			}
 		}
-		for _, e := range r.Rows {
-			if r.RefreshErr == nil && e.ID == r.ID {
+		for i, e := range r.Rows {
+			if r.Operation == ToggleActive && e.ID == r.ID {
+				m.Selected = i
+			}
+			if r.Operation == Delete && r.RefreshErr == nil && e.ID == r.ID {
 				m.Status = "epic delete committed; record retained"
 				if !e.Active {
 					m.Status = "epic deactivated"
@@ -225,7 +258,7 @@ func (m Model) Apply(r Result) (Model, bool) {
 	if r.Committed && r.RefreshErr != nil {
 		m.Outcome = m.Status
 		m.refreshOp, m.refreshID = Details, r.ID
-		if r.Operation == Delete {
+		if r.Operation == Delete || r.Operation == ToggleActive {
 			m.refreshOp, m.refreshID = List, 0
 		}
 	}

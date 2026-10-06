@@ -112,3 +112,14 @@ func (c HTTPClient) DeleteEpic(ctx context.Context, id int) error {
 	}
 	return c.projectRequest(ctx, "/api/v1/epic/delete", projectID{id}, 204, nil)
 }
+
+// UpdateEpicActive sends an explicit activity state and accepts an empty 204.
+func (c HTTPClient) UpdateEpicActive(ctx context.Context, id int, active bool) error {
+	if id <= 0 {
+		return errors.New("epic ID must be a valid positive number")
+	}
+	return c.projectRequest(ctx, "/api/v1/epic/update-active", struct {
+		ID     int  `json:"id"`
+		Active bool `json:"active"`
+	}{id, active}, 204, nil)
+}

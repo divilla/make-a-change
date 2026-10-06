@@ -24,7 +24,7 @@ func TestP302EpicViewportKeepsSelectionVisible(t *testing.T) {
 			assert.LessOrEqual(t, len(strings.Split(view, "\n")), height)
 			assert.Contains(t, view, m.Rows[selected].Name)
 			if height > 1 {
-				assert.Contains(t, view, "ID   Name")
+				assert.Contains(t, view, "ID Name")
 			}
 		}
 	}

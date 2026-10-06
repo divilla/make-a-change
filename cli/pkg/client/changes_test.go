@@ -26,7 +26,7 @@ func TestP401AllChangeOperationsExactTypedPayloadsAndOneRequest(t *testing.T) {
 		status int
 		call   func(HTTPClient) error
 	}{
-		{"list", `{"project_id":7}`, 200, func(c HTTPClient) error {
+		{"list", `{"project_id":7,"active":true}`, 200, func(c HTTPClient) error {
 			rows, e := c.ListChangeRows(ctx, 7)
 			if e == nil {
 				require.Len(t, rows, 1)
@@ -64,7 +64,6 @@ func TestP401AllChangeOperationsExactTypedPayloadsAndOneRequest(t *testing.T) {
 		{"update-after-change", `{"id":12,"after_change_id":3}`, 204, func(c HTTPClient) error { return c.UpdateChangeAfterChange(ctx, 12, &association) }},
 		{"update-after-change", `{"id":12,"after_change_id":null}`, 204, func(c HTTPClient) error { return c.UpdateChangeAfterChange(ctx, 12, nil) }},
 		{"update-pr-url", `{"id":12,"pr_url":"https://example.test/1"}`, 204, func(c HTTPClient) error { return c.UpdateChangePRUrl(ctx, 12, "https://example.test/1") }},
-		{"delete", `{"id":12}`, 204, func(c HTTPClient) error { return c.DeleteChange(ctx, 12) }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name+tt.input, func(t *testing.T) {
@@ -210,7 +209,7 @@ func TestP401InvalidIDsNeverRequest(t *testing.T) {
 	require.Error(t, e)
 	_, e = c.CreateChange(ctx, dto.ChangeCreateInput{})
 	require.Error(t, e)
-	for _, e := range []error{c.UpdateChangeTitle(ctx, 0, "a"), c.UpdateChangePhase(ctx, 0, "a"), c.UpdateChangeTypes(ctx, 0, nil), c.UpdateChangeActive(ctx, 0, false), c.UpdateChangeEpic(ctx, 0, nil), c.UpdateChangeAfterChange(ctx, 0, nil), c.UpdateChangePRUrl(ctx, 0, ""), c.DeleteChange(ctx, 0), c.UpdateChangeEpic(ctx, 1, &negative), c.UpdateChangeAfterChange(ctx, 1, &negative)} {
+	for _, e := range []error{c.UpdateChangeTitle(ctx, 0, "a"), c.UpdateChangePhase(ctx, 0, "a"), c.UpdateChangeTypes(ctx, 0, nil), c.UpdateChangeActive(ctx, 0, false), c.UpdateChangeEpic(ctx, 0, nil), c.UpdateChangeAfterChange(ctx, 0, nil), c.UpdateChangePRUrl(ctx, 0, ""), c.UpdateChangeEpic(ctx, 1, &negative), c.UpdateChangeAfterChange(ctx, 1, &negative)} {
 		require.Error(t, e)
 		var h *HTTPError
 		require.False(t, errors.As(e, &h))

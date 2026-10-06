@@ -3501,3 +3501,152 @@ checkpoint/log edits do not change tested production or test source.
 
 Validation used fake HTTP servers and owned local processes only. No live data
 was changed and no Git publication was performed.
+
+## 034 — Epic activity and persistent inactive changes (2026-10-06)
+
+Epic browsing retains active and inactive server records and uses the aligned
+Changes-style bordered table: ID 4, Name 30, DoneTC 6, Compl 5, Chngs 5,
+Active 8, with Unicode display-width clipping and bounded height. Activity sets
+row foreground even when selected; selection retains its purple background.
+Delete on the list immediately uses backend deletion/deactivation fallback;
+Space toggles explicit epic activity. Active-only epic assignment and its clear
+option remain covered.
+
+Changes default to active-only and use explicit activity on the current scoped
+list endpoint. `/inactive-filter` is the fifth persistent filter, with menu
+placement, red/gray summary, and retention across details, Main and project
+selection. Clear-filters resets every saved filter and activity. Delete and
+`/del-change` confirm deactivation at the bottom of the existing screen;
+details `/delete` uses the same confirmation. Space and `/undel-change` restore
+inactive rows. The permanent change-delete client method is removed. Rejected
+writes retain the prior state, and committed refresh failures expose a read-only
+retry, including active deactivation and inactive restoration. Epic deletion
+never infers disappearance from change_count when its refresh fails.
+
+| Command | Exit | Evidence |
+| --- | --- | --- |
+| `make -C cli format` (during implementation and final) | 0 | `/tmp/034-format.log`, `/tmp/034-format-final.log`; intended formatting inspected. |
+| `go test -count=1 ./internal/epics ./internal/changes ./internal/app ./pkg/client` (CLI cwd) | 1, 1, then 0 | `/tmp/034-targeted.log`, `/tmp/034-targeted2.log`, `/tmp/034-targeted3.log`; old permanent-delete/retired-list/viewport assertions updated to the supplied contract. |
+| Focused new app/epic/client unit suites (CLI cwd) | 1, 1, then 0 | `/tmp/034-new-unit.log`, `/tmp/034-new-unit2.log`, `/tmp/034-new-unit3.log`; narrow-width clipping bug and test-local filter-state shadowing repaired. |
+| `go test -count=1 ./internal/app ./internal/changes ./internal/epics ./pkg/client` (CLI cwd, final) | 0 | `/tmp/034-targeted-final.log`. |
+| `go test -count=1 -timeout=3m ./integration -run 'TestCLIProgram(ChangeCRUD\|EpicCRUD\|031Inactive)'` (CLI cwd) | 0 | `/tmp/034-program-targeted.log`; existing complete-program scenarios adapted to the current activity contract. |
+| `go test -count=1 -timeout=90s ./integration -run '^TestCLIProgram034EpicAndChangeActivity$'` (CLI cwd) | 1, then 0 | `/tmp/034-new-program.log`, `/tmp/034-new-program2.log`; first run exposed an incorrect expected mutation count, corrected to four. |
+| `make -C cli check` (initial) | 2 | `/tmp/034-check.log`; one new test lint correction and the manifest's exact expected scenario set required updating. |
+| `make -C cli check` (final) | 0 | `/tmp/034-check-final.log`; formatting, lint, vet, race, architecture and tooling pass. |
+| `make -C cli coverage` (initial / final) | 0 / 0 | `/tmp/034-coverage.log`, `/tmp/034-coverage-final.log`; final **5739/6451 (88.9630%)**, strict 80% gate passes. |
+| `make -C cli deps-audit` (initial / final) | 0 / 0 | `/tmp/034-deps-audit.log`, `/tmp/034-deps-audit-final.log`; no vulnerabilities found. |
+| `make -C cli integration-coverage` (initial / final) | 0 / 0 | `/tmp/034-integration-coverage.log`, `/tmp/034-integration-coverage-final.log`; final **5027/6451 (77.9259%)**, strict 70% gate passes, including the real PTY child. |
+| `python3 -B -m unittest discover -s cli/scripts -p documentation_test.py` and `git diff --check -- . ':(exclude)cli/implementation-log.md'` | 0 | `/tmp/034-documentation-final.log`; commands, local links, current backend route inventory, test ledger and whitespace pass. |
+
+All 36 manifest program scenarios, including the covered startup child, and the
+real PTY scenario finish without skipped scenarios, missing counters, assertion
+failures, crashes, timeouts or cleanup failures. Initial valid coverage was
+5736/6448 unit and 5026/6448 terminal; final results above include the inactive
+Delete refresh-recovery edge case. No failures remain on the final implementation.
+
+Tested revision: `4c06c413bf5cbd55e02c42854c0981aad62b4e40` plus these working-tree
+changes. Final campaign input maps match each other and every current input was
+checked before these documentation/log updates. Sorted compact input-map SHA-256:
+`9c9c15bc4df0bb252e8ace4d97cd6903d9cb45ad0d422bc9836a1d9d3c854d20`.
+Terminal child SHA-256:
+`f84889987ededa437ad3933ebe45fbc15dfba4ab5e5b02501dd2fae970a706d5`.
+Tools: Go `go1.26.8-X:nodwarf5`, golangci-lint 2.13.1, govulncheck 1.7.0.
+Independent profiles, provenance, commands/exits, scenario results, exact package
+totals and uncovered statements/functions remain in `cli/.coverage/{unit,integration}`.
+Changed packages: app **2672/3138** unit, **2433/3138** terminal; changes
+**864/991**, **758/991**; epics **268/268**, **236/268**; client **404/426**,
+**320/426**. All production packages remain in both denominators, including main
+without unit tests. Remaining aggregate gaps include shell and HTTP/process error
+branches, main (0/3 unit, 1/3 terminal), and navigation (23/38, 18/38).
+
+The contract ledger maps the specification to unit and complete-program tests.
+Final documentation-only updates are verified by the documented-link/target and
+route-ledger checks; the implementation-log block is checked separately from
+whitespace checks because its trailing blank line is required by the skill.
+Only fake HTTP servers and owned local processes were used. Backend/database
+source and data are unchanged. No Git publication or stage/production promotion
+was performed.
+
+## Shared confirmation choices — 2026-10-06
+
+All confirmations (change list/details, testcase, epic, project and document)
+reuse `openConfirmation` and the same confirmation rendering branch. Choices
+render as plain `yes` and `no`, with selection highlighting and no checkbox or
+slash prefix. Existing slash-prefixed input remains accepted. Document deletion
+retains its captured target and uses the common constructor.
+`TestAllConfirmationsDisplayPlainChoices` checks exact rows at three terminal
+widths, both highlighted choices, plain/legacy filtering and cancellation.
+The existing change deactivation regression now rejects slash-prefixed labels.
+
+Final verification, after consolidating the document constructor:
+
+| Command | Exit | Evidence |
+| --- | --- | --- |
+| `make -C cli check` | 0 | `/tmp/cli-dialog-check-final.log`; formatting, lint, vet, race, architecture and tooling pass. |
+| `make -C cli coverage` | 0 | `/tmp/cli-dialog-coverage-final.log`; **5739/6451 (88.9630%)**, 80% gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/cli-dialog-deps-audit-final.log`; no vulnerabilities found. |
+| `make -C cli integration-coverage` | 0 | `/tmp/cli-dialog-integration-coverage-final.log`; **5027/6451 (77.9259%)**, 70% gate passes, including real PTY. |
+
+No failed, blocked or skipped required scenarios. Before the constructor reuse
+follow-up, the app unit suite and all four required targets also passed.
+Tested revision: `5e1731c5fc723d7629751f12ce11fe2195116679` plus working-tree changes.
+Both final campaign input maps match; sorted compact input-map SHA-256:
+`95245cdefbbfa5e25fcf2c0bb1fdc9cdda2f60ae0fc988e52326ca31fea343c6`. Terminal child SHA-256: `d1c296a9cbb2ed99dc2932f1f68f7d984de7759aab98ab13f4d244cdae9bbaa1`.
+Independent profiles, exact package totals, uncovered functions/statements,
+commands/exits and tool versions remain under `cli/.coverage/unit` and
+`cli/.coverage/integration`. These evidence/ledger updates follow the campaigns.
+
+## Confirmation prompt and retained screen — 2026-10-06
+
+Confirmations now reuse the normal dropdown prompt frame: purple
+` Are you sure? > `, with plain indented `yes`/`no` choices underneath.
+The separate document-style rendering branch is removed. Every confirmation
+renders its originating screen while retaining its existing interaction state;
+testcase Delete keeps ChangeDetailsScreen and its viewport above the bottom
+prompt. `TestAllConfirmationsDisplayPlainChoices` now verifies the shared frame,
+purple caption and exact choices. `TestTestcaseConfirmationStaysBelowChangeDetails`
+checks Delete, retained change/testcase content, bottom placement at heights
+24/40, and cancellation without mutation. The existing PTY color assertion now
+checks the purple caption on the prompt background.
+
+| Command | Exit | Evidence |
+| --- | --- | --- |
+| `go test -count=1 ./internal/app` (CLI cwd) | 1, then 0 | Initial new assertion miscounted the wrapped footer by one row; final assertion checks bottom placement and rows relative to the prompt. One accidental root invocation exited 1 because root has no Go module; rerun in CLI passed. |
+| `make -C cli check` | 0 | `/tmp/cli-confirm-prompt-check.log` |
+| `make -C cli coverage` | 0 | `/tmp/cli-confirm-prompt-coverage.log`; **5730/6442 (88.9475%)**, strict gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/cli-confirm-prompt-deps-audit.log`; no vulnerabilities. |
+| `make -C cli integration-coverage` | 0 | `/tmp/cli-confirm-prompt-integration-coverage.log`; **5018/6442 (77.8951%)**, strict gate passes including real PTY. |
+
+No failed, skipped or blocked required scenarios remain. App package coverage:
+2663/3129 unit and 2424/3129 terminal. Independent profiles, exact package totals,
+uncovered statements/functions and tool versions remain in
+`cli/.coverage/unit` and `cli/.coverage/integration`.
+Tested revision: `5e1731c5fc723d7629751f12ce11fe2195116679` plus working-tree changes.
+Both campaign input maps match; sorted compact SHA-256: `be8406e89045d46c949d88af5d45d2f74878b17c09eaa91ea46e0db5a2f585b0`.
+Terminal child SHA-256: `d5b6b9130bdec17add7d6a9331e91ed68fda7f4fecb2bf626bbf7ac58b078d88`. These evidence updates follow verification.
+
+
+## Docs agent-edit indicator — 2026-10-06
+
+Docs display `agent-edit` in AccentBlue when the current document's `agent_edit`
+flag is true. A reserved column keeps timestamps and checkboxes aligned for
+ordinary documents and empty slots. Selection retains the purple background.
+Unit assertions cover flags, color, alignment and narrow widths; the complete
+program test consumes an agent-edited brief from its fake API.
+
+| Command | Exit | Evidence |
+| --- | --- | --- |
+| `make -C cli format` | 0 | No unrelated formatting changes. |
+| `go test -count=1 ./internal/changes` (CLI cwd) | 1, 1, then 0 | Corrected new test spacing and excluded the comment placeholder from Docs assertions. |
+| `make -C cli check` | 0 | `/tmp/cli-agent-edit-check.log` |
+| `make -C cli coverage` | 0 | `/tmp/cli-agent-edit-coverage.log`; **5740/6452 (88.9647%)**, gate passes. |
+| `make -C cli deps-audit` | 0 | `/tmp/cli-agent-edit-deps-audit.log`; no vulnerabilities. |
+| `make -C cli integration-coverage` | 0 | `/tmp/cli-agent-edit-integration-coverage.log`; **5028/6452 (77.9293%)**, gate passes including real PTY. |
+
+No failed, skipped or blocked required scenarios remain. Independent profiles,
+package totals, uncovered statements/functions and tool versions are retained
+under `cli/.coverage/unit` and `cli/.coverage/integration`.
+Tested revision: `88efdfb9ccf77e5940641668ef09910fe57031f5` plus working-tree changes.
+Both campaign input maps match; sorted compact SHA-256: `0830935d8ffcb5ad506622e18474d502961e98fe3c6f334a65507655cc4abdcb`.
+Terminal child SHA-256: `dcfd3a71df6779e18d7af41df68b03d52270f1cbb27068767a5c3b4f37a3b0c0`.
+These evidence and contract-ledger updates follow verification.

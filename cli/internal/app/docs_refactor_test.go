@@ -134,7 +134,7 @@ func Test031DocumentDeleteConfirmationLayoutAndColors(t *testing.T) {
 	require.Empty(t, a.deletes)
 	require.Equal(t, ChangeDetailsState, m.state)
 	view := m.View()
-	require.Contains(t, view, lipgloss.NewStyle().Foreground(styles.AccentPurple).Render("Are you sure?"))
+	require.Contains(t, view, styles.Default.MenuPromptIndicator.Render(" Are you sure? > "))
 	plain := stripANSI(view)
 	require.Less(t, strings.Index(plain, "Docs"), strings.Index(plain, "Are you sure?"))
 	require.Contains(t, plain, "yes")
@@ -422,7 +422,7 @@ func Test031InactiveListRoutesKeyboardAndScope(t *testing.T) {
 	require.Equal(t, "4", m.changeList.Rows[0].ID)
 	m, _ = sendKey(m, tea.KeyDown)
 	require.Equal(t, 1, m.changeList.Selected)
-	m, cmd = sendKey(m, tea.KeyEsc)
+	m, cmd = sendCommand(m, "/inactive-filter")
 	m = applyCommand(m, cmd)
 	require.False(t, m.changeList.Inactive)
 	require.Equal(t, "2", m.changeList.Rows[0].ID)
@@ -451,7 +451,8 @@ func Test031InactiveChangeSpaceActivationAndFooter(t *testing.T) {
 	require.Empty(t, m.changeList.Rows)
 	require.True(t, m.changeList.Inactive)
 	m, _ = sendKey(m, tea.KeyCtrlC)
-	require.False(t, m.changeList.Inactive)
+	require.True(t, m.changeList.Inactive)
+	require.Equal(t, MainState, m.state)
 }
 
 func Test031ChangeDetailsEpicSelectionExcludesInactiveEpics(t *testing.T) {

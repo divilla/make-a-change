@@ -1,11 +1,15 @@
 package epics
 
 import (
+	"cli/internal/dto"
 	"cli/internal/styles"
 	"cli/internal/ui"
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // ListTitle names the epic list screen.
@@ -25,22 +29,62 @@ func TableView(m Model, width, height int) string {
 	if len(m.Rows) == 0 {
 		return "No epics."
 	}
-	var lines []string
+	width = ui.NormalizeWidth(width)
+	tableWidth := min(63, max(1, width-2))
+	header := epicTableLine("ID", "Name", "DoneTC", "Compl", "Chngs", "Active")
+	lines := []string{}
 	if height > 1 {
-		lines = append(lines, "ID   Name   Done/Total TC   Completed   Changes")
-		height--
+		lines = append(lines, styles.Default.Muted.Render(header))
 	}
-	count := min(height, len(m.Rows))
+	rowHeight := height - 4
+	if height < 5 {
+		rowHeight = height - len(lines)
+	}
+	count := min(max(1, rowHeight), len(m.Rows))
 	start := max(0, min(m.Selected-count/2, len(m.Rows)-count))
 	for i := start; i < start+count; i++ {
 		e := m.Rows[i]
-		line := fmt.Sprintf("%d  %s  %d/%d  %d  %d", e.ID, strings.Join(strings.Fields(e.Name), " "), e.DoneTC, e.TotalTC, e.Completed, e.ChangeCount)
-		if i == m.Selected {
-			line = styles.Default.Selection.Render(line)
+		active := ""
+		if !e.Active {
+			active = "inactive"
 		}
-		lines = append(lines, line)
+		line := epicTableLine(strconv.Itoa(e.ID), e.Name, fmt.Sprintf("%d/%d", e.DoneTC, e.TotalTC), fmt.Sprintf("%d%%", e.Completed), strconv.Itoa(e.ChangeCount), active)
+		lines = append(lines, epicRowStyle(e, i == m.Selected).Render(line))
 	}
-	return ui.TruncateBlock(strings.Join(lines, "\n"), width)
+	lines = append(lines, styles.Default.Foreground.Render(fmt.Sprintf("Rows %d-%d of %d", start+1, start+count, len(m.Rows))))
+	for i := range lines {
+		lines[i] = ansi.Truncate(lines[i], tableWidth, "")
+	}
+	content := strings.Join(lines, "\n")
+	if height < 5 || width < 3 {
+		return ui.TruncateBlock(strings.Join(strings.Split(content, "\n")[:min(height, len(lines))], "\n"), width)
+	}
+	return lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("240")).Width(tableWidth).Render(content)
+}
+
+func epicTableLine(id, name, done, completed, count, active string) string {
+	return epicCell(id, 4, true) + " " + epicCell(name, 30, false) + " " + epicCell(done, 6, true) + " " + epicCell(completed, 5, true) + " " + epicCell(count, 5, true) + " " + epicCell(active, 8, false)
+}
+
+func epicCell(value string, width int, right bool) string {
+	value = ansi.Truncate(strings.Join(strings.Fields(ui.SafeText(value)), " "), width, "")
+	padding := strings.Repeat(" ", max(0, width-lipgloss.Width(value)))
+	if right {
+		return padding + value
+	}
+	return value + padding
+}
+
+func epicRowStyle(e dto.Epic, selected bool) lipgloss.Style {
+	color := styles.Foreground
+	if !e.Active {
+		color = styles.AccentRed
+	}
+	style := lipgloss.NewStyle().Foreground(color)
+	if selected {
+		style = style.Background(styles.MutedPurple)
+	}
+	return style
 }
 
 // DetailsView shows server completion values without calculating business state.
@@ -84,5 +128,5 @@ func detailOffset(offset, lines, height int) int {
 
 // HelpView describes the available operations and literal form/editor behavior.
 func HelpView() string {
-	return "List: /new-epic creates an epic; Enter opens details.\nScroll details: Up/Down or PgUp/PgDown.\nDetails: /edit changes the name; /delete asks for confirmation.\nForms: Enter or /save; Ctrl+E editor; /cancel discards.\n/retry reloads without repeating a write; /return goes back."
+	return "List: /new-epic creates an epic; Enter opens details; Delete deletes or deactivates; Space toggles activity.\nScroll details: Up/Down or PgUp/PgDown.\nDetails: /edit changes the name; /delete asks for confirmation.\nForms: Enter or /save; Ctrl+E editor; /cancel discards.\n/retry reloads without repeating a write; /return goes back."
 }

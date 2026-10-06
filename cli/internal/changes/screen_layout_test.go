@@ -19,7 +19,7 @@ func TestDetailLayoutColorsAndSectionDividers(t *testing.T) {
 	when := time.Date(2026, 10, 4, 10, 0, 0, 0, time.UTC)
 	change := dto.ChangeView{ID: "1", Title: "Respect q=0", Active: true, Created: when.Format(time.RFC3339), Modified: when.Format(time.RFC3339), DocumentTypes: []string{"brief", "spec", "pr", "review"}, Documents: []dto.Document{{ID: 8, DocType: "brief", UpdatedAt: when}, {ID: 9, DocType: "spec", UpdatedAt: when}}, TestCases: []dto.TestCase{{ID: 1, Scenario: "first", Done: true}, {ID: 2, Scenario: "second"}, {ID: 3, Scenario: "third"}}, Done: 1, Total: 3, Completed: 33, Comments: []dto.Document{{ID: 7, Body: "Comment 1\ncontinued"}, {ID: 6, Body: "Comment 2"}}}
 	view := DetailsView(Model{}.WithDetail(change), 160, 35)
-	require.Contains(t, stripANSI(view), "Docs │ "+when.Local().Format("2006-01-02 15:04")+" - [✓] brief")
+	require.Contains(t, stripANSI(view), "Docs │ "+when.Local().Format("2006-01-02 15:04")+"              - [✓] brief")
 	require.Contains(t, stripANSI(view), "Testcases │ [✓] first (#1)")
 	require.Contains(t, stripANSI(view), "Completed │ ---=== 1/3 - 33% ===---")
 	require.Contains(t, stripANSI(view), "Comments │ - Comment 1 continued")

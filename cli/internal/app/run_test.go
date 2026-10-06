@@ -2834,10 +2834,12 @@ func TestChangeDetailsCommandsAreExact(t *testing.T) {
 func TestChangesListCommandsAreExact(t *testing.T) {
 	assert.Equal(t, []string{
 		"/new-change",
+		"/del-change",
 		"/phase-filter",
 		"/types-filter",
 		"/epic-filter",
 		"/find-filter",
+		"/inactive-filter",
 		"/clear-filters",
 		"/help",
 		"/return",
@@ -3133,13 +3135,14 @@ func TestChangeDeleteConfirmationDeletesAndReloadsList(t *testing.T) {
 	got, cmd := sendKey(got, tea.KeyEnter)
 	require.NotNil(t, cmd)
 	assert.Equal(t, ChangeDetailsState, got.state)
-	assert.Equal(t, "deleting change", got.status)
+	assert.Equal(t, "deactivating change", got.status)
 
 	updated, reload := got.Update(cmd())
 	got = updated.(Model)
 	require.Equal(t, ChangesListState, got.state)
 	assert.False(t, got.changeList.Loading)
-	assert.Equal(t, []int{12}, client.changeDeleteIDs)
+	assert.Zero(t, client.changeDeleteCalls)
+	assert.Equal(t, []bool{false}, client.changeOpenUpdates)
 
 	require.Nil(t, reload)
 
@@ -3157,18 +3160,18 @@ func TestChangeDeleteRefreshFailureOffersListReloadPath(t *testing.T) {
 	m.changeList.Operation = changes.Delete
 	m.changeList.EntityID = 12
 	m.changeList.ProjectID = 7
-	next, cmd := m.applyChangeResult(changes.Result{ProjectID: 7, ID: 12, Operation: changes.Delete, Steps: []string{"deleted change"}, RefreshErr: errors.New("list unavailable")})
+	next, cmd := m.applyChangeResult(changes.Result{ProjectID: 7, ID: 12, Operation: changes.Delete, Steps: []string{"deactivated change"}, RefreshErr: errors.New("list unavailable")})
 	require.Nil(t, cmd)
 	m = next.(Model)
 	require.Equal(t, ChangesListState, m.state)
-	require.Contains(t, m.status, "return to Main and reopen /changes")
-	require.NotContains(t, m.status, "/retry")
-	m, _ = sendCommand(m, "/retry")
-	require.Contains(t, m.err, "unknown command")
+	require.Contains(t, m.status, "/retry reads only")
+	m, cmd = sendCommand(m, "/retry")
+	require.NotNil(t, cmd)
+	require.Empty(t, m.err)
 }
 
 func TestChangeDeleteFailurePreservesDetail(t *testing.T) {
-	client := &fakeClient{changeDeleteErr: errors.New("delete failed")}
+	client := &fakeClient{changeUpdateErr: errors.New("activation failed")}
 	m := newChangeTestModel(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeDetailsState
@@ -3181,8 +3184,9 @@ func TestChangeDeleteFailurePreservesDetail(t *testing.T) {
 	got = applyMsg(got, cmd())
 
 	assert.Equal(t, ChangeDetailsState, got.state)
-	assert.Equal(t, "delete failed", got.err)
-	assert.Equal(t, []int{12}, client.changeDeleteIDs)
+	assert.Equal(t, "activation failed", got.err)
+	assert.Zero(t, client.changeDeleteCalls)
+	assert.Equal(t, []bool{false}, client.changeOpenUpdates)
 	assert.Zero(t, client.changeListCalls)
 }
 
@@ -3659,3 +3663,5 @@ func (f *fakeClient) UndeleteComment(context.Context, int) error       { return 
 func (f *fakeClient) ListInactiveChanges(ctx context.Context, id int) ([]dto.Change, error) {
 	return f.ListChangeRows(ctx, id)
 }
+
+func (f *fakeClient) UpdateEpicActive(context.Context, int, bool) error { return f.updateErr }

@@ -652,14 +652,14 @@ func Test031InactiveReturnReloadsActiveRowsAndPreservesSelection(t *testing.T) {
 			m = applyCommand(m, cmd)
 			require.Equal(t, []int{4}, a.activationIDs)
 			a.changeRows = []dto.ChangeView{{ID: "4", Title: "match activated"}, {ID: "2", Title: "match first"}, {ID: "3", Title: "match selected"}, {ID: "5", Title: "excluded"}}
-			m, cmd = sendKey(m, key)
+			m, cmd = sendCommand(m, "/inactive-filter")
 			m = applyCommand(m, cmd)
 			require.False(t, m.changeList.Inactive)
 			require.False(t, m.changeList.Loading)
 			require.Equal(t, 1, a.changeListCalls)
 			require.Equal(t, "match", m.changesFilters.find)
 			require.Equal(t, "4", m.changeList.Rows[0].ID)
-			require.Equal(t, "3", changes.FilteredRows(m.changeList.Rows, m.changeFilters())[m.changeList.Selected].ID)
+			require.Equal(t, "4", changes.FilteredRows(m.changeList.Rows, m.changeFilters())[m.changeList.Selected].ID)
 		})
 	}
 }
@@ -671,8 +671,8 @@ func Test031InactiveReturnRestartsCanceledActiveLoad(t *testing.T) {
 	next, canceled := m.beginChange(changes.List, 0, changes.Input{})
 	m, cmd := sendKey(next.(Model), tea.KeyCtrlH)
 	m = applyCommand(m, cmd)
-	m, cmd = sendKey(m, tea.KeyEsc)
-	require.NotNil(t, cmd, "return must restart the canceled active request")
+	m, cmd = sendCommand(m, "/inactive-filter")
+	require.NotNil(t, cmd, "toggling must restart the canceled active request")
 	require.True(t, m.changeList.Loading)
 	m = applyCommand(m, cmd)
 	require.False(t, m.changeList.Loading)
@@ -747,7 +747,7 @@ func Test031InactiveActivationRefreshReadOnlyRetry(t *testing.T) {
 				}
 			}
 			require.Equal(t, []int{7, 7, 7, 7}, a.inactiveProjects)
-			m, cmd = sendKey(m, tea.KeyEsc)
+			m, cmd = sendCommand(m, "/inactive-filter")
 			m = applyCommand(m, cmd)
 			require.False(t, m.changeList.Inactive)
 			require.NotContains(t, m.commandOptions(ChangesListState), dto.Option{ID: "/retry", Label: "/retry"})

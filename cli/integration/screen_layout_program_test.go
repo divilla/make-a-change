@@ -11,6 +11,9 @@ import (
 
 func TestCLIProgramSelectedItemViewer(t *testing.T) {
 	b, server := docs031Server(t)
+	b.mu.Lock()
+	b.rows[2]["agent_edit"] = true
+	b.mu.Unlock()
 	root := t.TempDir()
 	writeProgramConfig(t, root, server.URL)
 	s := startProgram(t, root, "unused")
@@ -31,7 +34,7 @@ func TestCLIProgramSelectedItemViewer(t *testing.T) {
 	output := s.output.String()
 	updated := time.Date(2026, 9, 28, 11, 0, 0, 0, time.UTC).Local().Format("2006-01-02 15:04")
 	require.Contains(t, ansi.Strip(output), updated+" - one two three full comment tail")
-	require.Contains(t, ansi.Strip(output), updated+" - [✓] brief")
+	require.Contains(t, ansi.Strip(output), updated+" - agent-edit - [✓] brief")
 	for _, mode := range []string{"\x1b[?1000h", "\x1b[?1002h", "\x1b[?1003h", "\x1b[?1006h"} {
 		require.NotContains(t, output, mode)
 	}

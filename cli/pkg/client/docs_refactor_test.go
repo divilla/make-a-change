@@ -146,10 +146,11 @@ func Test031ProjectEpicChangeWireContracts(t *testing.T) {
 	delete(row, "after_change_id")
 	delete(row, "after_change_name")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/api/v1/change/list-inactive", r.URL.Path)
-		var in map[string]int
+		require.Equal(t, "/api/v1/change/list", r.URL.Path)
+		var in map[string]any
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&in))
-		require.Equal(t, 7, in["project_id"])
+		require.Equal(t, float64(7), in["project_id"])
+		require.Equal(t, false, in["active"])
 		require.NoError(t, json.NewEncoder(w).Encode([]any{row}))
 	}))
 	defer server.Close()

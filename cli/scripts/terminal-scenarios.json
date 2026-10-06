@@ -36,7 +36,8 @@
       "TestCLIProgramSelectedItemViewer",
       "TestCLIProgram032BriefSpecFlow",
       "TestCLIProgram032InvalidBriefAndCreationFailure",
-      "TestCLIProgram032ManualSpecAndEditedBrief"
+      "TestCLIProgram032ManualSpecAndEditedBrief",
+      "TestCLIProgram034EpicAndChangeActivity"
     ]
   },
   "pty": {

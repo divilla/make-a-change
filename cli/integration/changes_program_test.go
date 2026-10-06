@@ -65,7 +65,7 @@ func TestCLIProgramChangeCRUDAndPartialSuccess(t *testing.T) {
 						http.Error(w, "refresh unavailable", 500)
 						return
 					}
-					if exists {
+					if exists && change["active"] == body["active"] {
 						writeProgramJSON(w, []any{change})
 					} else {
 						writeProgramJSON(w, []any{})
@@ -91,12 +91,6 @@ func TestCLIProgramChangeCRUDAndPartialSuccess(t *testing.T) {
 					failRead = partial
 					w.WriteHeader(201)
 					writeProgramJSON(w, map[string]int{"id": 12})
-				case "/api/v1/change/delete":
-					require.Equal(t, map[string]any{"id": float64(12)}, body)
-					writes["delete"] = append(writes["delete"], body)
-					exists = false
-					failRead = partial
-					w.WriteHeader(204)
 				default:
 					op := strings.TrimPrefix(r.URL.Path, "/api/v1/change/update-")
 					keys := map[string]string{"title": "title", "phase": "change_phase", "types": "change_types", "epic": "epic_id", "after-change": "after_change_id", "active": "active", "pr-url": "pr_url"}
@@ -189,7 +183,7 @@ func TestCLIProgramChangeCRUDAndPartialSuccess(t *testing.T) {
 			s.waitFor(t, "73%")
 			s.waitFor(t, "https://example.test/pr/1")
 			s.navigate(t, "/delete\r", "Are you sure?")
-			s.navigate(t, "\r", "status deleted change")
+			s.navigate(t, "\r", "status deactivated change")
 			if partial {
 				s.navigate(t, "/return\r", "MainScreen")
 				s.navigate(t, "/changes\r", "no changes")
@@ -198,10 +192,10 @@ func TestCLIProgramChangeCRUDAndPartialSuccess(t *testing.T) {
 			s.finishFromChanges(t)
 			mu.Lock()
 			defer mu.Unlock()
-			for _, op := range []string{"create", "title", "phase", "active", "pr-url", "delete"} {
+			for _, op := range []string{"create", "title", "phase", "pr-url"} {
 				assert.Len(t, writes[op], 1, op)
 			}
-			for _, op := range []string{"types", "epic", "after-change"} {
+			for _, op := range []string{"types", "epic", "after-change", "active"} {
 				assert.Len(t, writes[op], 2, op)
 			}
 			assert.Equal(t, "/save", writes["title"][0]["title"])

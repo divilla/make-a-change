@@ -173,6 +173,7 @@ func selectedEpicID(selected dto.Option) (*int, error) {
 func (m Model) beginChange(op changes.Operation, id int, in changes.Input) (tea.Model, tea.Cmd) {
 	project, _ := strconv.Atoi(m.currentProject.ID)
 	var cmd tea.Cmd
+	m.changeList.Inactive = m.changesFilters.inactive
 	m.changeList, cmd = m.changeList.Begin(m.ctx, m.client, documents.Access{API: m.client, Types: m.optionCatalog.config.ChangeDocs}, op, project, id, in, m.optionCatalog.config)
 	if op != changes.List && op != changes.Details && cmd != nil {
 		m.changeDocuments = m.changeDocuments.Invalidate()
@@ -246,9 +247,7 @@ func (m Model) applyChangeResult(r changes.Result) (tea.Model, tea.Cmd) {
 		m.detailEditField = ""
 		m = m.setPromptValue("")
 	}
-	if m.state == ChangesListState && !m.changeList.Inactive {
-		m.status = strings.ReplaceAll(m.status, "/retry reads only", "return to Main and reopen /changes")
-	}
+
 	if r.Err == nil && r.SavedDocument != nil {
 		if r.SavedDocument.DocType == "spec" {
 			return m.syncSavedSpec(r.ID, r.SavedDocument.Body)

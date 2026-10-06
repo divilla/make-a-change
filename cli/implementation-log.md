@@ -133,3 +133,7 @@
 2026-05-10 14:36 cli-spec-save-after-interactive-exit
 +37 -18 code - +91 -12 tests --- compare temp spec content with freshly read active spec after generation; save differing content regardless of mtime, skip duplicate versions and retain testcase sync; check/audit and independent unit 5657/6367 and terminal 4946/6367 gates pass
 
+2026-06-10 09:10 034-cli-epics-fix
++334 -93 code - +785 -62 tests --- spec
++0 -0 code - +3 -3 tests --- review fixes 01
+

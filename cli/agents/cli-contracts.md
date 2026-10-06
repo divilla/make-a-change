@@ -69,7 +69,8 @@ replaces global option routes. No SQL or backend internals belong in CLI tests.
 | POST | `/api/v1/epic/details` | Epics P3: details |
 | POST | `/api/v1/epic/create` | Epics P3: create |
 | POST | `/api/v1/epic/update` | Epics P3: update |
-| POST | `/api/v1/epic/delete` | Epics P3: delete |
+| POST | `/api/v1/epic/delete` | Epics P3/034: delete with backend deactivation fallback |
+| POST | `/api/v1/epic/update-active` | 034: explicit activity toggle |
 | POST | `/api/v1/change/list` | Changes P4: list |
 | POST | `/api/v1/change/details` | Changes P4: details |
 | POST | `/api/v1/change/create` | Changes P4: create |
@@ -81,7 +82,7 @@ replaces global option routes. No SQL or backend internals belong in CLI tests.
 | POST | `/api/v1/change/update-title` | Changes P4: update-title |
 | POST | `/api/v1/change/update-slug` | Change details slug editor sends only a nonempty `[a-z0-9_-]` suffix in `slug`; list/details return the full nullable `ref_slug` (`006-some-slug` or `1116-some-slug`), whose reference prefix is fixed by the view. |
 | POST | `/api/v1/change/update-pr-url` | Changes P4: update-pr-url |
-| POST | `/api/v1/change/delete` | Changes P4: delete |
+| POST | `/api/v1/change/delete` | Backend only; CLI deactivation uses update-active (034) |
 | POST | `/api/v1/test-case/list` | Testcases P5: list |
 | POST | `/api/v1/test-case/create` | Testcases P5: create |
 | POST | `/api/v1/test-case/update` | Testcases P5: update |
@@ -98,8 +99,6 @@ replaces global option routes. No SQL or backend internals belong in CLI tests.
 | POST | `/api/v1/config/delete` | Configurations P7: delete |
 | GET | `/api/v1/health` | Health P7: health check |
 | GET | `/api/health` | Health P7: compatibility health check |
-| POST | `/api/v1/epic/list-inactive` | Backend 030; inactive epic browsing deferred outside 031 |
-| POST | `/api/v1/change/list-inactive` | 031: list-inactive |
 | POST | `/api/v1/doc/active-set` | 031: active-set |
 | POST | `/api/v1/doc/comment-list` | 031: comment-list |
 | POST | `/api/v1/doc/comment-insert` | 031: comment-insert |
@@ -959,9 +958,13 @@ an ordinary configured Docs slot; comments render a single line with newlines
 replaced by spaces. The 2026-10-05 follow-up prints comments as
 `<modified_at> - <body>`, with local modified timestamps in AccentCyan and bodies
 in pure-white Foreground (`styles.Foreground`, `#FFFFFF`), including selected rows.
-Saved Docs likewise show `<modified_at> - [✓] <type>` with cyan timestamps,
-pure-white text and green checks. Docs reserve the 16-column timestamp and
-separator even when missing, aligning checked and unchecked boxes.
+Saved Docs show `<modified_at> - agent-edit - [✓] <type>` when the document
+has `agent_edit=true`, with the agent-edit label in AccentBlue (including selected
+rows), pure-white text and green checks. Docs reserve the 16-column timestamp
+and 13-column agent-edit segment even when absent, aligning checked and unchecked
+boxes. `TestDocumentAgentEditLabelAndAlignment` covers flag visibility, blue color,
+selection and narrow layouts; `TestCLIProgramSelectedItemViewer` verifies the
+flag from the API through the complete program.
 Doc/comment timestamps are AccentPurple for today in local time and AccentCyan
 for other dates.
 Created/Modified share a cyan Timestamps row. Testcases
@@ -1130,3 +1133,42 @@ checks. HTTP payloads and human provenance remain unchanged.
 | --- | --- |
 | Project/epic brief and spec editor drafts survive failed saves and are removed after successful saves or retries; history still refreshes without agent work | `Test032OrdinaryDocumentSaveCleansMatchingEditorDraft` |
 | Real project/epic brief editors retain exact bytes after an API rejection and remove their temporary files after a successful retry | Strengthened `TestCLIProgramOrdinaryDocumentEditor`, included in the existing terminal scenario manifest |
+
+## 034 — Epic activity and persistent inactive changes
+
+[034 specification](../../agent/specs/034-cli-epics-fix.md) supersedes historical
+031 inactive navigation and P4 permanent change deletion. Epic lists use project
+scope with activity omitted; changes use the same `/change/list` endpoint with
+explicit activity. Retired list-inactive routes are removed from the current
+inventory. Backend permanent change deletion remains available outside the CLI.
+The fifth persistent filter is `/inactive-filter`; clear-filters restores active
+mode, navigation preserves it. Ordinary active menus expose read-only `/retry`
+when a committed mutation needs recovery.
+
+| Acceptance / retained behavior | Unit evidence | Terminal evidence |
+| --- | --- | --- |
+| All scoped epic states; fixed table columns, alignment, metrics, Unicode clipping, bounds and selected activity colors | `Test034EpicTableColumnsColorsAndBounds`, `Test034ActivityRequestsAndScopedLists`, `Test034EpicListImmediateDeletionAndSpace` | `TestCLIProgram034EpicAndChangeActivity` |
+| Immediate epic delete including active/inactive referenced records; Space toggles, rejected writes and committed read-only recovery | `Test034EpicListImmediateDeletionAndSpace`, `Test034EpicToggleMutationAndReadOnlyRecovery`, `Test034EpicToggleRequiresLoadedScopedSelection`; retained P3 deletion fallback tests | `TestCLIProgram034EpicAndChangeActivity`; retained epic CRUD/recovery scenarios |
+| Active-only assignment with clear option | retained `Test031ChangeDetailsEpicSelectionExcludesInactiveEpics` | retained `TestCLIProgram031InactiveChangesAndEpicSelection` |
+| Menu placement, summary gray/red, active default, persistent inactive mode through details/Main/project switch, existing filters and clear | `Test034InactiveFilterPersistenceMenuSummaryAndClear`, `Test034OtherFiltersSurviveActivityToggleAndActivationRejection` | `TestCLIProgram034EpicAndChangeActivity` |
+| Delete/del-change/details-delete confirmation, No/cancel, deactivation and Space/undel-change restore; no permanent deletion | `Test034ChangeDeactivationConfirmationAndRestoration`, `Test034InactiveDeleteConfirmsAndRetainsDeactivatedRow` | `TestCLIProgram034EpicAndChangeActivity`; adapted `TestCLIProgramChangeCRUDAndPartialSuccess` |
+| Explicit boolean activity requests, current list endpoints, rejection and read-only retry after committed refresh failure | `Test034ActivityRequestsAndScopedLists`, `Test034ChangeFailureAndCommittedReadOnlyRecovery`, `Test034OtherFiltersSurviveActivityToggleAndActivationRejection` | retained `TestCLIProgram031InactiveChangesAndEpicSelection`; adapted `TestShellNavigationEditorAndScrolling` uses current scoped list API and explicit mode toggle |
+
+Historical viewport tests now assert the aligned header and 30-cell clipped name;
+historical inactive-return tests use the explicit filter toggle to reload active
+rows. Unit and complete-program tests assert persistent navigation separately.
+
+## Shared confirmation choice presentation
+
+Every yes/no confirmation uses the common constructor and standard dropdown
+prompt frame with an AccentPurple ` Are you sure? > ` caption. Choices are plain
+`yes` and `no` without checkbox or slash prefixes. The originating screen remains
+visible above the confirmation.
+`TestAllConfirmationsDisplayPlainChoices` covers change list/details, testcase,
+epic, project and document dialogs at widths 20/80/240, both highlights,
+plain/legacy input filtering and cancellation. Existing complete-program and
+PTY deletion scenarios remain in the terminal manifest; the PTY color assertion
+checks the purple caption on the prompt background.
+`TestTestcaseConfirmationStaysBelowChangeDetails` checks that Delete retains the
+change and testcase content, places the prompt at the bottom at heights 24/40,
+and cancels without mutating the testcase.

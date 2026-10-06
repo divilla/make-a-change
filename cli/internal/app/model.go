@@ -77,10 +77,11 @@ const (
 )
 
 type changesFilters struct {
-	phase dto.Option
-	epic  dto.Option
-	typ   dto.Option
-	find  string
+	phase    dto.Option
+	epic     dto.Option
+	typ      dto.Option
+	find     string
+	inactive bool
 }
 
 type optionCatalog struct {
@@ -203,7 +204,6 @@ type Model struct {
 	configurations      configurations.Model
 	health              health.Model
 	changeList          changes.Model
-	inactiveOrigin      changes.Model
 	changeDetailLoaded  bool
 	currentProject      dto.Option
 	projectList         projects.Model

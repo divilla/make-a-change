@@ -55,7 +55,11 @@ func TestLongEpicRenderingRemainsResponsive(t *testing.T) {
 			view := render.view()
 			// A broad ceiling catches the previous multi-second quadratic stall.
 			assert.Less(t, time.Since(started), 2*time.Second)
-			assert.Contains(t, view, strings.Repeat("x", 60))
+			length := 60
+			if render.name == "table" {
+				length = 30
+			}
+			assert.Contains(t, view, strings.Repeat("x", length))
 			for _, line := range strings.Split(view, "\n") {
 				assert.LessOrEqual(t, ansi.StringWidth(line), 80)
 			}

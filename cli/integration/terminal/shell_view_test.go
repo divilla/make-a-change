@@ -209,7 +209,7 @@ sleep 30
 	send(" ", "committed active selection document #65")
 	send("\x1b", "returned from history")
 	send("\x1b[3~", "Are you sure?")
-	assert.Contains(t, capture.after(0), "\x1b[38;5;183mAre you sure?")
+	assert.Regexp(t, `\x1b\[[0-9;]*38;5;183[0-9;]*m Are you sure\? > `, capture.after(0))
 	send("\x03", "cancel")
 	send("\x1b[3~", "Are you sure?")
 	send("\r", "committed delete document #65")
@@ -261,7 +261,7 @@ sleep 30
 	send("/return\r", "Rows")
 	send("\x08", "Space activate")
 	send(" ", "activated change #31")
-	send("\x03", "of 31")
+	send("/inactive-filter\r", "of 31")
 	send("/return\r", "MainScreen")
 	draftPath := filepath.Join(scratchTemp, "mch", "0198a86f-9b8a-7d89-ae5b-6f25b528b04c", "brief.md")
 	draft, err := os.ReadFile(draftPath)
@@ -358,11 +358,6 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 				w.WriteHeader(204)
 				return
 			}
-		case "/api/v1/change/list-inactive":
-			value = []any{}
-			if inactive {
-				value = []any{terminalChange(31, "Inactive PTY Change")}
-			}
 		case "/api/v1/change/update-active":
 			var payload map[string]any
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
@@ -384,6 +379,17 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 			w.WriteHeader(204)
 			return
 		case "/api/v1/change/list":
+			var payload map[string]any
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+			require.Equal(t, float64(7), payload["project_id"])
+			require.Contains(t, payload, "active")
+			if payload["active"] == false {
+				value = []any{}
+				if inactive {
+					value = []any{terminalChange(31, "Inactive PTY Change")}
+				}
+				break
+			}
 			rows := []map[string]any{}
 			for i := 1; i <= 30; i++ {
 				rows = append(rows, terminalChange(i, fmt.Sprintf("Row %02d", i)))

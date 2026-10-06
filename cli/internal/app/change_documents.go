@@ -113,7 +113,7 @@ func (m Model) openDocumentConfirmation(id int) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.deleteDocumentID = id
-	m.dropdown = dropdownModel{kind: dropdownConfirm, previous: ChangeDetailsState, onSelect: ChangeDetailsState, label: "Are you sure?", options: []dto.Option{{ID: "/yes", Label: "yes"}, {ID: "/no", Label: "no"}}}
+	m.openConfirmation(ChangeDetailsState, ChangeDetailsState, ChangeDetailsState)
 	return m, nil
 }
 
@@ -296,20 +296,36 @@ func (m Model) selectedDocumentHistory() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) openInactiveChanges() (tea.Model, tea.Cmd) {
-	if m.changeList.Inactive {
+	if m.changesFilters.inactive {
 		return m, nil
 	}
-	m.inactiveOrigin = m.changeList
-	m.changeList = m.changeList.Invalidate()
-	m.changeList.Inactive = true
+	return m.toggleInactiveChanges()
+}
+
+func (m Model) toggleInactiveChanges() (tea.Model, tea.Cmd) {
+	m.rememberSelectedChange()
+	m.changesFilters.inactive = !m.changesFilters.inactive
+	m = m.setPromptValue("")
 	return m.beginChange(changes.List, 0, changes.Input{})
 }
 
-func (m Model) leaveInactiveChanges() (tea.Model, tea.Cmd) {
-	generation := m.changeList.Invalidate().Generation
-	m.changeList = m.inactiveOrigin
-	m.changeList.Generation = generation
-	m.changeList.Inactive = false
-	m.rememberSelectedChange()
-	return m.beginChange(changes.List, 0, changes.Input{})
+func (m Model) selectedChangeActivity(restore bool) (tea.Model, tea.Cmd) {
+	rows := changes.FilteredRows(m.changeList.Rows, m.changeFilters())
+	if m.changeList.Loading || len(rows) == 0 {
+		m.err = "no changes selectable"
+		return m, nil
+	}
+	m.changeList = m.changeList.ClampSelection(m.changeFilters(), m.changeTableRows())
+	selected := rows[m.changeList.Selected]
+	id, err := changeNumericID(selected)
+	if err != nil {
+		m.err = err.Error()
+		return m, nil
+	}
+	if restore {
+		return m.beginChange(changes.Reactivate, id, changes.Input{})
+	}
+	m.changeList = m.changeList.WithDetail(selected)
+	m.openConfirmation(ChangeDeleteConfirmation, ChangesListState, ChangesListState)
+	return m, nil
 }
