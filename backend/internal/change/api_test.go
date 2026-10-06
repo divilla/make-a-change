@@ -19,7 +19,7 @@ import (
 func TestRemovedChangeRoutes(t *testing.T) {
 	e := echo.New()
 	NewAPI(e, nil)
-	for _, path := range []string{"documents", "set-document", "update-brief", "update-spec", "update-pr", "rendered-artifacts", "get", "assign-flow", "start-run", "update-run", "reset-claim", "update-def", "update-agent-edit", "update-def-agent-edit"} {
+	for _, path := range []string{"list-inactive", "documents", "set-document", "update-brief", "update-spec", "update-pr", "rendered-artifacts", "get", "assign-flow", "start-run", "update-run", "reset-claim", "update-def", "update-agent-edit", "update-def-agent-edit"} {
 		rec := httptest.NewRecorder()
 		e.ServeHTTP(rec, httptest.NewRequest("POST", "/api/v1/change/"+path, strings.NewReader(`{}`)))
 		require.Equal(t, 404, rec.Code)

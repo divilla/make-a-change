@@ -1,0 +1,21 @@
+# PR reviews preserve the full identity used by the publication step.
+mode: '{"continuation":true}'
+scope:
+  docs: false
+  pr:
+    repo: { host: github.com, path: example/project }
+    number: 42
+review-complete: settled
+synthesize:
+  ready: true
+  action: none
+  findings_summary: "stub: qualified PR review passed"
+  report: { type: archon_artifact, run_id: fixture-run, path: review/report.md }
+publish:
+  ready: true
+  action: none
+  findings_summary: "stub: qualified PR review passed"
+  report: { type: archon_artifact, run_id: fixture-run, path: review/report.md }
+fixture:
+  expect: completed
+  reached: [synthesize, publish]

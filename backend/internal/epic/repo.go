@@ -15,7 +15,7 @@ type Repo struct {
 	pool epicPool
 }
 
-const epicColumns = "v.id, v.project_id, v.name, v.done_tc, v.total_tc, v.change_count, v.created_at, v.updated_at, e.active"
+const epicColumns = "v.id, v.project_id, v.name, v.done_tc, v.total_tc, v.change_count, v.created_at, v.updated_at, v.active"
 
 // NewRepo initializes or executes NewRepo behavior.
 func NewRepo(pool *pgxpool.Pool) *Repo {
@@ -24,21 +24,12 @@ func NewRepo(pool *pgxpool.Pool) *Repo {
 
 // List executes List behavior.
 func (r *Repo) List(ctx context.Context, req domain.EpicListRequest) ([]domain.Epic, error) {
-	return r.list(ctx, req, "public.vw_epic_list")
-}
-
-// ListInactive reads the separately filtered inactive view.
-func (r *Repo) ListInactive(ctx context.Context, req domain.EpicListRequest) ([]domain.Epic, error) {
-	return r.list(ctx, req, "public.vw_epic_inactive_list")
-}
-
-func (r *Repo) list(ctx context.Context, req domain.EpicListRequest, view string) ([]domain.Epic, error) {
 	rows, err := r.pool.Query(ctx, `
 		select `+epicColumns+`
-		from `+view+` v join public.epic e on e.id = v.id
-		where v.project_id = $1
+		from public.vw_epic_list v
+		where v.project_id = $1 and ($2::boolean is null or v.active = $2)
 		order by v.name, v.id
-	`, req.ProjectID)
+	`, req.ProjectID, req.Active)
 	if err != nil {
 		return nil, app.DatabaseError(err, nil, nil)
 	}
@@ -56,9 +47,7 @@ func (r *Repo) list(ctx context.Context, req domain.EpicListRequest, view string
 
 // Details executes Details behavior.
 func (r *Repo) Details(ctx context.Context, req domain.EpicIDRequest) (domain.Epic, error) {
-	epic, err := scanEpic(r.pool.QueryRow(ctx, `select `+epicColumns+` from public.vw_epic_list v join public.epic e on e.id = v.id where v.id = $1
- union all
- select `+epicColumns+` from public.vw_epic_inactive_list v join public.epic e on e.id = v.id where v.id = $1`, req.ID))
+	epic, err := scanEpic(r.pool.QueryRow(ctx, `select `+epicColumns+` from public.vw_epic_list v where v.id = $1`, req.ID))
 	if err != nil {
 		return domain.Epic{}, app.DatabaseError(err, app.ErrEpicNotFound, nil)
 	}
@@ -75,6 +64,18 @@ func (r *Repo) Create(ctx context.Context, req domain.EpicCreateRequest) (domain
 // Update changes the name and timestamp, including same-name updates.
 func (r *Repo) Update(ctx context.Context, req domain.EpicUpdateRequest) error {
 	tag, err := r.pool.Exec(ctx, "update public.epic set name = $2, updated_at = now() where id = $1", req.ID, req.Name)
+	if err != nil {
+		return app.DatabaseError(err, nil, nil)
+	}
+	if tag.RowsAffected() == 0 {
+		return app.ErrEpicNotFound
+	}
+	return nil
+}
+
+// UpdateActive executes one database mutation without reloading the entity.
+func (r *Repo) UpdateActive(ctx context.Context, req domain.EpicUpdateActiveRequest) error {
+	tag, err := r.pool.Exec(ctx, `update public.epic set active = $2, updated_at = now() where id = $1`, req.ID, req.Active)
 	if err != nil {
 		return app.DatabaseError(err, nil, nil)
 	}

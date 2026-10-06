@@ -44,21 +44,6 @@ func (s *Service) List(ctx context.Context, req domain.ChangeListRequest) ([]dom
 	return changes, nil
 }
 
-// ListInactive returns inactive entries with the same derived counters.
-func (s *Service) ListInactive(ctx context.Context, req domain.ChangeListRequest) ([]domain.ChangeListItem, error) {
-	if req.ProjectID <= 0 {
-		return nil, app.ErrChangeInvalidInput
-	}
-	changes, err := s.repo.ListInactive(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	for i := range changes {
-		changes[i].Completed = completion(changes[i].DoneTC, changes[i].TotalTC)
-	}
-	return changes, nil
-}
-
 // Details returns current stored fields and derived completion.
 func (s *Service) Details(ctx context.Context, req domain.ChangeIDRequest) (domain.ChangeDetails, error) {
 	if req.ID <= 0 {

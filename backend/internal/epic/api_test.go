@@ -14,7 +14,7 @@ import (
 
 func TestAPIRegisteredContracts(t *testing.T) {
 	now := time.Date(2026, 9, 28, 0, 0, 0, 0, time.UTC)
-	for _, op := range []string{"list", "list-inactive", "details", "create", "update", "delete"} {
+	for _, op := range []string{"list", "details", "create", "update", "delete"} {
 		t.Run(op, func(t *testing.T) {
 			r := &fakeEpicRepository{item: domain.Epic{ID: 7, Name: "Name", Active: true, CreatedAt: now, UpdatedAt: now, ProjectID: 7, DoneTC: 1, TotalTC: 2, ChangeCount: 70000}}
 
@@ -22,7 +22,11 @@ func TestAPIRegisteredContracts(t *testing.T) {
 			NewAPI(e, NewService(r))
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			req := httptest.NewRequest("POST", "/api/v1/epic/"+op, strings.NewReader(`{"id":7,"project_id":7,"name":" Name "}`)).WithContext(ctx)
+			body := `{"id":7,"project_id":7,"name":" Name "}`
+			if op == "list" {
+				body = `{"project_id":7,"active":false}`
+			}
+			req := httptest.NewRequest("POST", "/api/v1/epic/"+op, strings.NewReader(body)).WithContext(ctx)
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
 			e.ServeHTTP(rec, req)
@@ -42,8 +46,10 @@ func TestAPIRegisteredContracts(t *testing.T) {
 			default:
 				require.Equal(t, 200, rec.Code)
 				expected := `{"id":7,"project_id":7,"name":"Name","active":true,"done_tc":1,"total_tc":2,"completed":50,"change_count":70000,"created_at":"2026-09-28T00:00:00Z","updated_at":"2026-09-28T00:00:00Z"}`
-				if op == "list" || op == "list-inactive" {
+				if op == "list" {
 					expected = "[" + expected + "]"
+					active := false
+					require.Equal(t, domain.EpicListRequest{ProjectID: 7, Active: &active}, r.req)
 				}
 				require.JSONEq(t, expected, rec.Body.String())
 			}
@@ -52,10 +58,10 @@ func TestAPIRegisteredContracts(t *testing.T) {
 }
 
 func TestAPIRejectsMalformedAndInvalidRequests(t *testing.T) {
-	for _, op := range []string{"details", "create", "update", "delete", "list", "list-inactive"} {
+	for _, op := range []string{"details", "create", "update", "delete", "list"} {
 		bodies := []struct{ body, message string }{
-			{"{", "invalid epic " + strings.ReplaceAll(op, "list-inactive", "inactive list") + " payload"},
-			{`{"id":"bad","project_id":"bad","name":3}`, "invalid epic " + strings.ReplaceAll(op, "list-inactive", "inactive list") + " payload"},
+			{"{", "invalid epic " + op + " payload"},
+			{`{"id":"bad","project_id":"bad","name":3}`, "invalid epic " + op + " payload"},
 			{`{}`, "invalid epic payload"},
 			{`{"id":0,"project_id":0,"name":""}`, "invalid epic payload"},
 			{`{"id":-1,"project_id":-1,"name":""}`, "invalid epic payload"},
@@ -84,7 +90,7 @@ func TestAPIEmptyList(t *testing.T) {
 	p := newBoundary(t)
 	rows := &valueRows{}
 	p.rows = rows
-	p.args = []any{7}
+	p.args = []any{7, (*bool)(nil)}
 	e := echo.New()
 	NewAPI(e, NewService(&Repo{pool: p}))
 	rec := httptest.NewRecorder()

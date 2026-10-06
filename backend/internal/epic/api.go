@@ -24,10 +24,10 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 	}
 
 	a.g.POST("/list", a.list)
-	a.g.POST("/list-inactive", a.listInactive)
 	a.g.POST("/details", a.details)
 	a.g.POST("/create", a.create)
-	a.g.POST("/update", a.updateEpic)
+	a.g.POST("/update", a.update)
+	a.g.POST("/update-active", a.updateActive)
 	a.g.POST("/delete", a.delete)
 
 	return a
@@ -42,21 +42,6 @@ func (a *API) list(c *echo.Context) error {
 		return app.HTTPError(app.ValidationError(v.Errors, app.ErrEpicInvalidInput))
 	}
 	res, err := a.s.List(c.Request().Context(), req)
-	if err != nil {
-		return app.HTTPError(err)
-	}
-	return c.JSON(http.StatusOK, &res)
-}
-
-func (a *API) listInactive(c *echo.Context) error {
-	var req domain.EpicListRequest
-	if err := c.Bind(&req); err != nil {
-		return app.PayloadError(err, "invalid epic inactive list payload")
-	}
-	if v := validate.Struct(req); !v.Validate() {
-		return app.HTTPError(app.ValidationError(v.Errors, app.ErrEpicInvalidInput))
-	}
-	res, err := a.s.ListInactive(c.Request().Context(), req)
 	if err != nil {
 		return app.HTTPError(err)
 	}
@@ -93,7 +78,7 @@ func (a *API) create(c *echo.Context) error {
 	return c.JSON(http.StatusCreated, &res)
 }
 
-func (a *API) updateEpic(c *echo.Context) error {
+func (a *API) update(c *echo.Context) error {
 	var req domain.EpicUpdateRequest
 	if err := c.Bind(&req); err != nil {
 		return app.PayloadError(err, "invalid epic update payload")
@@ -102,6 +87,20 @@ func (a *API) updateEpic(c *echo.Context) error {
 		return app.HTTPError(app.ValidationError(v.Errors, app.ErrEpicInvalidInput))
 	}
 	if err := a.s.UpdateEpic(c.Request().Context(), req); err != nil {
+		return app.HTTPError(err)
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (a *API) updateActive(c *echo.Context) error {
+	var req domain.EpicUpdateActiveRequest
+	if err := c.Bind(&req); err != nil {
+		return app.PayloadError(err, "invalid epic active payload")
+	}
+	if v := validate.Struct(req); !v.Validate() {
+		return app.HTTPError(app.ValidationError(v.Errors, app.ErrEpicInvalidInput))
+	}
+	if err := a.s.UpdateActive(c.Request().Context(), req); err != nil {
 		return app.HTTPError(err)
 	}
 	return c.NoContent(http.StatusNoContent)

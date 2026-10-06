@@ -54,7 +54,7 @@ func TestServiceRequestsAndErrors(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for _, cause := range []error{nil, errors.New("repository failure")} {
-		for _, op := range []string{"list", "list-inactive", "details", "create", "update", "delete"} {
+		for _, op := range []string{"list", "details", "create", "update", "delete"} {
 			t.Run(op, func(t *testing.T) {
 				r := &fakeEpicRepository{err: cause}
 				s := NewService(r)
@@ -62,11 +62,9 @@ func TestServiceRequestsAndErrors(t *testing.T) {
 				var want any
 				switch op {
 				case "list":
-					_, err = s.List(ctx, domain.EpicListRequest{ProjectID: 7})
-					want = domain.EpicListRequest{ProjectID: 7}
-				case "list-inactive":
-					want = domain.EpicListRequest{ProjectID: 7}
-					_, err = s.ListInactive(ctx, want.(domain.EpicListRequest))
+					active := false
+					_, err = s.List(ctx, domain.EpicListRequest{ProjectID: 7, Active: &active})
+					want = domain.EpicListRequest{ProjectID: 7, Active: &active}
 				case "details":
 					want = domain.EpicIDRequest{ID: 7}
 					_, err = s.Details(ctx, want.(domain.EpicIDRequest))
@@ -100,8 +98,6 @@ func TestServiceRejectsInvalidEpicInput(t *testing.T) {
 		require.ErrorIs(t, err, app.ErrEpicInvalidInput)
 		require.ErrorIs(t, s.Delete(ctx, domain.EpicIDRequest{ID: id}), app.ErrEpicInvalidInput)
 		require.ErrorIs(t, s.UpdateEpic(ctx, domain.EpicUpdateRequest{ID: id, Name: "Valid"}), app.ErrEpicInvalidInput)
-		_, err = s.ListInactive(ctx, domain.EpicListRequest{ProjectID: id})
-		require.ErrorIs(t, err, app.ErrEpicInvalidInput)
 		_, err = s.List(ctx, domain.EpicListRequest{ProjectID: id})
 		require.ErrorIs(t, err, app.ErrEpicInvalidInput)
 		_, err = s.Create(ctx, domain.EpicCreateRequest{ProjectID: id, Name: "Valid"})
@@ -124,9 +120,6 @@ func TestServiceDerivesCompletion(t *testing.T) {
 		items, err := s.List(context.Background(), domain.EpicListRequest{ProjectID: 7})
 		require.NoError(t, err)
 		require.Equal(t, tc.want, items[0].Completed)
-		items, err = s.ListInactive(context.Background(), domain.EpicListRequest{ProjectID: 7})
-		require.NoError(t, err)
-		require.Equal(t, tc.want, items[0].Completed)
 	}
 }
 
@@ -135,7 +128,7 @@ func (r *fakeEpicRepository) Deactivate(ctx context.Context, req domain.EpicIDRe
 	return r.deactivateErr
 }
 
-func (r *fakeEpicRepository) ListInactive(ctx context.Context, req domain.EpicListRequest) ([]domain.Epic, error) {
-	r.record(ctx, "list-inactive", req)
-	return []domain.Epic{r.item}, r.err
+func (r *fakeEpicRepository) UpdateActive(ctx context.Context, req domain.EpicUpdateActiveRequest) error {
+	r.record(ctx, "update-active", req)
+	return r.err
 }

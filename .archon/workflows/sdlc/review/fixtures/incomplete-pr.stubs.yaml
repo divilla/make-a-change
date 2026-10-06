@@ -1,0 +1,8 @@
+# A PR number alone cannot identify where a review comment belongs.
+mode: '{"continuation":false}'
+scope:
+  docs: false
+  pr: { number: 42 }
+fixture:
+  expect: failed
+  fail-node: scope

@@ -16,7 +16,6 @@ type Repo struct{ pool changePool }
 // Repository is the service's database boundary.
 type Repository interface {
 	List(context.Context, domain.ChangeListRequest) ([]domain.ChangeListItem, error)
-	ListInactive(context.Context, domain.ChangeListRequest) ([]domain.ChangeListItem, error)
 	Details(context.Context, domain.ChangeIDRequest) (domain.ChangeDetails, error)
 	Exists(context.Context, domain.ChangeIDRequest) error
 	Project(context.Context, domain.ChangeIDRequest) (domain.ProjectIDRequest, error)
@@ -49,16 +48,9 @@ func NewRepo(pool *pgxpool.Pool) *Repo { return &Repo{pool: pool} }
 
 // List reads current view fields in modification order.
 func (r *Repo) List(ctx context.Context, req domain.ChangeListRequest) ([]domain.ChangeListItem, error) {
-	return r.list(ctx, req, "public.vw_change_list")
-}
-
-// ListInactive reads the separately filtered inactive view.
-func (r *Repo) ListInactive(ctx context.Context, req domain.ChangeListRequest) ([]domain.ChangeListItem, error) {
-	return r.list(ctx, req, "public.vw_change_inactive_list")
-}
-
-func (r *Repo) list(ctx context.Context, req domain.ChangeListRequest, view string) ([]domain.ChangeListItem, error) {
-	rows, err := r.pool.Query(ctx, `select `+changeListColumns+` from `+view+` where project_id = $1 order by updated_at desc, id`, req.ProjectID)
+	rows, err := r.pool.Query(ctx, `select `+changeListColumns+` from public.vw_change_list
+ where project_id = $1 and ($2::boolean is null or active = $2)
+ order by updated_at desc, id`, req.ProjectID, req.Active)
 	if err != nil {
 		return nil, app.DatabaseError(err, nil, nil)
 	}

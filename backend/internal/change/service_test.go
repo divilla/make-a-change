@@ -454,11 +454,3 @@ func TestUpdateAfterChange(t *testing.T) {
 	failure := errors.New("failure")
 	require.ErrorIs(t, NewService(&fakeChangeRepository{err: failure}, nil).UpdateAfterChange(context.Background(), domain.ChangeUpdateAfterChangeRequest{ID: 7}), failure)
 }
-
-func (r *fakeChangeRepository) ListInactive(c context.Context, q domain.ChangeListRequest) ([]domain.ChangeListItem, error) {
-	v := r.list
-	if v == nil {
-		v = []domain.ChangeListItem{}
-	}
-	return v, r.record(c, "ListInactive", q)
-}

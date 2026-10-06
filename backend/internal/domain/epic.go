@@ -19,7 +19,8 @@ type (
 
 	// EpicListRequest defines EpicListRequest values.
 	EpicListRequest struct {
-		ProjectID int `json:"project_id" validate:"required|min:1"`
+		ProjectID int   `json:"project_id" validate:"required|min:1"`
+		Active    *bool `json:"active"`
 	}
 
 	// EpicIDRequest defines EpicIDRequest values.
@@ -37,5 +38,11 @@ type (
 	EpicUpdateRequest struct {
 		ID   int    `json:"id" validate:"required|min:1"`
 		Name string `json:"name" validate:"required"`
+	}
+
+	// EpicUpdateActiveRequest requires an explicit activity state.
+	EpicUpdateActiveRequest struct {
+		ID     int   `json:"id" validate:"required|min:1"`
+		Active *bool `json:"active"`
 	}
 )

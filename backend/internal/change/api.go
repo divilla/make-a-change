@@ -24,17 +24,16 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 	}
 
 	a.g.POST("/list", a.list)
-	a.g.POST("/list-inactive", a.listInactive)
 	a.g.POST("/details", a.details)
 	a.g.POST("/create", a.create)
 	a.g.POST("/update-epic", a.updateEpic)
 	a.g.POST("/update-after-change", a.updateAfterChange)
 	a.g.POST("/update-phase", a.updatePhase)
-	a.g.POST("/update-active", a.updateActive)
 	a.g.POST("/update-types", a.updateTypes)
 	a.g.POST("/update-title", a.updateTitle)
 	a.g.POST("/update-slug", a.updateSlug)
 	a.g.POST("/update-pr-url", a.updatePRUrl)
+	a.g.POST("/update-active", a.updateActive)
 	a.g.POST("/delete", a.delete)
 
 	return a
@@ -49,21 +48,6 @@ func (a *API) list(c *echo.Context) error {
 		return app.HTTPError(app.ValidationError(v.Errors, app.ErrChangeInvalidInput))
 	}
 	res, err := a.s.List(c.Request().Context(), req)
-	if err != nil {
-		return app.HTTPError(err)
-	}
-	return c.JSON(http.StatusOK, &res)
-}
-
-func (a *API) listInactive(c *echo.Context) error {
-	var req domain.ChangeListRequest
-	if err := c.Bind(&req); err != nil {
-		return app.PayloadError(err, "invalid change inactive list payload")
-	}
-	if v := validate.Struct(req); !v.Validate() {
-		return app.HTTPError(app.ValidationError(v.Errors, app.ErrChangeInvalidInput))
-	}
-	res, err := a.s.ListInactive(c.Request().Context(), req)
 	if err != nil {
 		return app.HTTPError(err)
 	}

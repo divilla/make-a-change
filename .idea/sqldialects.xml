@@ -2,7 +2,10 @@
 <project version="4">
   <component name="SqlDialectMappings">
     <file url="file://$PROJECT_DIR$/backend/internal/change/repo.go" dialect="PostgreSQL" />
-    <file url="file://$PROJECT_DIR$/db/init.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/db/seed.sql" dialect="PostgreSQL" />
+    <file url="PROJECT" dialect="PostgreSQL" />
+  </component>
+  <component name="SqlResolveMappings">
+    <file url="file://$PROJECT_DIR$/backend" scope="{&quot;node&quot;:{  &quot;@negative&quot;:&quot;1&quot;,  &quot;group&quot;:{   &quot;@kind&quot;:&quot;root&quot;,   &quot;node&quot;:{    &quot;name&quot;:{     &quot;@qname&quot;:&quot;689e7f39-29a4-4c92-b9a6-50ff74d011e6&quot;    },    &quot;group&quot;:{     &quot;@kind&quot;:&quot;database&quot;,     &quot;node&quot;:{      &quot;name&quot;:{       &quot;@qname&quot;:&quot;changes&quot;      }     }    }   }  } }}" />
   </component>
 </project>

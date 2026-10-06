@@ -22,6 +22,19 @@ function condition(script: string, cwd: string): number {
   }).exitCode;
 }
 
+test('review scope declares every object for Codex structured output', () => {
+  const scope = byName.get('archon-review')!.doc.nodes.find((node: any) => node.id === 'scope');
+  function checkSchema(schema: any) {
+    if (schema.type === 'object') {
+      expect(schema.properties).toBeDefined();
+      expect(Object.keys(schema.properties).sort()).toEqual([...schema.required].sort());
+      for (const property of Object.values(schema.properties)) checkSchema(property);
+    }
+    for (const variant of schema.anyOf ?? []) checkSchema(variant);
+  }
+  checkSchema(scope.output_format);
+});
+
 test('all ship dependencies, commands and named scripts are owned by this repo', () => {
   const seen = new Set<string>();
   function visit(name: string) {

@@ -19,10 +19,10 @@ func TestEpicHandlerErrorContracts(t *testing.T) {
 		success             int
 	}{
 		{"list", `{"project_id":1}`, "list", (*API).list, 200},
-		{"list-inactive", `{"project_id":1}`, "inactive list", (*API).listInactive, 200},
 		{"details", `{"id":1}`, "details", (*API).details, 200},
 		{"create", `{"project_id":1,"name":"Name"}`, "create", (*API).create, 201},
-		{"update", `{"id":1,"name":"Name"}`, "update", (*API).updateEpic, 204},
+		{"update", `{"id":1,"name":"Name"}`, "update", (*API).update, 204},
+		{"update-active", `{"id":1,"active":false}`, "active", (*API).updateActive, 204},
 		{"delete", `{"id":1}`, "delete", (*API).delete, 204},
 	} {
 		t.Run(op.name, func(t *testing.T) {

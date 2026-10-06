@@ -18,6 +18,7 @@ func TestAPIValidationCauses(t *testing.T) {
 		{"details", `{"id":-1,"scenario":"valid"}`, "id", "min", "details"},
 		{"create", `{"project_id":-1,"scenario":"valid"}`, "project_id", "min", "create"},
 		{"update", `{"id":-1,"scenario":"valid"}`, "id", "min", "update"},
+		{"update-active", `{"id":-1,"active":true}`, "id", "min", "active"},
 		{"delete", `{"id":-1,"scenario":"valid"}`, "id", "min", "delete"},
 		{"create", `{"project_id":1}`, "name", "required", "create"},
 		{"update", `{"id":1}`, "name", "required", "update"},

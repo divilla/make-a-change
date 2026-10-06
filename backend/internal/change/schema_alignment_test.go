@@ -13,18 +13,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestInactiveChangeServiceValidatesAndDerivesCompletion(t *testing.T) {
+func TestFilteredChangeServiceValidatesAndDerivesCompletion(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, err := (&Service{}).ListInactive(ctx, domain.ChangeListRequest{})
+	_, err := (&Service{}).List(ctx, domain.ChangeListRequest{})
 	require.ErrorIs(t, err, app.ErrChangeInvalidInput)
 	failure := errors.New("read failed")
 	for _, cause := range []error{nil, failure} {
 		r := &fakeChangeRepository{err: cause, list: []domain.ChangeListItem{{ID: 7, DoneTC: 1, TotalTC: 2}, {ID: 8, TotalTC: 0}}}
-		got, err := NewService(r, nil).ListInactive(ctx, domain.ChangeListRequest{ProjectID: 9})
+		got, err := NewService(r, nil).List(ctx, domain.ChangeListRequest{ProjectID: 9, Active: boolPtr(false)})
 		require.ErrorIs(t, err, cause)
-		require.Equal(t, []string{"ListInactive"}, r.calls)
-		require.Equal(t, []any{domain.ChangeListRequest{ProjectID: 9}}, r.requests)
+		require.Equal(t, []string{"List"}, r.calls)
+		require.Equal(t, []any{domain.ChangeListRequest{ProjectID: 9, Active: boolPtr(false)}}, r.requests)
 		require.Same(t, ctx, r.contexts[0])
 		if cause == nil {
 			require.Equal(t, int64(50), got[0].Completed)
@@ -33,7 +33,7 @@ func TestInactiveChangeServiceValidatesAndDerivesCompletion(t *testing.T) {
 	}
 }
 
-func TestInactiveChangeAPIValidationAndErrors(t *testing.T) {
+func TestFilteredChangeAPIValidationAndErrors(t *testing.T) {
 	for _, tc := range []struct {
 		body   string
 		cause  error
@@ -49,7 +49,7 @@ func TestInactiveChangeAPIValidationAndErrors(t *testing.T) {
 		r := &fakeChangeRepository{err: tc.cause}
 		e := echo.New()
 		NewAPI(e, NewService(r, nil))
-		req := httptest.NewRequest("POST", "/api/v1/change/list-inactive", strings.NewReader(tc.body))
+		req := httptest.NewRequest("POST", "/api/v1/change/list", strings.NewReader(tc.body))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 		e.ServeHTTP(rec, req)

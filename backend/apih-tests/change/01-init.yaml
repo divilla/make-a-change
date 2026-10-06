@@ -116,3 +116,75 @@ spec:
       body: '{"id":${change_missing_project}}'
     response:
       expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/project/create
+      body: '{"name":"APIHydra active home"}'
+    response:
+      expected_status: 201
+      capture:
+        home_state_project: .id
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"project_id":${home_state_project},"name":"Same name"}'
+    response:
+      expected_status: 201
+      capture:
+        epic_first_state: .id
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"project_id":${home_state_project},"name":"Same name"}'
+    response:
+      expected_status: 201
+      capture:
+        epic_second_state: .id
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"project_id":${home_state_project},"name":"A first"}'
+    response:
+      expected_status: 201
+      capture:
+        epic_third_state: .id
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${home_state_project},"title":"first","brief":"Mixed state contract"}'
+    response:
+      expected_status: 201
+      capture:
+        change_first_state: .id
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${home_state_project},"title":"second","brief":"Mixed state contract"}'
+    response:
+      expected_status: 201
+      capture:
+        change_second_state: .id
+  - request:
+      method: POST
+      path: /api/v1/project/create
+      body: '{"name":"APIHydra active other"}'
+    response:
+      expected_status: 201
+      capture:
+        other_state_project: .id
+  - request:
+      method: POST
+      path: /api/v1/epic/create
+      body: '{"project_id":${other_state_project},"name":"Same name"}'
+    response:
+      expected_status: 201
+      capture:
+        epic_foreign_state: .id
+  - request:
+      method: POST
+      path: /api/v1/change/create
+      body: '{"project_id":${other_state_project},"title":"foreign","brief":"Mixed state contract"}'
+    response:
+      expected_status: 201
+      capture:
+        change_foreign_state: .id

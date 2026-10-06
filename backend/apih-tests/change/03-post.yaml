@@ -46,3 +46,118 @@ spec:
       body: '{"id":${change_project}}'
     response:
       expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/delete
+      body: '{"id":${change_first_state}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '{"id":${change_first_state},"active":false}'
+    response:
+      expected_status: 404
+      expected_body: '{"message":"change not found"}'
+  - request:
+      method: POST
+      path: /api/v1/change/delete
+      body: '{"id":${change_second_state}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '{"id":${change_second_state},"active":false}'
+    response:
+      expected_status: 404
+      expected_body: '{"message":"change not found"}'
+  - request:
+      method: POST
+      path: /api/v1/change/delete
+      body: '{"id":${change_foreign_state}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '{"id":${change_foreign_state},"active":false}'
+    response:
+      expected_status: 404
+      expected_body: '{"message":"change not found"}'
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '{"id":${epic_first_state}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/epic/update-active
+      body: '{"id":${epic_first_state},"active":false}'
+    response:
+      expected_status: 404
+      expected_body: '{"message":"epic not found"}'
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '{"id":${epic_second_state}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/epic/update-active
+      body: '{"id":${epic_second_state},"active":false}'
+    response:
+      expected_status: 404
+      expected_body: '{"message":"epic not found"}'
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '{"id":${epic_third_state}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/epic/update-active
+      body: '{"id":${epic_third_state},"active":false}'
+    response:
+      expected_status: 404
+      expected_body: '{"message":"epic not found"}'
+  - request:
+      method: POST
+      path: /api/v1/epic/delete
+      body: '{"id":${epic_foreign_state}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/epic/update-active
+      body: '{"id":${epic_foreign_state},"active":false}'
+    response:
+      expected_status: 404
+      expected_body: '{"message":"epic not found"}'
+  - request:
+      method: POST
+      path: /api/v1/project/delete
+      body: '{"id":${home_state_project}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/project/details
+      body: '{"id":${home_state_project}}'
+    response:
+      expected_status: 404
+  - request:
+      method: POST
+      path: /api/v1/project/delete
+      body: '{"id":${other_state_project}}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/project/details
+      body: '{"id":${other_state_project}}'
+    response:
+      expected_status: 404

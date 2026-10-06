@@ -37,7 +37,8 @@ type (
 
 	// ChangeListRequest defines ChangeListRequest values.
 	ChangeListRequest struct {
-		ProjectID int `json:"project_id" validate:"required|min:1"`
+		ProjectID int   `json:"project_id" validate:"required|min:1"`
+		Active    *bool `json:"active"`
 	}
 
 	// ChangeIDRequest defines ChangeIDRequest values.

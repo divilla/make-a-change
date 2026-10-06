@@ -44,10 +44,10 @@ and input/method errors. No SQL schema change or database reset is needed.
 
 Project reads use `vw_project_list` plus base-table `config_slug`, `last_ref` and
 `active`. All projects remain listed, ordered active DESC, updated_at DESC, id DESC.
-Epic and change active/inactive lists use the corresponding separate views.
-Epic details combine both views in one UNION ALL statement and join the base
-`active` field; change details use the unfiltered details view. Inactive details,
-updates and child creation remain supported. Epic lists order by name,id,
+Epic and change lists use unified views with a nullable `active` filter: true
+and false select that state; null or omission returns both. Both inactive-list
+routes are retired. Epic details use the unified epic view; change details use
+the unfiltered details view. Inactive details, updates and child creation remain supported. Epic lists order by name,id,
 matching the current view's name ordering within each requested project.
 
 Project/epic DELETE first attempts physical deletion. Only the central mapped
@@ -59,8 +59,11 @@ The fallback does not modify children or their activity. Unit tests cover wrappe
 FK semantics, absent rows, unchanged contexts/requests and both failure stages;
 APIHydra verifies actual FK fallbacks and subsequent details/list reads.
 
-`/change/update-active` replaces `/change/update-open`; it requires an explicit
-`active` boolean. Project JSON exposes `config_slug`. `/doc/list-active` replaces
+`/change/update-active` replaces `/change/update-open`. Both `/epic/update-active`
+and `/change/update-active` require a positive id and an explicit `active` boolean
+(including false); null/omitted is400, a missing entity is404, success is empty204.
+They update only active and updated_at, including repeated state assignments.
+Project JSON exposes `config_slug`. `/doc/list-active` replaces
 `/doc/current` and reads `vw_doc_active`, scanning `doc_id` as the domain ID.
 All document reads include nullable `deleted_at`; list/details retain soft-deleted
 history. `/doc/comment-list` filters only doc_type=comment, including deleted
@@ -160,14 +163,13 @@ statement counts, baseline lint debt and the factory/R2 handoff.
 | POST | /api/v1/project/create | 201 {id}; one INSERT returning ID | P2 aligned | pass (project/02-main.yaml) |
 | POST | /api/v1/project/update | 204 empty; one name/updated_at UPDATE, including same name | P2 aligned | pass (project/02-main.yaml) |
 | POST | /api/v1/project/delete | 204 empty; DELETE, FK-only deactivation fallback; missing404; fallback errors propagated | P2 aligned | pass (project/02-main.yaml) |
-| POST | /api/v1/epic/list | 200 active epics from vw_epic_list; name,id order | P2 aligned | pass (epic/02-main.yaml) |
-| POST | /api/v1/epic/list-inactive | 200 inactive epics from vw_epic_inactive_list; name,id order | current | pass (epic/02-main.yaml) |
-| POST | /api/v1/epic/details | 200 active/inactive details from both epic views and stored active | P2 aligned | pass (epic/02-main.yaml) |
+| POST | /api/v1/epic/list | 200 epics from vw_epic_list filtered by optional active boolean; null/omitted returns all; name,id order | P2 aligned | pass (epic/02-main.yaml) |
+| POST | /api/v1/epic/details | 200 active/inactive details from vw_epic_list | P2 aligned | pass (epic/02-main.yaml) |
 | POST | /api/v1/epic/create | 201 {id}; one INSERT returning ID | P2 aligned | pass (epic/02-main.yaml) |
 | POST | /api/v1/epic/update | 204 empty; one name/updated_at UPDATE, including same name | P2 aligned | pass (epic/02-main.yaml) |
+| POST | /api/v1/epic/update-active | 204 empty; explicit true/false required; null/omitted400; missing404; updates active and updated_at only | unified state | pass (change/02-main.yaml) |
 | POST | /api/v1/epic/delete | 204 empty; DELETE, FK-only deactivation fallback; missing404; fallback errors propagated | P2 aligned | pass (epic/02-main.yaml) |
-| POST | /api/v1/change/list | 200 current vw_change_list columns; service int64 completion; updated_at DESC,id; [] for absent project | P3 aligned | pass (change/02-main.yaml) |
-| POST | /api/v1/change/list-inactive | 200 inactive vw_change_inactive_list entries; same completion/ordering | current | pass (change/02-main.yaml) |
+| POST | /api/v1/change/list | 200 current vw_change_list columns; optional active true/false filters, null/omitted returns both; service int64 completion; updated_at DESC,id; [] for absent project | P3 aligned | pass (change/02-main.yaml) |
 | POST | /api/v1/change/details | 200 current vw_change_details; flat fields, nullable after_change_id and references, no inline docs/version/testcases; 404 missing | P3 aligned | pass (change/02-main.yaml) |
 | POST | /api/v1/change/create | 201 exact {id}; selected config must support backlog/brief; UUIDv7 default or preserved caller UUID; fn_change_insert only | P3 aligned | pass (change/02-main.yaml) |
 | POST | /api/v1/change/update-epic | 204; targeted parent/epic project preflight, sp_change_epic_update; nil detaches; no config | P3 aligned | pass (change/02-main.yaml) |

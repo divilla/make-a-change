@@ -94,7 +94,24 @@ nodes:
         # The qualified pull request this round reviewed, or `{}` for a working
         # diff. publish below writes to this record and to nothing else, so the
         # comment can never land on an ambient branch→PR mapping.
-        pr: { type: object }
+        pr:
+          anyOf:
+            - type: object
+              properties:
+                repo:
+                  type: object
+                  properties:
+                    host: { type: string }
+                    path: { type: string }
+                  required: [host, path]
+                  additionalProperties: false
+                number: { type: integer }
+              required: [repo, number]
+              additionalProperties: false
+            - type: object
+              properties: {}
+              required: []
+              additionalProperties: false
       required: [docs, pr]
 
   # ── Default-on lenses ─────────────────────────────────────────────

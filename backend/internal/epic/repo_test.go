@@ -97,7 +97,7 @@ func TestRepositoryReads(t *testing.T) {
 	now := time.Now()
 	failure := errors.New("read failed")
 	values := []any{7, 9, "Name", int64(70000), int64(100000), 80000, now, now, false}
-	for _, op := range []string{"details", "list", "list-inactive"} {
+	for _, op := range []string{"details", "list-all", "list-true", "list-false"} {
 		scenarios := []string{"success", "scan", "missing", "wrapped missing"}
 		if op != "details" {
 			scenarios = []string{"success", "empty", "scan", "query", "iteration"}
@@ -106,6 +106,14 @@ func TestRepositoryReads(t *testing.T) {
 			t.Run(op+"/"+scenario, func(t *testing.T) {
 				p := newBoundary(t)
 				p.args = []any{7}
+				var active *bool
+				if op == "list-true" || op == "list-false" {
+					value := op == "list-true"
+					active = &value
+					p.args = append(p.args, active)
+				} else if op != "details" {
+					p.args = append(p.args, active)
+				}
 				r := &Repo{pool: p}
 				row := valueRow{t: t, values: values}
 				rows := &valueRows{row: row, remaining: 1}
@@ -144,11 +152,7 @@ func TestRepositoryReads(t *testing.T) {
 
 					var got []domain.Epic
 					var err error
-					if op == "list-inactive" {
-						got, err = r.ListInactive(p.ctx, domain.EpicListRequest{ProjectID: 7})
-					} else {
-						got, err = r.List(p.ctx, domain.EpicListRequest{ProjectID: 7})
-					}
+					got, err = r.List(p.ctx, domain.EpicListRequest{ProjectID: 7, Active: active})
 					switch scenario {
 					case "scan", "query", "iteration":
 						require.ErrorIs(t, err, failure)
@@ -166,15 +170,11 @@ func TestRepositoryReads(t *testing.T) {
 					require.Contains(t, p.sql, "order by v.name, v.id")
 				}
 				if op == "details" {
-					require.Contains(t, p.sql, "from public.vw_epic_list v join public.epic e on e.id = v.id where v.id = $1")
-					require.Contains(t, p.sql, "union all select "+epicColumns+" from public.vw_epic_inactive_list")
-					require.NotContains(t, p.sql, "e.active =")
+					require.Contains(t, p.sql, "from public.vw_epic_list v where v.id = $1")
+					require.NotContains(t, p.sql, "union")
 				} else {
-					view := "public.vw_epic_list"
-					if op == "list-inactive" {
-						view = "public.vw_epic_inactive_list"
-					}
-					require.Contains(t, p.sql, "from "+view+" v join public.epic e on e.id = v.id")
+					require.Contains(t, p.sql, "from public.vw_epic_list v")
+					require.Contains(t, p.sql, "where v.project_id = $1 and ($2::boolean is null or v.active = $2)")
 				}
 			})
 		}

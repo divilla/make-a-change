@@ -97,12 +97,19 @@ func TestRepositoryCurrentReads(t *testing.T) {
 	epic := 4
 	name := "Epic"
 	afterName := "Previous change #4"
-	for _, op := range []string{"list", "list-inactive", "details"} {
+	for _, op := range []string{"list-all", "list-true", "list-false", "details"} {
 		for _, scenario := range []string{"values", "nullable", "empty", "scan", "query", "iteration", "missing"} {
 			t.Run(op+"/"+scenario, func(t *testing.T) {
 				failure := errors.New("read failed")
 				p := newBoundary(t)
 				p.args = []any{7}
+				var active *bool
+				if op != "details" {
+					if op != "list-all" {
+						active = boolPtr(op == "list-true")
+					}
+					p.args = append(p.args, active)
+				}
 				c := domain.ChangeListItem{ID: 7, RefUUID: "uuid", RefSlug: &refSlug, ProjectID: 9, ChangePhase: "backlog", ChangeTypes: []string{"fix"}, EpicID: &epic, EpicName: &name, Title: "Title", DoneTC: 70000, TotalTC: 100000, UpdatedAt: now}
 				if scenario == "nullable" {
 					c.RefSlug = nil
@@ -138,13 +145,9 @@ func TestRepositoryCurrentReads(t *testing.T) {
 				r := &Repo{pool: p}
 				var err error
 				switch op {
-				case "list", "list-inactive":
+				case "list-all", "list-true", "list-false":
 					var got []domain.ChangeListItem
-					if op == "list-inactive" {
-						got, err = r.ListInactive(p.ctx, domain.ChangeListRequest{ProjectID: 7})
-					} else {
-						got, err = r.List(p.ctx, domain.ChangeListRequest{ProjectID: 7})
-					}
+					got, err = r.List(p.ctx, domain.ChangeListRequest{ProjectID: 7, Active: active})
 					if err == nil {
 						require.NotNil(t, got)
 						if scenario != "empty" {
@@ -153,11 +156,7 @@ func TestRepositoryCurrentReads(t *testing.T) {
 							require.Empty(t, got)
 						}
 					}
-					view := "public.vw_change_list"
-					if op == "list-inactive" {
-						view = "public.vw_change_inactive_list"
-					}
-					require.Contains(t, p.sql, "from "+view+" where project_id = $1 order by updated_at desc, id")
+					require.Contains(t, p.sql, "from public.vw_change_list where project_id = $1 and ($2::boolean is null or active = $2) order by updated_at desc, id")
 				case "details":
 					var got domain.ChangeDetails
 					got, err = r.Details(p.ctx, domain.ChangeIDRequest{ID: 7})

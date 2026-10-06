@@ -295,15 +295,15 @@ spec:
   - request:
       method: POST
       path: /api/v1/change/list
-      body: '{"project_id":${change_project}}'
+      body: '{"project_id":${change_project},"active":true}'
     response:
       expected_status: 200
       expected_types: {}
       expected_body: '[{"id":${change_prerequisite}}]'
   - request:
       method: POST
-      path: /api/v1/change/list-inactive
-      body: '{"project_id":${change_project}}'
+      path: /api/v1/change/list
+      body: '{"project_id":${change_project},"active":false}'
     response:
       expected_status: 200
       expected_body: '[{"id":${change_id}}]'
@@ -328,8 +328,8 @@ spec:
       expected_status: 204
   - request:
       method: POST
-      path: /api/v1/change/list-inactive
-      body: '{"project_id":${change_project}}'
+      path: /api/v1/change/list
+      body: '{"project_id":${change_project},"active":false}'
     response:
       expected_status: 200
       expected_body: '[]'
@@ -1064,36 +1064,8 @@ spec:
       expected_body: '{"title":"Updated title","active":true,"after_change_id":null,"epic_id":null,"pr_url":"https://example.com/pull/123","change_types":[]}'
   - request:
       method: POST
-      path: /api/v1/change/list-inactive
-      body: '{'
-    response:
-      expected_status: 400
-      expected_types: *id001
-  - request:
-      method: POST
-      path: /api/v1/change/list-inactive
-      body: '{"project_id":"bad"}'
-    response:
-      expected_status: 400
-      expected_types: *id002
-  - request:
-      method: POST
-      path: /api/v1/change/list-inactive
-      body: '{"project_id":0}'
-    response:
-      expected_status: 400
-      expected_types: *id003
-  - request:
-      method: POST
-      path: /api/v1/change/list-inactive
-      body: '{"project_id":-1}'
-    response:
-      expected_status: 400
-      expected_types: *id004
-  - request:
-      method: POST
-      path: /api/v1/change/list-inactive
-      body: '{"project_id":${change_missing_project}}'
+      path: /api/v1/change/list
+      body: '{"project_id":${change_missing_project},"active":false}'
     response:
       expected_status: 200
       expected_body: '[]'
@@ -1182,62 +1154,6 @@ spec:
     response:
       expected_status: 405
       expected_body: '{"message":"Method Not Allowed"}'
-  # list-inactive: project_id omitted; other fields valid
-  - request:
-      method: POST
-      path: /api/v1/change/list-inactive
-      body: '{}'
-    response:
-      expected_status: 400
-      expected_body: '{"message":"invalid change payload"}'
-  # list-inactive: project_id null; other fields valid
-  - request:
-      method: POST
-      path: /api/v1/change/list-inactive
-      body: '{"project_id":null}'
-    response:
-      expected_status: 400
-      expected_body: '{"message":"invalid change payload"}'
-  # list-inactive: project_id fraction; other fields valid
-  - request:
-      method: POST
-      path: /api/v1/change/list-inactive
-      body: '{"project_id":-1.5}'
-    response:
-      expected_status: 400
-      expected_body: '{"message":"invalid change inactive list payload"}'
-  # list-inactive: project_id integer underflow; other fields valid
-  - request:
-      method: POST
-      path: /api/v1/change/list-inactive
-      body: '{"project_id":-9223372036854775809}'
-    response:
-      expected_status: 400
-      expected_body: '{"message":"invalid change inactive list payload"}'
-  # list-inactive: array body
-  - request:
-      method: POST
-      path: /api/v1/change/list-inactive
-      body: '[]'
-    response:
-      expected_status: 400
-      expected_body: '{"message":"invalid change inactive list payload"}'
-  # list-inactive: string body
-  - request:
-      method: POST
-      path: /api/v1/change/list-inactive
-      body: '"invalid"'
-    response:
-      expected_status: 400
-      expected_body: '{"message":"invalid change inactive list payload"}'
-  # list-inactive: wrong HTTP method
-  - request:
-      method: GET
-      path: /api/v1/change/list-inactive
-    response:
-      expected_status: 405
-      expected_body: '{"message":"Method Not Allowed"}'
-  # details: id omitted; other fields valid
   - request:
       method: POST
       path: /api/v1/change/details
@@ -2177,3 +2093,377 @@ spec:
     response:
       expected_status: 200
       expected_body: '{"title":"Updated title","active":true,"after_change_id":null,"epic_id":null,"pr_url":"https://example.com/pull/123","change_types":[]}'
+  - request:
+      method: POST
+      path: /api/v1/epic/update-active
+      body: '{"id":${epic_first_state},"active":false}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '{"id":${epic_first_state}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${epic_first_state},"active":false}'
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"project_id":${home_state_project},"active":true}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${epic_third_state}},{"id":${epic_second_state}}]'
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"project_id":${home_state_project},"active":false}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${epic_first_state}}]'
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"project_id":${home_state_project},"active":null}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${epic_third_state}},{"id":${epic_first_state}},{"id":${epic_second_state}}]'
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"project_id":${home_state_project}}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${epic_third_state}},{"id":${epic_first_state}},{"id":${epic_second_state}}]'
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"project_id":${other_state_project}}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${epic_foreign_state}}]'
+  - request:
+      method: POST
+      path: /api/v1/epic/update-active
+      body: '{"id":${epic_first_state},"active":true}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/epic/details
+      body: '{"id":${epic_first_state}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${epic_first_state},"active":true}'
+      expected_types:
+        "if .updated_at > .created_at then 0 else 1 end":
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"project_id":${home_state_project},"active":false}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/epic/update-active
+      body: '{"id":${epic_first_state},"active":true}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"project_id":${home_state_project},"active":true}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${epic_third_state}},{"id":${epic_first_state}},{"id":${epic_second_state}}]'
+  - request:
+      method: POST
+      path: /api/v1/epic/update-active
+      body: '{"id":${epic_first_state}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  - request:
+      method: POST
+      path: /api/v1/epic/update-active
+      body: '{"id":${epic_first_state},"active":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  - request:
+      method: POST
+      path: /api/v1/epic/update-active
+      body: '{"id":0,"active":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  - request:
+      method: POST
+      path: /api/v1/epic/update-active
+      body: '{"id":-1,"active":true}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic payload"}'
+  - request:
+      method: POST
+      path: /api/v1/epic/update-active
+      body: '{"id":${epic_first_state},"active":"false"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic active payload"}'
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"project_id":${home_state_project},"active":"false"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic list payload"}'
+  - request:
+      method: POST
+      path: /api/v1/epic/update-active
+      body: '{"id":${epic_first_state},"active":0}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic active payload"}'
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"project_id":${home_state_project},"active":0}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic list payload"}'
+  - request:
+      method: POST
+      path: /api/v1/epic/update-active
+      body: '{"id":${epic_first_state},"active":[]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic active payload"}'
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"project_id":${home_state_project},"active":[]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic list payload"}'
+  - request:
+      method: POST
+      path: /api/v1/epic/update-active
+      body: '{"id":${epic_first_state},"active":{}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic active payload"}'
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"project_id":${home_state_project},"active":{}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic list payload"}'
+  - request:
+      method: POST
+      path: /api/v1/epic/update-active
+      body: '{'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid epic active payload"}'
+  - request:
+      method: GET
+      path: /api/v1/epic/update-active
+    response:
+      expected_status: 405
+  - request:
+      method: POST
+      path: /api/v1/epic/list-inactive
+      body: '{}'
+    response:
+      expected_status: 404
+      expected_body: '{"message":"Not Found"}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '{"id":${change_first_state},"active":false}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_first_state}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${change_first_state},"active":false}'
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":${home_state_project},"active":true}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${change_second_state}}]'
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":${home_state_project},"active":false}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${change_first_state}}]'
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":${home_state_project},"active":null}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${change_first_state}},{"id":${change_second_state}}]'
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":${home_state_project}}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${change_first_state}},{"id":${change_second_state}}]'
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":${other_state_project}}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${change_foreign_state}}]'
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '{"id":${change_first_state},"active":true}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/details
+      body: '{"id":${change_first_state}}'
+    response:
+      expected_status: 200
+      expected_body: '{"id":${change_first_state},"active":true}'
+      expected_types:
+        "if .updated_at > .created_at then 0 else 1 end":
+        - zero
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":${home_state_project},"active":false}'
+    response:
+      expected_status: 200
+      expected_body: '[]'
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '{"id":${change_first_state},"active":true}'
+    response:
+      expected_status: 204
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":${home_state_project},"active":true}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${change_first_state}},{"id":${change_second_state}}]'
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '{"id":${change_first_state}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '{"id":${change_first_state},"active":null}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '{"id":0,"active":false}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '{"id":-1,"active":true}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change payload"}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '{"id":${change_first_state},"active":"false"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change active payload"}'
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":${home_state_project},"active":"false"}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change list payload"}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '{"id":${change_first_state},"active":0}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change active payload"}'
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":${home_state_project},"active":0}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change list payload"}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '{"id":${change_first_state},"active":[]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change active payload"}'
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":${home_state_project},"active":[]}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change list payload"}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '{"id":${change_first_state},"active":{}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change active payload"}'
+  - request:
+      method: POST
+      path: /api/v1/change/list
+      body: '{"project_id":${home_state_project},"active":{}}'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change list payload"}'
+  - request:
+      method: POST
+      path: /api/v1/change/update-active
+      body: '{'
+    response:
+      expected_status: 400
+      expected_body: '{"message":"invalid change active payload"}'
+  - request:
+      method: GET
+      path: /api/v1/change/update-active
+    response:
+      expected_status: 405
+  - request:
+      method: POST
+      path: /api/v1/change/list-inactive
+      body: '{}'
+    response:
+      expected_status: 404
+      expected_body: '{"message":"Not Found"}'

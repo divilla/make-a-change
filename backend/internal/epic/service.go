@@ -19,9 +19,9 @@ type (
 		Details(ctx context.Context, req domain.EpicIDRequest) (domain.Epic, error)
 		Create(ctx context.Context, req domain.EpicCreateRequest) (domain.EpicIDRequest, error)
 		Update(ctx context.Context, req domain.EpicUpdateRequest) error
+		UpdateActive(ctx context.Context, req domain.EpicUpdateActiveRequest) error
 		Delete(ctx context.Context, req domain.EpicIDRequest) error
 		Deactivate(ctx context.Context, req domain.EpicIDRequest) error
-		ListInactive(ctx context.Context, req domain.EpicListRequest) ([]domain.Epic, error)
 	}
 )
 
@@ -36,21 +36,6 @@ func (s *Service) List(ctx context.Context, req domain.EpicListRequest) ([]domai
 		return nil, app.ErrEpicInvalidInput
 	}
 	items, err := s.repo.List(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	for i := range items {
-		items[i] = withCompletion(items[i])
-	}
-	return items, nil
-}
-
-// ListInactive returns inactive entries with the same derived counters.
-func (s *Service) ListInactive(ctx context.Context, req domain.EpicListRequest) ([]domain.Epic, error) {
-	if req.ProjectID <= 0 {
-		return nil, app.ErrEpicInvalidInput
-	}
-	items, err := s.repo.ListInactive(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -88,6 +73,14 @@ func (s *Service) UpdateEpic(ctx context.Context, req domain.EpicUpdateRequest) 
 		return app.ErrEpicInvalidInput
 	}
 	return s.repo.Update(ctx, req)
+}
+
+// UpdateActive requires an explicit boolean, including false.
+func (s *Service) UpdateActive(ctx context.Context, req domain.EpicUpdateActiveRequest) error {
+	if req.ID <= 0 || req.Active == nil {
+		return app.ErrEpicInvalidInput
+	}
+	return s.repo.UpdateActive(ctx, req)
 }
 
 // Delete executes Delete behavior.

@@ -113,13 +113,27 @@ spec:
   - request:
       method: POST
       path: /api/v1/epic/list
-      body: '{"project_id":${epic_project}}'
+      body: '{"project_id":${epic_project},"active":true}'
     response:
       expected_status: 200
       expected_body: '[]'
   - request:
       method: POST
-      path: /api/v1/epic/list-inactive
+      path: /api/v1/epic/list
+      body: '{"project_id":${epic_project},"active":false}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${epic_id},"active":false,"change_count":1}]'
+  - request:
+      method: POST
+      path: /api/v1/epic/list
+      body: '{"project_id":${epic_project},"active":null}'
+    response:
+      expected_status: 200
+      expected_body: '[{"id":${epic_id},"active":false,"change_count":1}]'
+  - request:
+      method: POST
+      path: /api/v1/epic/list
       body: '{"project_id":${epic_project}}'
     response:
       expected_status: 200
@@ -395,38 +409,9 @@ spec:
   - request:
       method: POST
       path: /api/v1/epic/list-inactive
-      body: '{'
     response:
-      expected_status: 400
-      expected_types: *id001
-  - request:
-      method: POST
-      path: /api/v1/epic/list-inactive
-      body: '{"id":"bad","project_id":"bad","name":3}'
-    response:
-      expected_status: 400
-      expected_types: *id002
-  - request:
-      method: POST
-      path: /api/v1/epic/list-inactive
-      body: '{}'
-    response:
-      expected_status: 400
-      expected_types: *id003
-  - request:
-      method: POST
-      path: /api/v1/epic/list-inactive
-      body: '{"id":-1,"project_id":-1,"name":""}'
-    response:
-      expected_status: 400
-      expected_types: *id004
-  - request:
-      method: POST
-      path: /api/v1/epic/list-inactive
-      body: '{"project_id":${epic_missing_project}}'
-    response:
-      expected_status: 200
-      expected_body: '[]'
+      expected_status: 404
+      expected_body: '{"message":"Not Found"}'
 
   # Independent error cases: each malformed field has otherwise valid input.
   # list: project_id null; other fields valid
@@ -484,61 +469,14 @@ spec:
     response:
       expected_status: 405
       expected_body: '{"message":"Method Not Allowed"}'
-  # list-inactive: project_id null; other fields valid
+  # list: active must be boolean or null
   - request:
       method: POST
-      path: /api/v1/epic/list-inactive
-      body: '{"project_id":null}'
+      path: /api/v1/epic/list
+      body: '{"project_id":${epic_project},"active":"false"}'
     response:
       expected_status: 400
-      expected_body: '{"message":"invalid epic payload"}'
-  # list-inactive: project_id zero; other fields valid
-  - request:
-      method: POST
-      path: /api/v1/epic/list-inactive
-      body: '{"project_id":0}'
-    response:
-      expected_status: 400
-      expected_body: '{"message":"invalid epic payload"}'
-  # list-inactive: project_id fraction; other fields valid
-  - request:
-      method: POST
-      path: /api/v1/epic/list-inactive
-      body: '{"project_id":-1.5}'
-    response:
-      expected_status: 400
-      expected_body: '{"message":"invalid epic inactive list payload"}'
-  # list-inactive: project_id integer underflow; other fields valid
-  - request:
-      method: POST
-      path: /api/v1/epic/list-inactive
-      body: '{"project_id":-9223372036854775809}'
-    response:
-      expected_status: 400
-      expected_body: '{"message":"invalid epic inactive list payload"}'
-  # list-inactive: array body
-  - request:
-      method: POST
-      path: /api/v1/epic/list-inactive
-      body: '[]'
-    response:
-      expected_status: 400
-      expected_body: '{"message":"invalid epic inactive list payload"}'
-  # list-inactive: string body
-  - request:
-      method: POST
-      path: /api/v1/epic/list-inactive
-      body: '"invalid"'
-    response:
-      expected_status: 400
-      expected_body: '{"message":"invalid epic inactive list payload"}'
-  # list-inactive: wrong HTTP method
-  - request:
-      method: GET
-      path: /api/v1/epic/list-inactive
-    response:
-      expected_status: 405
-      expected_body: '{"message":"Method Not Allowed"}'
+      expected_body: '{"message":"invalid epic list payload"}'
   # details: id null; other fields valid
   - request:
       method: POST
