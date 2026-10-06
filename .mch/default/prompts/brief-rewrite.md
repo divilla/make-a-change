@@ -8,6 +8,7 @@
 - The first line of the brief must be a level-one heading: `# [Title describing the change]`.
 - Limit each line of the rewritten brief to 100 characters in both the file and the response.
 - Keep the brief concise without omitting specified details.
-- Specification writing is handled by a separate prompt.
+- Read the saved file back and verify completeness and compliance with the template.
+  On success, output exactly `Done.` without printing the brief or adding commentary.
 
 [brief-file-path.md]
