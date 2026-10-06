@@ -20,5 +20,6 @@
   only `Error: <reason>` with a concise explanation. Do not output `Done.` on failure.
 - Apply these rules to later revisions. Edit the brief only; do not write a specification,
   implement code, or perform Git publication.
+- Brief file path is relative to repo root.
 
 [brief-file-path.md]
